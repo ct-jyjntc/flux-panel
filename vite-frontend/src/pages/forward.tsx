@@ -1596,103 +1596,84 @@ export default function ForwardPage() {
           <ModalContent>
             {(onClose) => (
               <>
-                <ModalHeader className="flex flex-col gap-1">
-                  <h2 className="text-xl font-bold">转发诊断结果</h2>
-                  {currentDiagnosisForward && (
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-small text-default-500 truncate flex-1 min-w-0">{currentDiagnosisForward.name}</span>
-                      <Chip 
-                        color="primary"
-                        variant="flat" 
-                        size="sm"
-                        className="flex-shrink-0"
-                      >
-                        转发服务
-                      </Chip>
-                    </div>
-                  )}
+                <ModalHeader className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <h2 className="text-lg font-semibold">转发诊断结果</h2>
+                    {currentDiagnosisForward && (
+                      <div className="flex items-center gap-2 text-xs text-default-500 mt-1">
+                        <span className="truncate">{currentDiagnosisForward.name}</span>
+                        <span className="text-default-300">•</span>
+                        <span>转发服务</span>
+                      </div>
+                    )}
+                  </div>
                 </ModalHeader>
                 <ModalBody>
                   {diagnosisLoading ? (
-                    <div className="flex items-center justify-center py-16">
+                    <div className="flex items-center justify-center py-10">
                       <div className="flex items-center gap-3">
                         <Spinner size="sm" />
                         <span className="text-default-600">正在诊断转发连接...</span>
                       </div>
                     </div>
                   ) : diagnosisResult ? (
-                    <div className="border border-divider rounded-lg overflow-hidden divide-y divide-divider">
-                      {diagnosisResult.results.map((result, index) => {
-                        const quality = getQualityDisplay(result.averageTime, result.packetLoss);
-                        
-                        return (
-                          <div key={index} className="p-4">
-                            <div className="flex items-center justify-between w-full">
-                              <div>
-                                <h3 className="text-lg font-semibold text-foreground">{result.description}</h3>
-                                <div className="flex items-center gap-2 mt-1">
-                                  <span className="text-small text-default-500">节点: {result.nodeName}</span>
-                                  <Chip 
-                                    color={result.success ? 'success' : 'danger'} 
-                                    variant="flat" 
-                                    size="sm"
-                                  >
-                                    {result.success ? '连接成功' : '连接失败'}
-                                  </Chip>
+                    <div className="border border-divider rounded-md overflow-hidden">
+                      <div className="grid grid-cols-[1fr_120px_120px_120px_120px] bg-default-100 text-xs font-semibold text-default-700 px-4 py-2">
+                        <div>路径</div>
+                        <div className="text-center">状态</div>
+                        <div className="text-center">延迟(ms)</div>
+                        <div className="text-center">丢包率</div>
+                        <div className="text-center">质量</div>
+                      </div>
+                      <div className="divide-y divide-divider">
+                        {diagnosisResult.results.map((result, index) => {
+                          const quality = getQualityDisplay(result.averageTime, result.packetLoss);
+                          const targetAddress = `${result.targetIp}${result.targetPort ? ':' + result.targetPort : ''}`;
+
+                          return (
+                            <div key={index} className="grid grid-cols-[1fr_120px_120px_120px_120px] px-4 py-3 items-center">
+                              <div className="min-w-0">
+                                <div className="text-sm font-semibold text-foreground truncate">
+                                  {result.description}（{result.nodeName}）
                                 </div>
+                                <div className="text-xs text-default-500 font-mono truncate">{targetAddress}</div>
+                                {!result.success && (
+                                  <div className="text-xs text-default-500 mt-1 truncate">
+                                    错误: {result.message || '-'}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="flex justify-center">
+                                <Chip 
+                                  color={result.success ? 'success' : 'danger'} 
+                                  variant="flat" 
+                                  size="sm"
+                                >
+                                  {result.success ? '成功' : '失败'}
+                                </Chip>
+                              </div>
+                              <div className="text-center text-sm font-semibold text-foreground">
+                                {result.success ? result.averageTime?.toFixed(0) : '--'}
+                              </div>
+                              <div className="text-center text-sm font-semibold text-foreground">
+                                {result.success ? `${result.packetLoss?.toFixed(1)}%` : '--'}
+                              </div>
+                              <div className="flex justify-center">
+                                {result.success && quality ? (
+                                  <Chip color={quality.color as any} variant="flat" size="sm">
+                                    {quality.text}
+                                  </Chip>
+                                ) : (
+                                  <span className="text-xs text-default-400">-</span>
+                                )}
                               </div>
                             </div>
-                            
-                            <div className="mt-3">
-                              {result.success ? (
-                                <div className="space-y-3">
-                                  <div className="grid grid-cols-3 gap-4">
-                                    <div className="text-center">
-                                      <div className="text-2xl font-bold text-primary">{result.averageTime?.toFixed(0)}</div>
-                                      <div className="text-small text-default-500">平均延迟(ms)</div>
-                                    </div>
-                                    <div className="text-center">
-                                      <div className="text-2xl font-bold text-warning">{result.packetLoss?.toFixed(1)}</div>
-                                      <div className="text-small text-default-500">丢包率(%)</div>
-                                    </div>
-                                    <div className="text-center">
-                                      {quality && (
-                                        <>
-                                          <Chip color={quality.color as any} variant="flat" size="lg">
-                                            {quality.text}
-                                          </Chip>
-                                          <div className="text-small text-default-500 mt-1">连接质量</div>
-                                        </>
-                                      )}
-                                    </div>
-                                  </div>
-                                  <div className="text-small text-default-500 flex items-center gap-1">
-                                    <span className="flex-shrink-0">目标地址:</span>
-                                    <code className="font-mono truncate min-w-0" title={`${result.targetIp}${result.targetPort ? ':' + result.targetPort : ''}`}>
-                                      {result.targetIp}{result.targetPort ? ':' + result.targetPort : ''}
-                                    </code>
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="space-y-2">
-                                  <div className="text-small text-default-500 flex items-center gap-1">
-                                    <span className="flex-shrink-0">目标地址:</span>
-                                    <code className="font-mono truncate min-w-0" title={`${result.targetIp}${result.targetPort ? ':' + result.targetPort : ''}`}>
-                                      {result.targetIp}{result.targetPort ? ':' + result.targetPort : ''}
-                                    </code>
-                                  </div>
-                                  <div className="text-xs text-default-500">
-                                    错误详情: {result.message || '-'}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
+                          );
+                        })}
+                      </div>
                     </div>
                   ) : (
-                    <div className="text-center py-16">
+                    <div className="text-center py-10">
                       <div className="w-16 h-16 bg-default-100 rounded-full flex items-center justify-center mx-auto mb-4">
                         <svg className="w-8 h-8 text-default-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />

@@ -882,99 +882,84 @@ export default function TunnelPage() {
           <ModalContent>
             {(onClose) => (
               <>
-                <ModalHeader className="flex flex-col gap-1">
-                  <h2 className="text-xl font-bold">隧道诊断结果</h2>
-                  {currentDiagnosisTunnel && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-small text-default-500">{currentDiagnosisTunnel.name}</span>
-                      <Chip 
-                        color={currentDiagnosisTunnel.type === 1 ? 'primary' : 'secondary'} 
-                        variant="flat" 
-                        size="sm"
-                      >
-                        {currentDiagnosisTunnel.type === 1 ? '端口转发' : '隧道转发'}
-                      </Chip>
-                    </div>
-                  )}
+                <ModalHeader className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <h2 className="text-lg font-semibold">隧道诊断结果</h2>
+                    {currentDiagnosisTunnel && (
+                      <div className="flex items-center gap-2 text-xs text-default-500 mt-1">
+                        <span className="truncate">{currentDiagnosisTunnel.name}</span>
+                        <span className="text-default-300">•</span>
+                        <span>{currentDiagnosisTunnel.type === 1 ? '端口转发' : '隧道转发'}</span>
+                      </div>
+                    )}
+                  </div>
                 </ModalHeader>
                 <ModalBody>
                   {diagnosisLoading ? (
-                    <div className="flex items-center justify-center py-16">
+                    <div className="flex items-center justify-center py-10">
                       <div className="flex items-center gap-3">
                         <Spinner size="sm" />
                         <span className="text-default-600">正在诊断...</span>
                       </div>
                     </div>
                   ) : diagnosisResult ? (
-                    <div className="border border-divider rounded-lg overflow-hidden divide-y divide-divider">
-                      {diagnosisResult.results.map((result, index) => {
-                        const quality = getQualityDisplay(result.averageTime, result.packetLoss);
-                        
-                        return (
-                          <div key={index} className="p-4">
-                            <div className="flex items-center justify-between gap-3">
-                              <div className="flex items-center gap-3">
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                                  result.success ? 'bg-success text-white' : 'bg-danger text-white'
-                                }`}>
-                                  {result.success ? '✓' : '✗'}
+                    <div className="border border-divider rounded-md overflow-hidden">
+                      <div className="grid grid-cols-[1fr_120px_120px_120px_120px] bg-default-100 text-xs font-semibold text-default-700 px-4 py-2">
+                        <div>路径</div>
+                        <div className="text-center">状态</div>
+                        <div className="text-center">延迟(ms)</div>
+                        <div className="text-center">丢包率</div>
+                        <div className="text-center">质量</div>
+                      </div>
+                      <div className="divide-y divide-divider">
+                        {diagnosisResult.results.map((result, index) => {
+                          const quality = getQualityDisplay(result.averageTime, result.packetLoss);
+                          const targetAddress = `${result.targetIp}${result.targetPort ? ':' + result.targetPort : ''}`;
+
+                          return (
+                            <div key={index} className="grid grid-cols-[1fr_120px_120px_120px_120px] px-4 py-3 items-center">
+                              <div className="min-w-0">
+                                <div className="text-sm font-semibold text-foreground truncate">
+                                  {result.description}（{result.nodeName}）
                                 </div>
-                                <div>
-                                  <h4 className="font-semibold">{result.description}</h4>
-                                  <p className="text-small text-default-500">{result.nodeName}</p>
-                                </div>
+                                <div className="text-xs text-default-500 font-mono truncate">{targetAddress}</div>
+                                {!result.success && (
+                                  <div className="text-xs text-default-500 mt-1 truncate">
+                                    错误: {result.message || '-'}
+                                  </div>
+                                )}
                               </div>
-                              <Chip 
-                                color={result.success ? 'success' : 'danger'} 
-                                variant="flat"
-                              >
-                                {result.success ? '成功' : '失败'}
-                              </Chip>
+                              <div className="flex justify-center">
+                                <Chip 
+                                  color={result.success ? 'success' : 'danger'} 
+                                  variant="flat"
+                                  size="sm"
+                                >
+                                  {result.success ? '成功' : '失败'}
+                                </Chip>
+                              </div>
+                              <div className="text-center text-sm font-semibold text-foreground">
+                                {result.success ? result.averageTime?.toFixed(0) : '--'}
+                              </div>
+                              <div className="text-center text-sm font-semibold text-foreground">
+                                {result.success ? `${result.packetLoss?.toFixed(1)}%` : '--'}
+                              </div>
+                              <div className="flex justify-center">
+                                {result.success && quality ? (
+                                  <Chip color={quality.color as any} variant="flat" size="sm">
+                                    {quality.text}
+                                  </Chip>
+                                ) : (
+                                  <span className="text-xs text-default-400">-</span>
+                                )}
+                              </div>
                             </div>
-                            <div className="mt-3">
-                              {result.success ? (
-                                <div className="space-y-3">
-                                  <div className="grid grid-cols-3 gap-4">
-                                    <div className="text-center">
-                                      <div className="text-2xl font-bold text-primary">{result.averageTime?.toFixed(0)}</div>
-                                      <div className="text-small text-default-500">平均延迟(ms)</div>
-                                    </div>
-                                    <div className="text-center">
-                                      <div className="text-2xl font-bold text-warning">{result.packetLoss?.toFixed(1)}</div>
-                                      <div className="text-small text-default-500">丢包率(%)</div>
-                                    </div>
-                                    <div className="text-center">
-                                      {quality && (
-                                        <>
-                                          <Chip color={quality.color as any} variant="flat" size="lg">
-                                            {quality.text}
-                                          </Chip>
-                                          <div className="text-small text-default-500 mt-1">连接质量</div>
-                                        </>
-                                      )}
-                                    </div>
-                                  </div>
-                                  <div className="text-small text-default-500">
-                                    目标地址: <code className="font-mono">{result.targetIp}{result.targetPort ? ':' + result.targetPort : ''}</code>
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="space-y-2">
-                                  <div className="text-small text-default-500">
-                                    目标地址: <code className="font-mono">{result.targetIp}{result.targetPort ? ':' + result.targetPort : ''}</code>
-                                  </div>
-                                  <div className="text-xs text-default-500">
-                                    错误详情: {result.message || '-'}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
+                          );
+                        })}
+                      </div>
                     </div>
                   ) : (
-                    <div className="text-center py-16">
+                    <div className="text-center py-10">
                       <div className="w-16 h-16 bg-default-100 rounded-full flex items-center justify-center mx-auto mb-4">
                         <svg className="w-8 h-8 text-default-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
