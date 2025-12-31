@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@config "../../tailwind.config.js";
 
 
 /* 移动端视口高度优化 */
@@ -85,4 +86,49 @@ html, body {
   }
 }
 
-@config "../../tailwind.config.js"
+/* Flat input styles (HeroUI inputs/selects) */
+:root {
+  --flat-input-border: #e5e7eb;
+  --flat-input-border-focus: #2563eb;
+  --flat-input-bg: transparent;
+}
+
+.dark {
+  --flat-input-border: #374151;
+  --flat-input-border-focus: #60a5fa;
+}
+
+[data-slot="input-wrapper"],
+[data-slot="trigger"] {
+  box-shadow: none !important;
+  background: var(--flat-input-bg) !important;
+  border: 1px solid var(--flat-input-border) !important;
+  border-radius: 0.5rem !important;
+}
+
+[data-slot="input-wrapper"][data-focus="true"],
+[data-slot="trigger"][data-focus="true"] {
+  border-color: var(--flat-input-border-focus) !important;
+}
+
+/* Flat button styles (HeroUI buttons and native buttons) */
+:root {
+  --flat-button-radius: 0.5rem;
+}
+
+button,
+[role="button"] {
+  box-shadow: none !important;
+  border-radius: var(--flat-button-radius) !important;
+}
+
+button[data-hover="true"],
+button[data-pressed="true"],
+button[data-focus="true"],
+button[data-focus-visible="true"],
+[role="button"][data-hover="true"],
+[role="button"][data-pressed="true"],
+[role="button"][data-focus="true"],
+[role="button"][data-focus-visible="true"] {
+  box-shadow: none !important;
+}

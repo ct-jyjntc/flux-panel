@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardBody } from "@heroui/card";
 import { Button } from "@heroui/button";
 import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, useDisclosure } from "@heroui/modal";
 import { Input } from "@heroui/input";
@@ -160,12 +159,12 @@ export default function ProfilePage() {
   };
 
   return (
-    <div className="px-3 lg:px-6 py-8 flex flex-col h-full">
+    <div className="px-4 lg:px-6 py-6 flex flex-col h-full">
 
       <div className="space-y-6 flex-1">
-        {/* 用户信息卡片 */}
-        <Card className="border border-gray-200 dark:border-default-200 shadow-md hover:shadow-lg transition-shadow">
-          <CardBody className="p-4">
+        <div className="border border-gray-200 dark:border-default-200 rounded-lg overflow-hidden divide-y divide-gray-200 dark:divide-default-200">
+          {/* 用户信息卡片 */}
+          <div className="p-4">
             <div className="flex items-center space-x-4">
               <div className="w-12 h-12 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center">
                 <svg className="w-6 h-6 text-primary" fill="currentColor" viewBox="0 0 20 20">
@@ -188,12 +187,10 @@ export default function ProfilePage() {
                 </div>
               </div>
             </div>
-          </CardBody>
-        </Card>
+          </div>
 
-        {/* 功能网格 */}
-        <Card className="border border-gray-200 dark:border-default-200 shadow-md hover:shadow-lg transition-shadow">
-          <CardBody className="p-4">
+          {/* 功能网格 */}
+          <div className="p-4">
             <div className="grid grid-cols-3 gap-3">
               {/* 管理员功能 */}
               {isAdmin && adminMenuItems.map((item) => (
@@ -235,8 +232,8 @@ export default function ProfilePage() {
                 <span className="text-xs text-foreground text-center">退出登录</span>
               </button>
             </div>
-          </CardBody>
-        </Card>
+          </div>
+        </div>
 
         <div className="fixed inset-x-0 bottom-20 text-center py-4">
                <p className="text-xs text-gray-400 dark:text-gray-500">
@@ -313,10 +310,11 @@ export default function ProfilePage() {
                 </div>
               </ModalBody>
               <ModalFooter>
-                <Button color="default" variant="light" onPress={onClose}>
+                <Button size="sm" color="default" variant="light" onPress={onClose}>
                   取消
                 </Button>
                 <Button 
+                  size="sm"
                   color="primary" 
                   onPress={handlePasswordSubmit}
                   isLoading={passwordLoading}

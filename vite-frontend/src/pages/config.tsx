@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from "@heroui/button";
-import { Card, CardBody, CardHeader } from "@heroui/card";
 import { Input } from "@heroui/input";
 import { Spinner } from "@heroui/spinner";
 import { Divider } from "@heroui/divider";
@@ -335,45 +334,22 @@ export default function ConfigPage() {
 
   return (
     
-      <div className="p-6 max-w-4xl mx-auto">
-        {/* 页面标题 */}
-        <div className="flex items-center gap-3 mb-6">
-          <SettingsIcon className="w-8 h-8 text-primary" />
-          <div>
-            <h1 className="text-2xl font-bold">网站配置</h1>
-            <p className="text-gray-600 dark:text-gray-400">
-              管理网站的基本信息和显示设置
-            </p>
-          </div>
+      <div className="px-4 lg:px-6 py-6">
+        <div className="flex justify-end mb-6">
+          <Button
+            size="sm"
+            color="primary"
+            startContent={<SaveIcon className="w-4 h-4" />}
+            onClick={handleSave}
+            isLoading={saving}
+            disabled={!hasChanges}
+          >
+            {saving ? '保存中...' : '保存配置'}
+          </Button>
         </div>
 
-        <Card className="shadow-md">
-          <CardHeader className="pb-4">
-            <div className="flex justify-between items-center w-full">
-              <div>
-                <h2 className="text-xl font-semibold">基本设置</h2>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  配置网站的基本信息，这些设置会影响网站的显示效果
-                </p>
-              </div>
-              <div className="flex gap-2">
-
-                <Button
-                  color="primary"
-                  startContent={<SaveIcon className="w-4 h-4" />}
-                  onClick={handleSave}
-                  isLoading={saving}
-                  disabled={!hasChanges}
-                >
-                  {saving ? '保存中...' : '保存配置'}
-                </Button>
-              </div>
-            </div>
-          </CardHeader>
-
-          <Divider />
-
-          <CardBody className="space-y-6 pt-6">
+        <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden divide-y divide-gray-200 dark:divide-gray-700">
+          <div className="p-4">
             {CONFIG_ITEMS.map((item, index) => {
               // 检查配置项是否应该显示
               if (!shouldShowItem(item)) {
@@ -385,13 +361,13 @@ export default function ConfigPage() {
               const isLastItem = remainingItems.length === 0;
 
               return (
-                <div key={item.key} className="space-y-3">
+                <div key={item.key} className="space-y-2 py-4 first:pt-0 last:pb-0">
                   <div className="flex flex-col gap-1">
-                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    <label className="text-sm font-medium text-default-700">
                       {item.label}
                     </label>
                     {item.description && (
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                      <p className="text-xs text-default-500">
                         {item.description}
                       </p>
                     )}
@@ -399,30 +375,17 @@ export default function ConfigPage() {
                   
                   {/* 渲染配置项 */}
                   {renderConfigItem(item)}
-                  
-                  {/* 分隔线 */}
-                  {!isLastItem && (
-                    <Divider className="mt-6" />
-                  )}
+                  {!isLastItem && <div className="pt-4" />}
                 </div>
               );
             })}
-          </CardBody>
-        </Card>
-
-        {/* 操作提示 */}
-        {hasChanges && (
-          <Card className="mt-4 bg-warning-50 dark:bg-warning-900/20 border-warning-200 dark:border-warning-800">
-            <CardBody className="py-3">
-              <div className="flex items-center gap-2 text-warning-700 dark:text-warning-300">
-                <div className="w-2 h-2 bg-warning-500 rounded-full animate-pulse" />
-                <span className="text-sm">
-                  检测到配置变更，请记得保存您的修改
-                </span>
-              </div>
-            </CardBody>
-          </Card>
-        )}
+          </div>
+          {hasChanges && (
+            <div className="px-4 py-3 text-sm text-warning-600">
+              检测到配置变更，请记得保存您的修改
+            </div>
+          )}
+        </div>
       </div>
     
   );

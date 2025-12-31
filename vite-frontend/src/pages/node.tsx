@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from "react";
-import { Card, CardBody, CardHeader } from "@heroui/card";
 import { Button } from "@heroui/button";
 import { Input } from "@heroui/input";
 import { Textarea } from "@heroui/input";
@@ -7,8 +6,15 @@ import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from "@herou
 import { Chip } from "@heroui/chip";
 import { Switch } from "@heroui/switch";
 import { Spinner } from "@heroui/spinner";
-import { Alert } from "@heroui/alert";
 import { Progress } from "@heroui/progress";
+import { 
+  Table, 
+  TableHeader, 
+  TableColumn, 
+  TableBody, 
+  TableRow, 
+  TableCell 
+} from "@heroui/table";
 import toast from 'react-hot-toast';
 import axios from 'axios';
 
@@ -590,22 +596,17 @@ export default function NodePage() {
 
   return (
     
-      <div className="px-3 lg:px-6 py-8">
+      <div className="px-4 lg:px-6 py-6">
         {/* 页面头部 */}
-        <div className="flex items-center justify-between mb-6">
-        <div className="flex-1">
-        </div>
-
-        <Button
-              size="sm"
-              variant="flat"
-              color="primary"
-              onPress={handleAdd}
-             
-            >
-              新增
-            </Button>
-     
+        <div className="flex items-center justify-end mb-6">
+          <Button
+            size="sm"
+            variant="flat"
+            color="primary"
+            onPress={handleAdd}
+          >
+            新增
+          </Button>
         </div>
 
         {/* 节点列表 */}
@@ -616,36 +617,64 @@ export default function NodePage() {
               <span className="text-default-600">正在加载...</span>
             </div>
           </div>
-        ) : nodeList.length === 0 ? (
-          <Card className="shadow-sm border border-gray-200 dark:border-gray-700">
-            <CardBody className="text-center py-16">
-              <div className="flex flex-col items-center gap-4">
-                <div className="w-16 h-16 bg-default-100 rounded-full flex items-center justify-center">
-                  <svg className="w-8 h-8 text-default-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 12h14M5 12l4-4m-4 4l4 4" />
-                  </svg>
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-foreground">暂无节点配置</h3>
-                  <p className="text-default-500 text-sm mt-1">还没有创建任何节点配置，点击上方按钮开始创建</p>
-                </div>
-              </div>
-            </CardBody>
-          </Card>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
-            {nodeList.map((node) => (
-              <Card 
-                key={node.id} 
-                className="shadow-sm border border-divider hover:shadow-md transition-shadow duration-200"
+          <div className="border border-divider rounded-lg overflow-hidden">
+            <Table
+              removeWrapper
+              aria-label="节点列表"
+              classNames={{
+                th: "bg-default-50 text-default-600 text-xs",
+                td: "py-3 align-top",
+              }}
+            >
+              <TableHeader>
+                <TableColumn>节点</TableColumn>
+                <TableColumn>入口IP</TableColumn>
+                <TableColumn>端口</TableColumn>
+                <TableColumn>版本</TableColumn>
+                <TableColumn>状态</TableColumn>
+                <TableColumn>开机时间</TableColumn>
+                <TableColumn>CPU</TableColumn>
+                <TableColumn>内存</TableColumn>
+                <TableColumn>网络</TableColumn>
+                <TableColumn>流量</TableColumn>
+                <TableColumn className="text-right">操作</TableColumn>
+              </TableHeader>
+              <TableBody
+                emptyContent={
+                  <div className="text-default-500 text-sm py-8">
+                    暂无节点配置，点击上方按钮开始创建
+                  </div>
+                }
               >
-                <CardHeader className="pb-2">
-                  <div className="flex justify-between items-start w-full">
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-foreground truncate text-sm">{node.name}</h3>
-                      <p className="text-xs text-default-500 truncate">{node.serverIp}</p>
-                    </div>
-                    <div className="flex items-center gap-1.5 ml-2">
+                {nodeList.map((node) => (
+                  <TableRow key={node.id}>
+                    <TableCell>
+                      <div className="min-w-0">
+                        <div className="font-medium text-foreground truncate text-sm">{node.name}</div>
+                        <div className="text-xs text-default-500 truncate">{node.serverIp}</div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-xs font-mono">
+                        {node.ip ? (
+                          node.ip.split(',').length > 1 ? (
+                            <span title={node.ip.split(',')[0].trim()}>
+                              {node.ip.split(',')[0].trim()} +{node.ip.split(',').length - 1}
+                            </span>
+                          ) : (
+                            <span title={node.ip.trim()}>{node.ip.trim()}</span>
+                          )
+                        ) : '-'}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-xs">{node.portSta}-{node.portEnd}</div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-xs">{node.version || '未知'}</div>
+                    </TableCell>
+                    <TableCell>
                       <Chip 
                         color={node.connectionStatus === 'online' ? 'success' : 'danger'} 
                         variant="flat" 
@@ -654,173 +683,76 @@ export default function NodePage() {
                       >
                         {node.connectionStatus === 'online' ? '在线' : '离线'}
                       </Chip>
-                    </div>
-                  </div>
-                </CardHeader>
-
-                <CardBody className="pt-0 pb-3">
-                  {/* 基础信息 */}
-                  <div className="space-y-2 mb-4">
-                    <div className="flex justify-between items-center text-sm min-w-0">
-                      <span className="text-default-600 flex-shrink-0">入口IP</span>
-                      <div className="text-right text-xs min-w-0 flex-1 ml-2">
-                        {node.ip ? (
-                          node.ip.split(',').length > 1 ? (
-                            <span className="font-mono truncate block" title={node.ip.split(',')[0].trim()}>
-                              {node.ip.split(',')[0].trim()} +{node.ip.split(',').length - 1}个
-                            </span>
-                          ) : (
-                            <span className="font-mono truncate block" title={node.ip.trim()}>
-                              {node.ip.trim()}
-                            </span>
-                          )
-                        ) : '-'}
-                      </div>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-default-600">端口</span>
-                      <span className="text-xs">{node.portSta}-{node.portEnd}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-default-600">版本</span>
-                      <span className="text-xs">{node.version || '未知'}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-default-600">开机时间</span>
-                      <span className="text-xs">
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-xs">
                         {node.connectionStatus === 'online' && node.systemInfo 
                           ? formatUptime(node.systemInfo.uptime)
                           : '-'
                         }
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* 系统监控 */}
-                  <div className="space-y-3 mb-4">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <div className="flex justify-between text-xs mb-1">
-                          <span>CPU</span>
-                          <span className="font-mono">
-                            {node.connectionStatus === 'online' && node.systemInfo 
-                              ? `${node.systemInfo.cpuUsage.toFixed(1)}%` 
-                              : '-'
-                            }
-                          </span>
-                        </div>
-                        <Progress
-                          value={node.connectionStatus === 'online' && node.systemInfo ? node.systemInfo.cpuUsage : 0}
-                          color={getProgressColor(
-                            node.connectionStatus === 'online' && node.systemInfo ? node.systemInfo.cpuUsage : 0,
-                            node.connectionStatus !== 'online'
-                          )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-xs">
+                        {node.connectionStatus === 'online' && node.systemInfo 
+                          ? `${node.systemInfo.cpuUsage.toFixed(1)}%` 
+                          : '-'
+                        }
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-xs">
+                        {node.connectionStatus === 'online' && node.systemInfo 
+                          ? `${node.systemInfo.memoryUsage.toFixed(1)}%` 
+                          : '-'
+                        }
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-xs space-y-1">
+                        <div>↑ {node.connectionStatus === 'online' && node.systemInfo ? formatSpeed(node.systemInfo.uploadSpeed) : '-'}</div>
+                        <div>↓ {node.connectionStatus === 'online' && node.systemInfo ? formatSpeed(node.systemInfo.downloadSpeed) : '-'}</div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-xs space-y-1">
+                        <div>↑ {node.connectionStatus === 'online' && node.systemInfo ? formatTraffic(node.systemInfo.uploadTraffic) : '-'}</div>
+                        <div>↓ {node.connectionStatus === 'online' && node.systemInfo ? formatTraffic(node.systemInfo.downloadTraffic) : '-'}</div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex justify-end gap-1.5">
+                        <Button
                           size="sm"
-                          aria-label="CPU使用率"
-                        />
-                      </div>
-                      <div>
-                        <div className="flex justify-between text-xs mb-1">
-                          <span>内存</span>
-                          <span className="font-mono">
-                            {node.connectionStatus === 'online' && node.systemInfo 
-                              ? `${node.systemInfo.memoryUsage.toFixed(1)}%` 
-                              : '-'
-                            }
-                          </span>
-                        </div>
-                        <Progress
-                          value={node.connectionStatus === 'online' && node.systemInfo ? node.systemInfo.memoryUsage : 0}
-                          color={getProgressColor(
-                            node.connectionStatus === 'online' && node.systemInfo ? node.systemInfo.memoryUsage : 0,
-                            node.connectionStatus !== 'online'
-                          )}
+                          variant="flat"
+                          color="success"
+                          onPress={() => handleCopyInstallCommand(node)}
+                          isLoading={node.copyLoading}
+                        >
+                          安装
+                        </Button>
+                        <Button
                           size="sm"
-                          aria-label="内存使用率"
-                        />
+                          variant="flat"
+                          color="primary"
+                          onPress={() => handleEdit(node)}
+                        >
+                          编辑
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="flat"
+                          color="danger"
+                          onPress={() => handleDelete(node)}
+                        >
+                          删除
+                        </Button>
                       </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      <div className="text-center p-2 bg-default-50 dark:bg-default-100 rounded">
-                        <div className="text-default-600 mb-0.5">上传</div>
-                        <div className="font-mono">
-                          {node.connectionStatus === 'online' && node.systemInfo 
-                            ? formatSpeed(node.systemInfo.uploadSpeed) 
-                            : '-'
-                          }
-                        </div>
-                      </div>
-                      <div className="text-center p-2 bg-default-50 dark:bg-default-100 rounded">
-                        <div className="text-default-600 mb-0.5">下载</div>
-                        <div className="font-mono">
-                          {node.connectionStatus === 'online' && node.systemInfo 
-                            ? formatSpeed(node.systemInfo.downloadSpeed) 
-                            : '-'
-                          }
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* 流量统计 */}
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      <div className="text-center p-2 bg-primary-50 dark:bg-primary-100/20 rounded border border-primary-200 dark:border-primary-300/20">
-                        <div className="text-primary-600 dark:text-primary-400 mb-0.5">↑ 上行流量</div>
-                        <div className="font-mono text-primary-700 dark:text-primary-300">
-                          {node.connectionStatus === 'online' && node.systemInfo 
-                            ? formatTraffic(node.systemInfo.uploadTraffic) 
-                            : '-'
-                          }
-                        </div>
-                      </div>
-                      <div className="text-center p-2 bg-success-50 dark:bg-success-100/20 rounded border border-success-200 dark:border-success-300/20">
-                        <div className="text-success-600 dark:text-success-400 mb-0.5">↓ 下行流量</div>
-                        <div className="font-mono text-success-700 dark:text-success-300">
-                          {node.connectionStatus === 'online' && node.systemInfo 
-                            ? formatTraffic(node.systemInfo.downloadTraffic) 
-                            : '-'
-                          }
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 操作按钮 */}
-                  <div className="space-y-1.5">
-                    <div className="flex gap-1.5">
-                      <Button
-                        size="sm"
-                        variant="flat"
-                        color="success"
-                        onPress={() => handleCopyInstallCommand(node)}
-                        isLoading={node.copyLoading}
-                        className="flex-1 min-h-8"
-                      >
-                        安装
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="flat"
-                        color="primary"
-                        onPress={() => handleEdit(node)}
-                        className="flex-1 min-h-8"
-                      >
-                        编辑
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="flat"
-                        color="danger"
-                        onPress={() => handleDelete(node)}
-                        className="flex-1 min-h-8"
-                      >
-                        删除
-                      </Button>
-                    </div>
-                  </div>
-                </CardBody>
-              </Card>
-            ))}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </div>
         )}
 
@@ -836,7 +768,7 @@ export default function NodePage() {
           <ModalContent>
             <ModalHeader>{dialogTitle}</ModalHeader>
             <ModalBody>
-              <div className="space-y-4">
+              <div className="space-y-3">
                 <Input
                   label="节点名称"
                   placeholder="请输入节点名称"
@@ -845,6 +777,10 @@ export default function NodePage() {
                   isInvalid={!!errors.name}
                   errorMessage={errors.name}
                   variant="bordered"
+                  classNames={{
+                    inputWrapper: "rounded-lg border border-default-200 dark:border-default-200/40 bg-transparent shadow-none",
+                    label: "text-default-600",
+                  }}
                 />
 
                 <Input
@@ -855,6 +791,10 @@ export default function NodePage() {
                   isInvalid={!!errors.serverIp}
                   errorMessage={errors.serverIp}
                   variant="bordered"
+                  classNames={{
+                    inputWrapper: "rounded-lg border border-default-200 dark:border-default-200/40 bg-transparent shadow-none",
+                    label: "text-default-600",
+                  }}
                 />
 
                 <Textarea
@@ -868,9 +808,14 @@ export default function NodePage() {
                   minRows={3}
                   maxRows={5}
                   description="支持多个IP，每行一个地址"
+                  classNames={{
+                    inputWrapper: "rounded-lg border border-default-200 dark:border-default-200/40 bg-transparent shadow-none",
+                    label: "text-default-600",
+                    description: "text-xs text-default-400",
+                  }}
                 />
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-3">
                   <Input
                     label="起始端口"
                     type="number"
@@ -882,6 +827,10 @@ export default function NodePage() {
                     variant="bordered"
                     min={1}
                     max={65535}
+                    classNames={{
+                      inputWrapper: "rounded-lg border border-default-200 dark:border-default-200/40 bg-transparent shadow-none",
+                      label: "text-default-600",
+                    }}
                   />
 
                   <Input
@@ -895,30 +844,30 @@ export default function NodePage() {
                     variant="bordered"
                     min={1}
                     max={65535}
+                    classNames={{
+                      inputWrapper: "rounded-lg border border-default-200 dark:border-default-200/40 bg-transparent shadow-none",
+                      label: "text-default-600",
+                    }}
                   />
                 </div>
 
                 {/* 屏蔽协议 */}
                 <div className="mt-1">
                   <div className="text-sm font-medium text-default-700">屏蔽协议</div>
-                  <div className="text-xs text-default-500 mb-2">开启开关以屏蔽对应协议</div>
+                  <div className="text-xs text-default-500 mb-1">开启开关以屏蔽对应协议</div>
                   {protocolDisabled && (
-                    <Alert
-                      color="warning"
-                      variant="flat"
-                      description={protocolDisabledReason || '等待节点上线后再设置'}
-                      className="mb-2"
-                    />
+                    <div className="text-xs text-warning-600 mb-2">
+                      {protocolDisabledReason || '等待节点上线后再设置'}
+                    </div>
                   )}
-                  <div className={`grid grid-cols-1 sm:grid-cols-3 gap-3 bg-default-50 dark:bg-default-100 p-3 rounded-md border border-default-200 dark:border-default-100/30 ${protocolDisabled ? 'opacity-70' : ''}`}>
-                    {/* HTTP tile */}
-                    <div className="px-3 py-3 rounded-lg bg-white dark:bg-default-50 border border-default-200 dark:border-default-100/30 hover:border-primary-200 transition-colors">
-                      <div className="flex items-center gap-2 mb-2">
+                  <div className={`divide-y divide-default-200 dark:divide-default-200/40 border-t border-default-200 dark:border-default-200/40 ${protocolDisabled ? 'opacity-70' : ''}`}>
+                    <div className="flex items-center justify-between py-3">
+                      <div className="flex items-center gap-2">
                         <svg className="w-4 h-4 text-default-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 10h20"/></svg>
                         <div className="text-sm font-medium text-default-700">HTTP</div>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <div className="text-xs text-default-500">禁用/启用</div>
+                      <div className="flex items-center gap-3">
+                        <div className="text-xs text-default-400">{form.http === 1 ? '已开启' : '已关闭'}</div>
                         <Switch
                           size="sm"
                           isSelected={form.http === 1}
@@ -926,17 +875,14 @@ export default function NodePage() {
                           onValueChange={(v) => setForm(prev => ({ ...prev, http: v ? 1 : 0 }))}
                         />
                       </div>
-                      <div className="mt-1 text-xs text-default-400">{form.http === 1 ? '已开启' : '已关闭'}</div>
                     </div>
-
-                    {/* TLS tile */}
-                    <div className="px-3 py-3 rounded-lg bg-white dark:bg-default-50 border border-default-200 dark:border-default-100/30 hover:border-primary-200 transition-colors">
-                      <div className="flex items-center gap-2 mb-2">
+                    <div className="flex items-center justify-between py-3">
+                      <div className="flex items-center gap-2">
                         <svg className="w-4 h-4 text-default-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 10V7a6 6 0 1 1 12 0v3"/><rect x="4" y="10" width="16" height="10" rx="2"/></svg>
                         <div className="text-sm font-medium text-default-700">TLS</div>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <div className="text-xs text-default-500">禁用/启用</div>
+                      <div className="flex items-center gap-3">
+                        <div className="text-xs text-default-400">{form.tls === 1 ? '已开启' : '已关闭'}</div>
                         <Switch
                           size="sm"
                           isSelected={form.tls === 1}
@@ -944,17 +890,14 @@ export default function NodePage() {
                           onValueChange={(v) => setForm(prev => ({ ...prev, tls: v ? 1 : 0 }))}
                         />
                       </div>
-                      <div className="mt-1 text-xs text-default-400">{form.tls === 1 ? '已开启' : '已关闭'}</div>
                     </div>
-
-                    {/* SOCKS tile */}
-                    <div className="px-3 py-3 rounded-lg bg-white dark:bg-default-50 border border-default-200 dark:border-default-100/30 hover:border-primary-200 transition-colors">
-                      <div className="flex items-center gap-2 mb-2">
+                    <div className="flex items-center justify-between py-3">
+                      <div className="flex items-center gap-2">
                         <svg className="w-4 h-4 text-default-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                         <div className="text-sm font-medium text-default-700">SOCKS</div>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <div className="text-xs text-default-500">禁用/启用</div>
+                      <div className="flex items-center gap-3">
+                        <div className="text-xs text-default-400">{form.socks === 1 ? '已开启' : '已关闭'}</div>
                         <Switch
                           size="sm"
                           isSelected={form.socks === 1}
@@ -962,36 +905,28 @@ export default function NodePage() {
                           onValueChange={(v) => setForm(prev => ({ ...prev, socks: v ? 1 : 0 }))}
                         />
                       </div>
-                      <div className="mt-1 text-xs text-default-400">{form.socks === 1 ? '已开启' : '已关闭'}</div>
                     </div>
                   </div>
                 </div>
 
 
 
-                <Alert
-                        color="danger"
-                        variant="flat"
-                        description="请不要在出口节点执行屏蔽协议，否则可能影响转发；屏蔽协议仅需在入口节点执行。"
-                        className="mt-3"
-                      />
-                
-                <Alert
-                        color="primary"
-                        variant="flat"
-                        description="服务器ip是你要添加的服务器的ip地址，不是面板的ip地址。入口ip是用于展示在转发页面，面向用户的访问地址。实在理解不到说明你没这个需求，都填节点的服务器ip就行！"
-                        className="mt-4"
-                      />
+                <div className="mt-2 text-xs text-default-500 space-y-1">
+                  <div>请不要在出口节点执行屏蔽协议，否则可能影响转发；屏蔽协议仅需在入口节点执行。</div>
+                  <div>服务器ip是你要添加的服务器的ip地址，不是面板的ip地址。入口ip是用于展示在转发页面，面向用户的访问地址。实在理解不到说明你没这个需求，都填节点的服务器ip就行！</div>
+                </div>
               </div>
             </ModalBody>
             <ModalFooter>
               <Button
+                size="sm"
                 variant="flat"
                 onPress={() => setDialogVisible(false)}
               >
                 取消
               </Button>
               <Button
+                size="sm"
                 color="primary"
                 onPress={handleSubmit}
                 isLoading={submitLoading}
@@ -1022,10 +957,11 @@ export default function NodePage() {
                   <p className="text-small text-default-500">此操作不可恢复，请谨慎操作。</p>
                 </ModalBody>
                 <ModalFooter>
-                  <Button variant="light" onPress={onClose}>
+                  <Button size="sm" variant="light" onPress={onClose}>
                     取消
                   </Button>
                   <Button 
+                    size="sm"
                     color="danger" 
                     onPress={confirmDelete}
                     isLoading={deleteLoading}
@@ -1083,6 +1019,7 @@ export default function NodePage() {
             </ModalBody>
             <ModalFooter>
               <Button
+                size="sm"
                 variant="flat"
                 onPress={() => setInstallCommandModal(false)}
               >

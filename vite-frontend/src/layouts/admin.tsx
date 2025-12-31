@@ -36,6 +36,13 @@ export default function AdminLayout({
 
   const [isMobile, setIsMobile] = useState(false);
   const [mobileMenuVisible, setMobileMenuVisible] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('sidebar-collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
   const [username, setUsername] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
@@ -162,6 +169,16 @@ export default function AdminLayout({
     setMobileMenuVisible(!mobileMenuVisible);
   };
 
+  const toggleSidebarCollapsed = () => {
+    const next = !isSidebarCollapsed;
+    setIsSidebarCollapsed(next);
+    try {
+      localStorage.setItem('sidebar-collapsed', next ? 'true' : 'false');
+    } catch {
+      // ignore storage errors
+    }
+  };
+
   // 隐藏移动端菜单
   const hideMobileMenu = () => {
     setMobileMenuVisible(false);
@@ -255,9 +272,8 @@ export default function AdminLayout({
       <aside className={`
         ${isMobile ? 'fixed' : 'relative'} 
         ${isMobile && !mobileMenuVisible ? '-translate-x-full' : 'translate-x-0'}
-        ${isMobile ? 'w-64' : 'w-72'} 
+        ${isMobile ? 'w-64' : (isSidebarCollapsed ? 'w-17' : 'w-72')} 
         bg-white dark:bg-black 
-        shadow-lg 
         border-r border-gray-200 dark:border-gray-600
         z-50 
         transition-transform duration-300 ease-in-out
@@ -266,19 +282,33 @@ export default function AdminLayout({
         ${isMobile ? 'top-0 left-0' : ''}
       `}>
                  {/* Logo 区域 */}
-         <div className="px-3 py-3 h-14 flex items-center">
-           <div className="flex items-center gap-2 w-full">
-             <Logo size={24} />
-             <div className="flex-1 min-w-0">
-               <h1 className="text-sm font-bold text-foreground overflow-hidden whitespace-nowrap">{siteConfig.name}</h1>
-               <p className="text-xs text-default-500">v{siteConfig.version}</p>
-             </div>
+        <div className={`px-4 h-14 flex items-center border-b border-gray-200 dark:border-gray-600 ${isSidebarCollapsed ? 'justify-center' : ''}`}>
+           <div className="flex items-center w-full">
+             {!isSidebarCollapsed && (
+               <div className="flex-1 min-w-0">
+                 <h1 className="text-sm font-semibold text-foreground tracking-wide overflow-hidden whitespace-nowrap">{siteConfig.name}</h1>
+               </div>
+             )}
+             {!isMobile && (
+               <Button
+                 isIconOnly
+                 size="sm"
+                 variant="light"
+                 onPress={toggleSidebarCollapsed}
+                 aria-label={isSidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
+                 className={isSidebarCollapsed ? 'hidden' : ''}
+               >
+                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                 </svg>
+               </Button>
+             )}
            </div>
          </div>
 
                  {/* 菜单导航 */}
-         <nav className="flex-1 px-4 py-6 overflow-y-auto">
-           <ul className="space-y-1">
+        <nav className={`flex-1 py-3 overflow-y-auto ${isSidebarCollapsed ? 'px-2' : 'px-3'}`}>
+          <ul className="space-y-0.5">
             {filteredMenuItems.map((item) => {
               const isActive = location.pathname === item.path;
               return (
@@ -286,18 +316,21 @@ export default function AdminLayout({
                                      <button
                      onClick={() => handleMenuClick(item.path)}
                      className={`
-                       w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left
-                       transition-colors duration-200 min-h-[44px]
+                       w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-2' : 'gap-2.5 px-3'} py-2 rounded-md text-left
+                       transition-colors duration-150 min-h-[40px] relative
                        ${isActive 
-                         ? 'bg-primary-100 dark:bg-primary-600/20 text-primary-600 dark:text-primary-300' 
-                         : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-900'
+                         ? 'text-primary-700 dark:text-primary-300 bg-transparent' 
+                         : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100/60 dark:hover:bg-gray-900/60'
                        }
                      `}
                    >
-                     <div className="flex-shrink-0">
-                       {item.icon}
+                     {isActive && !isSidebarCollapsed && (
+                       <span className="absolute left-1 top-1.5 bottom-1.5 w-[2px] rounded-full bg-primary-500" />
+                     )}
+                     <div className={`flex-shrink-0 ${isActive ? 'text-primary-600 dark:text-primary-300' : ''}`}>
+                      {item.icon}
                      </div>
-                     <span className="font-medium text-sm">{item.label}</span>
+                     {!isSidebarCollapsed && <span className="font-medium text-sm">{item.label}</span>}
                    </button>
                 </li>
               );
@@ -306,38 +339,43 @@ export default function AdminLayout({
         </nav>
 
                 {/* 底部版权信息 */}
-        <div className="px-4 py-2 pb-4 mt-auto flex-shrink-0">
-          <div className="text-center">
-            <p className="text-xs text-gray-400 dark:text-gray-500">
-              Powered by{' '}
-              <a 
-                href="https://github.com/bqlpfy/flux-panel" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-              >
-                flux-panel
-              </a>
-            </p>
-          </div>
+        <div className={`py-2 pb-4 mt-auto flex-shrink-0 ${isSidebarCollapsed ? 'px-2' : 'px-4'}`}>
+          {!isSidebarCollapsed && (
+            <div className="text-center text-xs text-gray-400 dark:text-gray-500">
+              v{siteConfig.version}
+            </div>
+          )}
         </div>
       </aside>
 
       {/* 主内容区域 */}
       <div className={`flex flex-col flex-1 ${isMobile ? 'min-h-0' : 'h-full overflow-hidden'}`}>
                  {/* 顶部导航栏 */}
-         <header className="bg-white dark:bg-black shadow-md border-b border-gray-200 dark:border-gray-600 h-14 flex items-center justify-between px-4 lg:px-6 relative z-10">
-          <div className="flex items-center gap-4">
-            {/* 移动端菜单按钮 */}
-            {isMobile && (
+         <header className="bg-white dark:bg-black border-b border-gray-200 dark:border-gray-600 h-14 flex items-center justify-between px-4 lg:px-6 relative z-10">
+         <div className="flex items-center gap-4">
+           {/* 移动端菜单按钮 */}
+           {isMobile && (
+             <Button
+               isIconOnly
+               variant="light"
+               onPress={toggleMobileMenu}
+               className="lg:hidden"
+             >
+               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+               </svg>
+             </Button>
+           )}
+            {!isMobile && isSidebarCollapsed && (
               <Button
                 isIconOnly
+                size="sm"
                 variant="light"
-                onPress={toggleMobileMenu}
-                className="lg:hidden"
+                onPress={toggleSidebarCollapsed}
+                aria-label="展开侧边栏"
               >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
               </Button>
             )}
@@ -442,10 +480,11 @@ export default function AdminLayout({
                  </div>
               </ModalBody>
               <ModalFooter>
-                <Button color="default" variant="light" onPress={onClose}>
+                <Button size="sm" color="default" variant="light" onPress={onClose}>
                   取消
                 </Button>
                 <Button 
+                  size="sm"
                   color="primary" 
                   onPress={handlePasswordSubmit}
                   isLoading={passwordLoading}

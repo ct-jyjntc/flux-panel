@@ -1,11 +1,18 @@
 import { useState, useEffect } from "react";
-import { Card, CardBody, CardHeader } from "@heroui/card";
 import { Button } from "@heroui/button";
 import { Input } from "@heroui/input";
 import { Select, SelectItem } from "@heroui/select";
 import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from "@heroui/modal";
 import { Chip } from "@heroui/chip";
 import { Spinner } from "@heroui/spinner";
+import { 
+  Table, 
+  TableHeader, 
+  TableColumn, 
+  TableBody, 
+  TableRow, 
+  TableCell 
+} from "@heroui/table";
 import toast from 'react-hot-toast';
 
 
@@ -222,33 +229,48 @@ export default function LimitPage() {
 
   return (
     
-      <div className="px-3 lg:px-6 py-8">
+      <div className="px-4 lg:px-6 py-6">
         {/* 页面头部 */}
-        <div className="flex items-center justify-between mb-6">
-        <div className="flex-1">
+        <div className="flex items-center justify-end mb-6">
+          <Button
+            size="sm"
+            variant="flat"
+            color="primary"
+            onPress={handleAdd}
+          >
+            新增
+          </Button>
         </div>
 
-        <Button
-              size="sm"
-              variant="flat"
-              color="primary"
-              onPress={handleAdd}
-             
+        <div className="border border-divider rounded-lg overflow-hidden">
+          <Table
+            removeWrapper
+            aria-label="限速规则列表"
+            classNames={{
+              th: "bg-default-50 text-default-600 text-xs",
+              td: "py-3 align-top",
+            }}
+          >
+            <TableHeader>
+              <TableColumn>规则名称</TableColumn>
+              <TableColumn>状态</TableColumn>
+              <TableColumn>速度限制</TableColumn>
+              <TableColumn>绑定隧道</TableColumn>
+              <TableColumn className="text-right">操作</TableColumn>
+            </TableHeader>
+            <TableBody
+              emptyContent={
+                <div className="text-default-500 text-sm py-8">
+                  暂无限速规则，点击上方按钮开始创建
+                </div>
+              }
             >
-              新增
-            </Button>
-        </div>
-
-        {/* 统一卡片网格 */}
-        {rules.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
-            {rules.map((rule) => (
-              <Card key={rule.id} className="shadow-sm border border-gray-200 dark:border-gray-700">
-                <CardHeader className="pb-3">
-                  <div className="flex justify-between items-start w-full">
-                    <div>
-                      <h3 className="font-semibold text-foreground">{rule.name}</h3>
-                    </div>
+              {rules.map((rule) => (
+                <TableRow key={rule.id}>
+                  <TableCell>
+                    <div className="text-sm font-medium text-foreground">{rule.name}</div>
+                  </TableCell>
+                  <TableCell>
                     <Chip 
                       color={rule.status === 1 ? "success" : "danger"} 
                       variant="flat" 
@@ -256,81 +278,46 @@ export default function LimitPage() {
                     >
                       {rule.status === 1 ? '运行' : '异常'}
                     </Chip>
-                  </div>
-                </CardHeader>
-                <CardBody className="pt-0">
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-center">
-                      <span className="text-small text-default-600">速度限制</span>
-                      <Chip color="secondary" variant="flat" size="sm">
-                        {rule.speed} Mbps
+                  </TableCell>
+                  <TableCell>
+                    <Chip color="secondary" variant="flat" size="sm">
+                      {rule.speed} Mbps
+                    </Chip>
+                  </TableCell>
+                  <TableCell>
+                    {rule.tunnelName ? (
+                      <Chip color="primary" variant="flat" size="sm">
+                        {rule.tunnelName}
                       </Chip>
+                    ) : (
+                      <span className="text-default-400 text-sm">未绑定</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        size="sm"
+                        variant="flat"
+                        color="primary"
+                        onPress={() => handleEdit(rule)}
+                      >
+                        编辑
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="flat"
+                        color="danger"
+                        onPress={() => handleDelete(rule)}
+                      >
+                        删除
+                      </Button>
                     </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-small text-default-600">绑定隧道</span>
-                      {rule.tunnelName ? (
-                        <Chip color="primary" variant="flat" size="sm">
-                          {rule.tunnelName}
-                        </Chip>
-                      ) : (
-                        <span className="text-default-400 text-small">未绑定</span>
-                      )}
-                    </div>
-                  </div>
-                  
-                  <div className="flex gap-2 mt-4">
-                    <Button
-                      size="sm"
-                      variant="flat"
-                      color="primary"
-                      onPress={() => handleEdit(rule)}
-                      className="flex-1"
-                      startContent={
-                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                          <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-                        </svg>
-                      }
-                    >
-                      编辑
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="flat"
-                      color="danger"
-                      onPress={() => handleDelete(rule)}
-                      className="flex-1"
-                      startContent={
-                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" clipRule="evenodd" />
-                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 012 0v4a1 1 0 11-2 0V7zM12 7a1 1 0 012 0v4a1 1 0 11-2 0V7z" clipRule="evenodd" />
-                        </svg>
-                      }
-                    >
-                      删除
-                    </Button>
-                  </div>
-                </CardBody>
-              </Card>
-            ))}
-          </div>
-        ) : (
-          /* 空状态 */
-          <Card className="shadow-sm border border-gray-200 dark:border-gray-700">
-            <CardBody className="text-center py-16">
-              <div className="flex flex-col items-center gap-4">
-                <div className="w-16 h-16 bg-default-100 rounded-full flex items-center justify-center">
-                  <svg className="w-8 h-8 text-default-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6v6l4 2m6-6a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-foreground">暂无限速规则</h3>
-                  <p className="text-default-500 text-sm mt-1">还没有创建任何限速规则，点击上方按钮开始创建</p>
-                </div>
-              </div>
-            </CardBody>
-          </Card>
-        )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
 
         {/* 新增/编辑模态框 */}
         <Modal 
@@ -414,10 +401,11 @@ export default function LimitPage() {
                   </div>
                 </ModalBody>
                 <ModalFooter>
-                  <Button variant="light" onPress={onClose}>
+                  <Button size="sm" variant="light" onPress={onClose}>
                     取消
                   </Button>
                   <Button 
+                    size="sm"
                     color="primary" 
                     onPress={handleSubmit}
                     isLoading={submitLoading}
@@ -454,10 +442,11 @@ export default function LimitPage() {
                   </p>
                 </ModalBody>
                 <ModalFooter>
-                  <Button variant="light" onPress={onClose}>
+                  <Button size="sm" variant="light" onPress={onClose}>
                     取消
                   </Button>
                   <Button 
+                    size="sm"
                     color="danger" 
                     onPress={confirmDelete}
                     isLoading={deleteLoading}

@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { Card, CardBody, CardHeader } from "@heroui/card";
 import { Button } from "@heroui/button";
 import { Input } from "@heroui/input";
 import { Select, SelectItem } from "@heroui/select";
@@ -7,7 +6,14 @@ import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from "@herou
 import { Chip } from "@heroui/chip";
 import { Spinner } from "@heroui/spinner";
 import { Divider } from "@heroui/divider";
-import { Alert } from "@heroui/alert";
+import { 
+  Table, 
+  TableHeader, 
+  TableColumn, 
+  TableBody, 
+  TableRow, 
+  TableCell 
+} from "@heroui/table";
 import toast from 'react-hot-toast';
 
 
@@ -425,180 +431,120 @@ export default function TunnelPage() {
 
   return (
     
-      <div className="px-3 lg:px-6 py-8">
+      <div className="px-4 lg:px-6 py-6">
         {/* 页面头部 */}
-        <div className="flex items-center justify-between mb-6">
-        <div className="flex-1">
+        <div className="flex items-center justify-end mb-6">
+          <Button
+            size="sm"
+            variant="flat"
+            color="primary"
+            onPress={handleAdd}
+          >
+            新增
+          </Button>
         </div>
 
-        <Button
-              size="sm"
-              variant="flat"
-              color="primary"
-              onPress={handleAdd}
-             
+        <div className="border border-divider rounded-lg overflow-hidden">
+          <Table
+            removeWrapper
+            aria-label="隧道列表"
+            classNames={{
+              th: "bg-default-50 text-default-600 text-xs",
+              td: "py-3 align-top",
+            }}
+          >
+            <TableHeader>
+              <TableColumn>隧道名称</TableColumn>
+              <TableColumn>类型</TableColumn>
+              <TableColumn>状态</TableColumn>
+              <TableColumn>入口节点</TableColumn>
+              <TableColumn>出口节点</TableColumn>
+              <TableColumn>计费</TableColumn>
+              <TableColumn>倍率</TableColumn>
+              <TableColumn className="text-right">操作</TableColumn>
+            </TableHeader>
+            <TableBody
+              emptyContent={
+                <div className="text-default-500 text-sm py-8">
+                  暂无隧道配置，点击上方按钮开始创建
+                </div>
+              }
             >
-              新增
-            </Button>
-     
+              {tunnels.map((tunnel) => {
+                const statusDisplay = getStatusDisplay(tunnel.status);
+                const typeDisplay = getTypeDisplay(tunnel.type);
+                const outNodeName = tunnel.type === 1 ? getNodeName(tunnel.inNodeId) : getNodeName(tunnel.outNodeId);
+                const outIp = tunnel.type === 1 ? getDisplayIp(tunnel.inIp) : getDisplayIp(tunnel.outIp);
+
+                return (
+                  <TableRow key={tunnel.id}>
+                    <TableCell>
+                      <div className="text-sm font-medium text-foreground">{tunnel.name}</div>
+                    </TableCell>
+                    <TableCell>
+                      <Chip color={typeDisplay.color as any} variant="flat" size="sm">
+                        {typeDisplay.text}
+                      </Chip>
+                    </TableCell>
+                    <TableCell>
+                      <Chip color={statusDisplay.color as any} variant="flat" size="sm">
+                        {statusDisplay.text}
+                      </Chip>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-xs">
+                        <div className="font-medium">{getNodeName(tunnel.inNodeId)}</div>
+                        <div className="text-default-500">{getDisplayIp(tunnel.inIp)}</div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-xs">
+                        <div className="font-medium">{outNodeName}</div>
+                        <div className="text-default-500">{outIp}</div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-xs font-medium text-foreground">
+                        {getFlowDisplay(tunnel.flow)}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-xs font-medium text-foreground">{tunnel.trafficRatio}x</div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          size="sm"
+                          variant="flat"
+                          color="primary"
+                          onPress={() => handleEdit(tunnel)}
+                        >
+                          编辑
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="flat"
+                          color="warning"
+                          onPress={() => handleDiagnose(tunnel)}
+                        >
+                          诊断
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="flat"
+                          color="danger"
+                          onPress={() => handleDelete(tunnel)}
+                        >
+                          删除
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
         </div>
-
-        {/* 隧道卡片网格 */}
-        {tunnels.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
-            {tunnels.map((tunnel) => {
-              const statusDisplay = getStatusDisplay(tunnel.status);
-              const typeDisplay = getTypeDisplay(tunnel.type);
-              
-              return (
-                <Card key={tunnel.id} className="shadow-sm border border-divider hover:shadow-md transition-shadow duration-200">
-                  <CardHeader className="pb-2">
-                    <div className="flex justify-between items-start w-full">
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-foreground truncate text-sm">{tunnel.name}</h3>
-                        <div className="flex items-center gap-1.5 mt-1">
-                          <Chip 
-                            color={typeDisplay.color as any} 
-                            variant="flat" 
-                            size="sm"
-                            className="text-xs"
-                          >
-                            {typeDisplay.text}
-                          </Chip>
-                          <Chip 
-                            color={statusDisplay.color as any} 
-                            variant="flat" 
-                            size="sm"
-                            className="text-xs"
-                          >
-                            {statusDisplay.text}
-                          </Chip>
-                        </div>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  
-                  <CardBody className="pt-0 pb-3">
-                    <div className="space-y-2">
-                      {/* 流程展示 */}
-                      <div className="space-y-1.5">
-                        <div className="p-2 bg-default-50 dark:bg-default-100/50 rounded border border-default-200 dark:border-default-300">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs font-medium text-default-600">入口节点</span>
-                          </div>
-                          <code className="text-xs font-mono text-foreground block truncate">
-                            {getNodeName(tunnel.inNodeId)}
-                          </code>
-                          <code className="text-xs font-mono text-default-500 block truncate">
-                            {getDisplayIp(tunnel.inIp)}
-                          </code>
-                        </div>
-                        
-                        <div className="text-center py-0.5">
-                          <svg className="w-3 h-3 text-default-400 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                          </svg>
-                        </div>
-                        
-                        <div className="p-2 bg-default-50 dark:bg-default-100/50 rounded border border-default-200 dark:border-default-300">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs font-medium text-default-600">
-                              {tunnel.type === 1 ? '出口节点（同入口）' : '出口节点'}
-                            </span>
-                          </div>
-                          <code className="text-xs font-mono text-foreground block truncate">
-                            {tunnel.type === 1 ? getNodeName(tunnel.inNodeId) : getNodeName(tunnel.outNodeId)}
-                          </code>
-                          <code className="text-xs font-mono text-default-500 block truncate">
-                            {tunnel.type === 1 ? getDisplayIp(tunnel.inIp) : getDisplayIp(tunnel.outIp)}
-                          </code>
-                        </div>
-                      </div>
-
-                      {/* 配置信息 */}
-                      <div className="flex justify-between items-center pt-2 border-t border-divider">
-                        <div className="text-left">
-                          <div className="text-xs font-medium text-foreground">
-                            {getFlowDisplay(tunnel.flow)}
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-xs font-medium text-foreground">
-                            {tunnel.trafficRatio}x
-                          </div>
-                        </div>
-                      </div>
-
-                    </div>
-                    
-                    <div className="flex gap-1.5 mt-3">
-                      <Button
-                        size="sm"
-                        variant="flat"
-                        color="primary"
-                        onPress={() => handleEdit(tunnel)}
-                        className="flex-1 min-h-8"
-                        startContent={
-                          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                            <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-                          </svg>
-                        }
-                      >
-                        编辑
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="flat"
-                        color="warning"
-                        onPress={() => handleDiagnose(tunnel)}
-                        className="flex-1 min-h-8"
-                        startContent={
-                          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                          </svg>
-                        }
-                      >
-                        诊断
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="flat"
-                        color="danger"
-                        onPress={() => handleDelete(tunnel)}
-                        className="flex-1 min-h-8"
-                        startContent={
-                          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" clipRule="evenodd" />
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 012 0v4a1 1 0 11-2 0V7zM12 7a1 1 0 012 0v4a1 1 0 11-2 0V7z" clipRule="evenodd" />
-                          </svg>
-                        }
-                      >
-                        删除
-                      </Button>
-                    </div>
-                  </CardBody>
-                </Card>
-              );
-            })}
-          </div>
-        ) : (
-          /* 空状态 */
-          <Card className="shadow-sm border border-gray-200 dark:border-gray-700">
-            <CardBody className="text-center py-16">
-              <div className="flex flex-col items-center gap-4">
-                <div className="w-16 h-16 bg-default-100 rounded-full flex items-center justify-center">
-                  <svg className="w-8 h-8 text-default-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
-                  </svg>
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-foreground">暂无隧道配置</h3>
-                  <p className="text-default-500 text-sm mt-1">还没有创建任何隧道配置，点击上方按钮开始创建</p>
-                </div>
-              </div>
-            </CardBody>
-          </Card>
-        )}
 
         {/* 新增/编辑模态框 */}
         <Modal 
@@ -843,27 +789,18 @@ export default function TunnelPage() {
                       </>
                     )}
 
-                    <Alert
-                        color="primary"
-                        variant="flat"
-                        title="TCP,UDP监听地址"
-                        description="V6或者双栈填写[::],V4填写0.0.0.0。不懂的就去看文档网站内的说明"
-                        className="mt-4"
-                      />
-                      <Alert
-                        color="primary"
-                        variant="flat"
-                        title="出口网卡名或IP"
-                        description="用于多IP服务器指定使用那个IP和出口服务器通讯，不懂的默认为空就行"
-                        className="mt-4"
-                      />
+                    <div className="mt-3 text-xs text-default-500 space-y-1">
+                      <div>TCP/UDP监听地址：V6或双栈填写 [::]，V4 填写 0.0.0.0。</div>
+                      <div>出口网卡名或IP：多 IP 服务器指定出口地址，不懂可留空。</div>
+                    </div>
                   </div>
                 </ModalBody>
                 <ModalFooter>
-                  <Button variant="light" onPress={onClose}>
+                  <Button size="sm" variant="light" onPress={onClose}>
                     取消
                   </Button>
                   <Button 
+                    size="sm"
                     color="primary" 
                     onPress={handleSubmit}
                     isLoading={submitLoading}
@@ -896,10 +833,11 @@ export default function TunnelPage() {
                   <p className="text-small text-default-500">此操作不可恢复，请谨慎操作。</p>
                 </ModalBody>
                 <ModalFooter>
-                  <Button variant="light" onPress={onClose}>
+                  <Button size="sm" variant="light" onPress={onClose}>
                     取消
                   </Button>
                   <Button 
+                    size="sm"
                     color="danger" 
                     onPress={confirmDelete}
                     isLoading={deleteLoading}
@@ -948,34 +886,32 @@ export default function TunnelPage() {
                       </div>
                     </div>
                   ) : diagnosisResult ? (
-                    <div className="space-y-4">
+                    <div className="border border-divider rounded-lg overflow-hidden divide-y divide-divider">
                       {diagnosisResult.results.map((result, index) => {
                         const quality = getQualityDisplay(result.averageTime, result.packetLoss);
                         
                         return (
-                          <Card key={index} className={`shadow-sm border ${result.success ? 'border-success' : 'border-danger'}`}>
-                            <CardHeader className="pb-2">
-                              <div className="flex items-center justify-between w-full">
-                                <div className="flex items-center gap-3">
-                                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                                    result.success ? 'bg-success text-white' : 'bg-danger text-white'
-                                  }`}>
-                                    {result.success ? '✓' : '✗'}
-                                  </div>
-                                  <div>
-                                    <h4 className="font-semibold">{result.description}</h4>
-                                    <p className="text-small text-default-500">{result.nodeName}</p>
-                                  </div>
+                          <div key={index} className="p-4">
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="flex items-center gap-3">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                                  result.success ? 'bg-success text-white' : 'bg-danger text-white'
+                                }`}>
+                                  {result.success ? '✓' : '✗'}
                                 </div>
-                                <Chip 
-                                  color={result.success ? 'success' : 'danger'} 
-                                  variant="flat"
-                                >
-                                  {result.success ? '成功' : '失败'}
-                                </Chip>
+                                <div>
+                                  <h4 className="font-semibold">{result.description}</h4>
+                                  <p className="text-small text-default-500">{result.nodeName}</p>
+                                </div>
                               </div>
-                            </CardHeader>
-                            <CardBody className="pt-0">
+                              <Chip 
+                                color={result.success ? 'success' : 'danger'} 
+                                variant="flat"
+                              >
+                                {result.success ? '成功' : '失败'}
+                              </Chip>
+                            </div>
+                            <div className="mt-3">
                               {result.success ? (
                                 <div className="space-y-3">
                                   <div className="grid grid-cols-3 gap-4">
@@ -1007,16 +943,13 @@ export default function TunnelPage() {
                                   <div className="text-small text-default-500">
                                     目标地址: <code className="font-mono">{result.targetIp}{result.targetPort ? ':' + result.targetPort : ''}</code>
                                   </div>
-                                  <Alert
-                                    color="danger"
-                                    variant="flat"
-                                    title="错误详情"
-                                    description={result.message}
-                                  />
+                                  <div className="text-xs text-default-500">
+                                    错误详情: {result.message || '-'}
+                                  </div>
                                 </div>
                               )}
-                            </CardBody>
-                          </Card>
+                            </div>
+                          </div>
                         );
                       })}
                     </div>
@@ -1032,11 +965,12 @@ export default function TunnelPage() {
                   )}
                 </ModalBody>
                 <ModalFooter>
-                  <Button variant="light" onPress={onClose}>
+                  <Button size="sm" variant="light" onPress={onClose}>
                     关闭
                   </Button>
                   {currentDiagnosisTunnel && (
                     <Button 
+                      size="sm"
                       color="primary" 
                       onPress={() => handleDiagnose(currentDiagnosisTunnel)}
                       isLoading={diagnosisLoading}

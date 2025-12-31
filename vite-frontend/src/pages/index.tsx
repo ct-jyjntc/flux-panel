@@ -1,6 +1,5 @@
 import { Button } from "@heroui/button";
 import { Input } from "@heroui/input";
-import { Card, CardBody, CardHeader } from "@heroui/card";
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from 'react-hot-toast';
@@ -255,12 +254,12 @@ export default function IndexPage() {
     <DefaultLayout>
       <section className="flex flex-col items-center justify-center gap-4 py-4 sm:py-8 md:py-10 pb-20 min-h-[calc(100dvh-120px)] sm:min-h-[calc(100dvh-200px)]">
         <div className="w-full max-w-md px-4 sm:px-0">
-          <Card className="w-full">
-            <CardHeader className="pb-0 pt-6 px-6 flex-col items-center">
+          <div className="w-full border border-gray-200 dark:border-default-200 rounded-lg overflow-hidden bg-background">
+            <div className="pb-0 pt-6 px-6 flex-col items-center border-b border-gray-200 dark:border-default-200">
               <h1 className={title({ size: "sm" })}>登陆</h1>
               <p className="text-small text-default-500 mt-2">请输入您的账号信息</p>
-            </CardHeader>
-            <CardBody className="px-6 py-6">
+            </div>
+            <div className="px-6 py-6">
               <div className="flex flex-col gap-4">
                 <Input
                   label="用户名"
@@ -298,8 +297,8 @@ export default function IndexPage() {
                   {loading ? (showCaptcha ? "验证中..." : "登录中...") : "登录"}
                 </Button>
               </div>
-            </CardBody>
-          </Card>
+            </div>
+          </div>
         </div>
 
 

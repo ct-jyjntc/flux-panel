@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { Button } from "@heroui/button";
-import { Card, CardBody, CardHeader } from "@heroui/card";
 import { Input } from "@heroui/input";
 import { 
   Table, 
@@ -48,7 +47,7 @@ import {
   getSpeedLimitList,
   resetUserFlow
 } from '@/api';
-import { SearchIcon, EditIcon, DeleteIcon, UserIcon, SettingsIcon } from '@/components/icons';
+import { SearchIcon, EditIcon, DeleteIcon, SettingsIcon } from '@/components/icons';
 import { parseDate } from "@internationalized/date";
 
 
@@ -528,13 +527,10 @@ export default function UserPage() {
 
   return (
     
-      <div className="px-3 lg:px-6 py-8">
+      <div className="px-4 lg:px-6 py-6">
       {/* 页面头部 */}
-      <div className="flex flex-col gap-4 mb-6">
-        <div className="flex items-center gap-3">
-        </div>
-        
-        <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
+      <div className="mb-6">
+        <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
           <div className="flex items-center gap-3 flex-1 max-w-md">
             <Input
               value={searchKeyword}
@@ -542,11 +538,12 @@ export default function UserPage() {
               placeholder="搜索用户名"
               startContent={<SearchIcon className="w-4 h-4 text-default-400" />}
               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+              size="sm"
               className="flex-1"
               classNames={{
                 base: "bg-default-100",
                 input: "bg-transparent",
-                inputWrapper: "bg-default-100 border-2 border-default-200 hover:border-default-300 focus-within:border-primary data-[hover=true]:border-default-300"
+                inputWrapper: "bg-default-100 border border-default-200 hover:border-default-300 focus-within:border-primary data-[hover=true]:border-default-300"
               }}
             />
             <Button
@@ -554,17 +551,17 @@ export default function UserPage() {
               variant="solid"
               color="primary"
               isIconOnly
-              className="min-h-10 w-10"
+              size="sm"
             >
               <SearchIcon className="w-4 h-4" />
             </Button>
           </div>
           
-          <Button
+            <Button
+              size="sm"
               variant="flat"
               color="primary"
               onPress={handleAdd}
-             
             >
               新增
             </Button>
@@ -579,164 +576,146 @@ export default function UserPage() {
             <span className="text-default-600">正在加载...</span>
           </div>
         </div>
-      ) : users.length === 0 ? (
-        <Card className="shadow-sm border border-gray-200 dark:border-gray-700">
-          <CardBody className="text-center py-16">
-            <div className="flex flex-col items-center gap-4">
-              <div className="w-16 h-16 bg-default-100 rounded-full flex items-center justify-center">
-                <UserIcon className="w-8 h-8 text-default-400" />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-foreground">暂无用户数据</h3>
-                <p className="text-default-500 text-sm mt-1">还没有创建任何用户，点击上方按钮开始创建</p>
-              </div>
-            </div>
-          </CardBody>
-        </Card>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
-          {users.map((user) => {
-            const userStatus = getUserStatus(user);
-            const expStatus = user.expTime ? getExpireStatus(user.expTime) : null;
-            const usedFlow = calculateUserTotalUsedFlow(user);
-            const flowPercent = user.flow > 0 ? Math.min((usedFlow / (user.flow * 1024 * 1024 * 1024)) * 100, 100) : 0;
-            
-            return (
-              <Card 
-                key={user.id} 
-                className="shadow-sm border border-divider hover:shadow-md transition-shadow duration-200"
-              >
-                <CardHeader className="pb-2">
-                  <div className="flex justify-between items-start w-full">
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-foreground truncate text-sm">
-                        {user.name || user.user}
-                      </h3>
-                      <p className="text-xs text-default-500 truncate">@{user.user}</p>
-                    </div>
-                    <div className="flex items-center gap-1.5 ml-2">
-                      <Chip 
-                        color={userStatus.color} 
-                        variant="flat" 
-                        size="sm"
-                        className="text-xs"
-                      >
+        <div className="border border-divider rounded-lg overflow-hidden">
+          <Table
+            removeWrapper
+            aria-label="用户列表"
+            classNames={{
+              th: "bg-default-50 text-default-600 text-xs",
+              td: "py-3 align-top",
+            }}
+          >
+            <TableHeader>
+              <TableColumn>用户</TableColumn>
+              <TableColumn>状态</TableColumn>
+              <TableColumn>流量</TableColumn>
+              <TableColumn>转发数量</TableColumn>
+              <TableColumn>重置时间</TableColumn>
+              <TableColumn>到期时间</TableColumn>
+              <TableColumn className="text-right">操作</TableColumn>
+            </TableHeader>
+            <TableBody
+              emptyContent={
+                <div className="text-default-500 text-sm py-8">
+                  暂无用户数据，点击上方按钮开始创建
+                </div>
+              }
+            >
+              {users.map((user) => {
+                const userStatus = getUserStatus(user);
+                const expStatus = user.expTime ? getExpireStatus(user.expTime) : null;
+                const usedFlow = calculateUserTotalUsedFlow(user);
+                const flowPercent = user.flow > 0 ? Math.min((usedFlow / (user.flow * 1024 * 1024 * 1024)) * 100, 100) : 0;
+
+                return (
+                  <TableRow key={user.id}>
+                    <TableCell>
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-foreground truncate">
+                          {user.name || user.user}
+                        </div>
+                        <div className="text-xs text-default-500 truncate">@{user.user}</div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Chip color={userStatus.color} variant="flat" size="sm" className="text-xs">
                         {userStatus.text}
                       </Chip>
-                    </div>
-                  </div>
-                </CardHeader>
-
-                <CardBody className="pt-0 pb-3">
-                  <div className="space-y-2">
-                    {/* 流量信息 */}
-                    <div className="space-y-1.5">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-default-600">流量限制</span>
-                        <span className="font-medium text-xs">{formatFlow(user.flow, 'gb')}</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-default-600">已使用</span>
-                        <span className="font-medium text-xs text-danger">{formatFlow(usedFlow)}</span>
-                      </div>
-                      <Progress 
-                        size="sm" 
-                        value={flowPercent}
-                        color={flowPercent > 90 ? 'danger' : flowPercent > 70 ? 'warning' : 'success'}
-                        className="mt-1"
-                        aria-label={`流量使用 ${flowPercent.toFixed(1)}%`}
-                      />
-                    </div>
-
-                    {/* 其他信息 */}
-                    <div className="space-y-1.5 pt-2 border-t border-divider">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-default-600">转发数量</span>
-                        <span className="font-medium text-xs">{user.num}</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-default-600">重置日期</span>
-                        <span className="text-xs">{user.flowResetTime === 0 ? '不重置' : `每月${user.flowResetTime}号`}</span>
-                      </div>
-                      {user.expTime && (
-                        <div className="flex justify-between text-sm">
-                          <span className="text-default-600">过期时间</span>
-                          <div className="text-right">
-                            {expStatus && expStatus.color === 'success' ? (
-                              <div className="text-xs">{formatDate(user.expTime)}</div>
-                            ) : (
-                              <Chip 
-                                color={expStatus?.color || 'default'} 
-                                variant="flat" 
-                                size="sm"
-                                className="text-xs"
-                              >
-                                {expStatus?.text || '未知状态'}
-                              </Chip>
-                            )}
-                          </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="space-y-1 min-w-[180px]">
+                        <div className="flex items-center justify-between text-xs text-default-500">
+                          <span>限制</span>
+                          <span className="text-foreground">{formatFlow(user.flow, 'gb')}</span>
                         </div>
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-default-500">已用</span>
+                          <span className="text-danger">{formatFlow(usedFlow)}</span>
+                        </div>
+                        <Progress
+                          size="sm"
+                          value={flowPercent}
+                          color={flowPercent > 90 ? 'danger' : flowPercent > 70 ? 'warning' : 'success'}
+                          aria-label={`流量使用 ${flowPercent.toFixed(1)}%`}
+                        />
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-sm font-medium text-foreground">{user.num}</span>
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-xs text-default-600">
+                        {user.flowResetTime === 0 ? '不重置' : `每月${user.flowResetTime}号`}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      {user.expTime ? (
+                        expStatus && expStatus.color === 'success' ? (
+                          <span className="text-xs text-default-600">{formatDate(user.expTime)}</span>
+                        ) : (
+                          <Chip
+                            color={expStatus?.color || 'default'}
+                            variant="flat"
+                            size="sm"
+                            className="text-xs"
+                          >
+                            {expStatus?.text || '未知状态'}
+                          </Chip>
+                        )
+                      ) : (
+                        <span className="text-xs text-default-400">不限制</span>
                       )}
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-1.5 mt-3">
-                    {/* 第一行：编辑和重置 */}
-                    <div className="flex gap-1.5">
-                      <Button
-                        size="sm"
-                        variant="flat"
-                        color="primary"
-                        onPress={() => handleEdit(user)}
-                        className="flex-1 min-h-8"
-                        startContent={<EditIcon className="w-3 h-3" />}
-                      >
-                        编辑
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="flat"
-                        color="warning"
-                        onPress={() => handleResetFlow(user)}
-                        className="flex-1 min-h-8"
-                        startContent={
-                          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
-                          </svg>
-                        }
-                      >
-                        重置
-                      </Button>
-                    </div>
-                    
-                    {/* 第二行：权限和删除 */}
-                    <div className="flex gap-1.5">
-                      <Button
-                        size="sm"
-                        variant="flat"
-                        color="success"
-                        onPress={() => handleManageTunnels(user)}
-                        className="flex-1 min-h-8"
-                        startContent={<SettingsIcon className="w-3 h-3" />}
-                      >
-                        权限
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="flat"
-                        color="danger"
-                        onPress={() => handleDelete(user)}
-                        className="flex-1 min-h-8"
-                        startContent={<DeleteIcon className="w-3 h-3" />}
-                      >
-                        删除
-                      </Button>
-                    </div>
-                  </div>
-                </CardBody>
-              </Card>
-            );
-          })}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <Button
+                          size="sm"
+                          variant="flat"
+                          color="primary"
+                          onPress={() => handleEdit(user)}
+                          startContent={<EditIcon className="w-3 h-3" />}
+                        >
+                          编辑
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="flat"
+                          color="warning"
+                          onPress={() => handleResetFlow(user)}
+                          startContent={
+                            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+                            </svg>
+                          }
+                        >
+                          重置
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="flat"
+                          color="success"
+                          onPress={() => handleManageTunnels(user)}
+                          startContent={<SettingsIcon className="w-3 h-3" />}
+                        >
+                          权限
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="flat"
+                          color="danger"
+                          onPress={() => handleDelete(user)}
+                          startContent={<DeleteIcon className="w-3 h-3" />}
+                        >
+                          删除
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
         </div>
       )}
 
@@ -841,10 +820,11 @@ export default function UserPage() {
             </RadioGroup>
           </ModalBody>
           <ModalFooter>
-            <Button onPress={onUserModalClose}>
+            <Button size="sm" onPress={onUserModalClose}>
               取消
             </Button>
             <Button
+              size="sm"
               color="primary"
               onPress={handleSubmitUser}
               isLoading={userFormLoading}
@@ -1089,7 +1069,7 @@ export default function UserPage() {
             </div>
           </ModalBody>
           <ModalFooter>
-            <Button onPress={onTunnelModalClose}>
+            <Button size="sm" onPress={onTunnelModalClose}>
               关闭
             </Button>
           </ModalFooter>
@@ -1206,10 +1186,11 @@ export default function UserPage() {
             )}
           </ModalBody>
           <ModalFooter>
-            <Button onPress={onEditTunnelModalClose}>
+            <Button size="sm" onPress={onEditTunnelModalClose}>
               取消
             </Button>
             <Button
+              size="sm"
               color="primary"
               onPress={handleUpdateTunnel}
               isLoading={editTunnelLoading}
@@ -1250,12 +1231,14 @@ export default function UserPage() {
           </ModalBody>
           <ModalFooter>
             <Button 
+              size="sm"
               variant="light" 
               onPress={onDeleteModalClose}
             >
               取消
             </Button>
             <Button 
+              size="sm"
               color="danger" 
               onPress={handleConfirmDelete}
             >
@@ -1295,12 +1278,14 @@ export default function UserPage() {
           </ModalBody>
           <ModalFooter>
             <Button 
+              size="sm"
               variant="light" 
               onPress={onDeleteTunnelModalClose}
             >
               取消
             </Button>
             <Button 
+              size="sm"
               color="danger" 
               onPress={handleConfirmRemoveTunnel}
             >
@@ -1363,12 +1348,14 @@ export default function UserPage() {
           </ModalBody>
           <ModalFooter>
             <Button 
+              size="sm"
               variant="light" 
               onPress={onResetFlowModalClose}
             >
               取消
             </Button>
             <Button 
+              size="sm"
               color="warning" 
               onPress={handleConfirmResetFlow}
               isLoading={resetFlowLoading}
@@ -1432,12 +1419,14 @@ export default function UserPage() {
           </ModalBody>
           <ModalFooter>
             <Button 
+              size="sm"
               variant="light" 
               onPress={onResetTunnelFlowModalClose}
             >
               取消
             </Button>
             <Button 
+              size="sm"
               color="warning" 
               onPress={handleConfirmResetTunnelFlow}
               isLoading={resetTunnelFlowLoading}
