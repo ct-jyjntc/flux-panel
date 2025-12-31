@@ -755,14 +755,27 @@ export default function ForwardPage() {
 
         // 验证远程地址格式 - 支持单个地址或多个地址用逗号分隔
         const addresses = remoteAddr.trim().split(',');
-        const addressPattern = /^[^:]+:\d+$/;
-        const isValidFormat = addresses.every(addr => addressPattern.test(addr.trim()));
+        const isValidFormat = addresses.every((addr) => {
+          const trimmed = addr.trim();
+          if (!trimmed) return false;
+          // IPv6: [ipv6]:port
+          if (trimmed.startsWith('[')) {
+            const endBracket = trimmed.indexOf(']');
+            if (endBracket <= 0) return false;
+            const portPart = trimmed.slice(endBracket + 1);
+            if (!portPart.startsWith(':')) return false;
+            const port = portPart.slice(1);
+            return /^\d+$/.test(port);
+          }
+          // IPv4/域名: host:port
+          return /^[^:\s]+:\d+$/.test(trimmed);
+        });
         
         if (!isValidFormat) {
           setImportResults(prev => [{
             line,
             success: false,
-            message: '目标地址格式错误，应为 地址:端口 格式，多个地址用逗号分隔'
+            message: '目标地址格式错误，应为 地址:端口 或 [IPv6]:端口，多个地址用逗号分隔'
           }, ...prev]);
           continue;
         }
