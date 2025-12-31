@@ -4,6 +4,7 @@ import com.admin.common.dto.ForwardDto;
 import com.admin.common.dto.ForwardUpdateDto;
 import com.admin.common.lang.R;
 import com.admin.entity.Forward;
+import com.admin.entity.Tunnel;
 import com.baomidou.mybatisplus.extension.service.IService;
 import java.util.Map;
 
@@ -80,6 +81,13 @@ public interface ForwardService extends IService<Forward> {
      */
     R updateForwardOrder(Map<String, Object> params);
 
+    /**
+     * 隧道入口节点变更时重建所有转发规则
+     * @param oldTunnel 变更前隧道
+     * @param newTunnel 变更后隧道
+     * @return 结果
+     */
+    R rebuildForwardsForTunnelUpdate(Tunnel oldTunnel, Tunnel newTunnel);
 
     void updateForwardA(Forward forward);
 }

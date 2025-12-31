@@ -22,6 +22,9 @@ public class TunnelUpdateDto {
     
     @NotNull(message = "流量计算类型不能为空")
     private Integer flow;
+
+    @NotNull(message = "入口节点不能为空")
+    private Long inNodeId;
     
     // 流量倍率
     @DecimalMin(value = "0.0", inclusive = false, message = "流量倍率必须大于0.0")

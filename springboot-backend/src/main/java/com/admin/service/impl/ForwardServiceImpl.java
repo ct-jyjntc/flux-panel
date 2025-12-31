@@ -1401,6 +1401,50 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
         updateGostServices(forward, tunnel, limiter, nodeInfo, userTunnel);
     }
 
+    @Override
+    public R rebuildForwardsForTunnelUpdate(Tunnel oldTunnel, Tunnel newTunnel) {
+        if (oldTunnel == null || newTunnel == null) {
+            return R.err("隧道信息不完整，无法重建转发规则");
+        }
+
+        List<Forward> forwards = this.list(new QueryWrapper<Forward>().eq("tunnel_id", newTunnel.getId()));
+        if (forwards.isEmpty()) {
+            return R.ok();
+        }
+
+        NodeInfo nodeInfo = getRequiredNodes(newTunnel);
+        if (nodeInfo.isHasError()) {
+            return R.err(nodeInfo.getErrorMessage());
+        }
+
+        int err = 0;
+        for (Forward forward : forwards) {
+            UserTunnel userTunnel = getUserTunnel(forward.getUserId(), newTunnel.getId().intValue());
+            Integer limiter = userTunnel != null ? userTunnel.getSpeedId() : null;
+
+            R deleteResult = deleteOldGostServices(forward, oldTunnel);
+            if (deleteResult.getCode() != 0) {
+                log.info("删除旧入口配置失败: {}", deleteResult.getMsg());
+            }
+
+            R createResult = createGostServices(forward, newTunnel, limiter, nodeInfo, userTunnel);
+            if (createResult.getCode() != 0) {
+                updateForwardStatusToError(forward);
+                err++;
+                continue;
+            }
+
+            forward.setStatus(FORWARD_STATUS_ACTIVE);
+            this.updateById(forward);
+        }
+
+        if (err != 0) {
+            return R.err("入口节点已更新，但部分转发规则重建失败");
+        }
+
+        return R.ok();
+    }
+
 
     // ========== 内部数据类 ==========
 

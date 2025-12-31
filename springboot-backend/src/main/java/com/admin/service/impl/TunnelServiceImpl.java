@@ -156,8 +156,8 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
     }
 
     /**
-     * 更新隧道（只允许修改名称、流量计费、端口范围）
-     * 
+     * 更新隧道（允许修改名称、流量计费、协议与监听地址、入口节点）
+     *
      * @param tunnelUpdateDto 更新数据传输对象
      * @return 更新结果响应
      */
@@ -168,11 +168,30 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
         if (existingTunnel == null) {
             return R.err(ERROR_TUNNEL_NOT_FOUND);
         }
+        Tunnel oldTunnelSnapshot = new Tunnel();
+        BeanUtils.copyProperties(existingTunnel, oldTunnelSnapshot);
 
         // 2. 验证隧道名称唯一性（排除自身）
         R nameValidationResult = validateTunnelNameUniquenessForUpdate(tunnelUpdateDto.getName(), tunnelUpdateDto.getId());
         if (nameValidationResult.getCode() != 0) {
             return nameValidationResult;
+        }
+        boolean inNodeChanged = false;
+        if (!Objects.equals(existingTunnel.getInNodeId(), tunnelUpdateDto.getInNodeId())) {
+            Node inNode = nodeService.getById(tunnelUpdateDto.getInNodeId());
+            if (inNode == null) {
+                return R.err(ERROR_IN_NODE_NOT_FOUND);
+            }
+            if (inNode.getStatus() != NODE_STATUS_ONLINE) {
+                return R.err(ERROR_IN_NODE_OFFLINE);
+            }
+            if (existingTunnel.getType() == TUNNEL_TYPE_TUNNEL_FORWARD &&
+                    Objects.equals(tunnelUpdateDto.getInNodeId(), existingTunnel.getOutNodeId())) {
+                return R.err(ERROR_SAME_NODE_NOT_ALLOWED);
+            }
+            existingTunnel.setInNodeId(inNode.getId());
+            existingTunnel.setInIp(inNode.getIp());
+            inNodeChanged = true;
         }
         int up = 0;
         if (!Objects.equals(existingTunnel.getTcpListenAddr(), tunnelUpdateDto.getTcpListenAddr()) ||
@@ -192,6 +211,12 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
         existingTunnel.setProtocol(tunnelUpdateDto.getProtocol());
         existingTunnel.setInterfaceName(tunnelUpdateDto.getInterfaceName());
         this.updateById(existingTunnel);
+        if (inNodeChanged) {
+            R rebuildResult = forwardService.rebuildForwardsForTunnelUpdate(oldTunnelSnapshot, existingTunnel);
+            if (rebuildResult.getCode() != 0) {
+                return rebuildResult;
+            }
+        }
         int err = 0;
         if (up != 0){
             System.out.println("123123");
