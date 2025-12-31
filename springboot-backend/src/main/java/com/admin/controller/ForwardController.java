@@ -97,4 +97,40 @@ public class ForwardController extends BaseController {
         return forwardService.updateForwardOrder(params);
     }
 
+    @LogAnnotation
+    @PostMapping("/batch/delete")
+    public R batchDelete(@RequestBody Map<String, Object> params) {
+        Object ids = params.get("ids");
+        if (!(ids instanceof java.util.List)) {
+            return R.err("缺少ids参数");
+        }
+        @SuppressWarnings("unchecked")
+        java.util.List<Object> rawIds = (java.util.List<Object>) ids;
+        java.util.List<Long> forwardIds = new java.util.ArrayList<>();
+        for (Object rawId : rawIds) {
+            forwardIds.add(Long.valueOf(rawId.toString()));
+        }
+        return forwardService.batchDeleteForwards(forwardIds);
+    }
+
+    @LogAnnotation
+    @PostMapping("/batch/update-tunnel")
+    public R batchUpdateTunnel(@RequestBody Map<String, Object> params) {
+        Object ids = params.get("ids");
+        Object tunnelId = params.get("tunnelId");
+        if (!(ids instanceof java.util.List)) {
+            return R.err("缺少ids参数");
+        }
+        if (tunnelId == null) {
+            return R.err("缺少tunnelId参数");
+        }
+        @SuppressWarnings("unchecked")
+        java.util.List<Object> rawIds = (java.util.List<Object>) ids;
+        java.util.List<Long> forwardIds = new java.util.ArrayList<>();
+        for (Object rawId : rawIds) {
+            forwardIds.add(Long.valueOf(rawId.toString()));
+        }
+        return forwardService.batchUpdateForwardTunnel(forwardIds, Integer.valueOf(tunnelId.toString()));
+    }
+
 }

@@ -27,7 +27,9 @@ import {
   userTunnel, 
   pauseForwardService,
   resumeForwardService,
-  diagnoseForward
+  diagnoseForward,
+  batchDeleteForwards,
+  batchUpdateForwardTunnel
 } from "@/api";
 import { JwtUtil } from "@/utils/jwt";
 
@@ -146,6 +148,11 @@ export default function ForwardPage() {
   // 表单验证错误
   const [errors, setErrors] = useState<{[key: string]: string}>({});
   const [selectedTunnel, setSelectedTunnel] = useState<Tunnel | null>(null);
+  const [selectedForwardKeys, setSelectedForwardKeys] = useState<Set<string>>(new Set());
+  const [bulkDeleteModalOpen, setBulkDeleteModalOpen] = useState(false);
+  const [bulkUpdateModalOpen, setBulkUpdateModalOpen] = useState(false);
+  const [bulkTunnelId, setBulkTunnelId] = useState<number | null>(null);
+  const [bulkActionLoading, setBulkActionLoading] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -907,6 +914,81 @@ export default function ForwardPage() {
     return sortedForwards;
   };
 
+  const selectedForwardIds = Array.from(selectedForwardKeys).map(key => Number(key)).filter(id => !Number.isNaN(id));
+  const selectedForwardCount = selectedForwardIds.length;
+
+  const handleForwardSelectionChange = (keys: "all" | Set<string>) => {
+    if (keys === "all") {
+      const allIds = getSortedForwards().map(forward => forward.id.toString());
+      setSelectedForwardKeys(new Set(allIds));
+      return;
+    }
+    setSelectedForwardKeys(new Set(keys));
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedForwardCount === 0) return;
+    setBulkDeleteModalOpen(true);
+  };
+
+  const confirmBulkDelete = async () => {
+    if (selectedForwardCount === 0) return;
+    setBulkActionLoading(true);
+    try {
+      const res = await batchDeleteForwards(selectedForwardIds);
+      if (res.code === 0) {
+        const failed = res.data?.failed || 0;
+        if (failed > 0) {
+          toast.success(`已删除 ${res.data?.success || 0} 条，失败 ${failed} 条`);
+        } else {
+          toast.success('批量删除成功');
+        }
+        setSelectedForwardKeys(new Set());
+        setBulkDeleteModalOpen(false);
+        await loadData(false);
+      } else {
+        toast.error(res.msg || '批量删除失败');
+      }
+    } catch (error) {
+      console.error('批量删除失败:', error);
+      toast.error('网络错误，请重试');
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
+
+  const handleBulkUpdateTunnel = () => {
+    if (selectedForwardCount === 0) return;
+    setBulkUpdateModalOpen(true);
+  };
+
+  const confirmBulkUpdateTunnel = async () => {
+    if (selectedForwardCount === 0 || !bulkTunnelId) return;
+    setBulkActionLoading(true);
+    try {
+      const res = await batchUpdateForwardTunnel(selectedForwardIds, bulkTunnelId);
+      if (res.code === 0) {
+        const failed = res.data?.failed || 0;
+        if (failed > 0) {
+          toast.success(`已更新 ${res.data?.success || 0} 条，失败 ${failed} 条`);
+        } else {
+          toast.success('批量更换隧道成功');
+        }
+        setSelectedForwardKeys(new Set());
+        setBulkUpdateModalOpen(false);
+        setBulkTunnelId(null);
+        await loadData(false);
+      } else {
+        toast.error(res.msg || '批量更换隧道失败');
+      }
+    } catch (error) {
+      console.error('批量更换隧道失败:', error);
+      toast.error('网络错误，请重试');
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
+
   const renderAddressCell = (address: string, port: number | null, title: string) => {
     const display = port === null ? formatRemoteAddress(address) : formatInAddress(address, port);
     const hasMultiple = hasMultipleAddresses(address);
@@ -1025,6 +1107,27 @@ export default function ForwardPage() {
         {/* 页面头部 */}
         <div className="flex items-center justify-end mb-6">
           <div className="flex items-center gap-3">
+            <div className="text-xs text-default-500 px-2 py-1 border border-divider rounded-md">
+              已选 {selectedForwardCount} 条
+            </div>
+            <Button
+              size="sm"
+              variant="flat"
+              color="primary"
+              onPress={handleBulkUpdateTunnel}
+              isDisabled={selectedForwardCount === 0}
+            >
+              批量更换隧道
+            </Button>
+            <Button
+              size="sm"
+              variant="flat"
+              color="danger"
+              onPress={handleBulkDelete}
+              isDisabled={selectedForwardCount === 0}
+            >
+              批量删除
+            </Button>
             {/* 导入按钮 */}
             <Button
               size="sm"
@@ -1067,6 +1170,9 @@ export default function ForwardPage() {
             <Table
               removeWrapper
               aria-label="转发列表"
+              selectionMode="multiple"
+              selectedKeys={selectedForwardKeys}
+              onSelectionChange={handleForwardSelectionChange as any}
               classNames={{
                 th: "bg-default-50 text-default-600 text-xs",
                 td: "py-3 align-top",
@@ -1580,6 +1686,104 @@ export default function ForwardPage() {
                 开始导入
               </Button>
             </ModalFooter>
+          </ModalContent>
+        </Modal>
+
+        {/* 批量删除确认 */}
+        <Modal
+          isOpen={bulkDeleteModalOpen}
+          onOpenChange={setBulkDeleteModalOpen}
+          size="md"
+          scrollBehavior="outside"
+          backdrop="blur"
+          placement="center"
+        >
+          <ModalContent>
+            {(onClose) => (
+              <>
+                <ModalHeader className="flex flex-col gap-1">
+                  <h2 className="text-lg font-semibold">批量删除转发</h2>
+                  <span className="text-xs text-default-500">
+                    将删除已选 {selectedForwardCount} 条转发
+                  </span>
+                </ModalHeader>
+                <ModalBody>
+                  <div className="text-sm text-default-600">
+                    删除后将无法恢复，同时会清理对应的服务配置。
+                  </div>
+                </ModalBody>
+                <ModalFooter>
+                  <Button size="sm" variant="light" onPress={onClose}>
+                    取消
+                  </Button>
+                  <Button
+                    size="sm"
+                    color="danger"
+                    onPress={confirmBulkDelete}
+                    isLoading={bulkActionLoading}
+                  >
+                    确认删除
+                  </Button>
+                </ModalFooter>
+              </>
+            )}
+          </ModalContent>
+        </Modal>
+
+        {/* 批量更换隧道 */}
+        <Modal
+          isOpen={bulkUpdateModalOpen}
+          onOpenChange={setBulkUpdateModalOpen}
+          size="md"
+          scrollBehavior="outside"
+          backdrop="blur"
+          placement="center"
+        >
+          <ModalContent>
+            {(onClose) => (
+              <>
+                <ModalHeader className="flex flex-col gap-1">
+                  <h2 className="text-lg font-semibold">批量更换隧道</h2>
+                  <span className="text-xs text-default-500">
+                    已选 {selectedForwardCount} 条转发
+                  </span>
+                </ModalHeader>
+                <ModalBody>
+                  <Select
+                    label="目标隧道"
+                    placeholder="请选择隧道"
+                    selectedKeys={bulkTunnelId ? [bulkTunnelId.toString()] : []}
+                    onSelectionChange={(keys) => {
+                      const selectedKey = Array.from(keys)[0] as string;
+                      setBulkTunnelId(selectedKey ? parseInt(selectedKey, 10) : null);
+                    }}
+                  >
+                    {tunnels.map((tunnel) => (
+                      <SelectItem key={tunnel.id.toString()} textValue={tunnel.name}>
+                        {tunnel.name}
+                      </SelectItem>
+                    ))}
+                  </Select>
+                  <div className="text-xs text-default-500">
+                    更换隧道后将自动重建转发规则。
+                  </div>
+                </ModalBody>
+                <ModalFooter>
+                  <Button size="sm" variant="light" onPress={onClose}>
+                    取消
+                  </Button>
+                  <Button
+                    size="sm"
+                    color="primary"
+                    onPress={confirmBulkUpdateTunnel}
+                    isLoading={bulkActionLoading}
+                    isDisabled={!bulkTunnelId}
+                  >
+                    确认更换
+                  </Button>
+                </ModalFooter>
+              </>
+            )}
           </ModalContent>
         </Modal>
 

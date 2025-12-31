@@ -181,9 +181,11 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
             return nameValidationResult;
         }
         boolean inNodeChanged = false;
+        boolean outNodeChanged = false;
         List<Long> resolvedInNodeIds = resolveInNodeIds(tunnelUpdateDto.getInNodeIds(), tunnelUpdateDto.getInNodeId());
+        NodeValidationResult inNodeValidation = null;
         if (!resolvedInNodeIds.isEmpty()) {
-            NodeValidationResult inNodeValidation = validateInNodes(resolvedInNodeIds);
+            inNodeValidation = validateInNodes(resolvedInNodeIds);
             if (inNodeValidation.isHasError()) {
                 return R.err(inNodeValidation.getErrorMessage());
             }
@@ -197,6 +199,47 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
                 existingTunnel.setInNodeId(inNodeValidation.getNodes().get(0).getId());
                 existingTunnel.setInIp(joinNodeIps(inNodeValidation.getNodes()));
                 inNodeChanged = true;
+            }
+
+            if (existingTunnel.getType() == TUNNEL_TYPE_PORT_FORWARD) {
+                Node firstInNode = inNodeValidation.getNodes().get(0);
+                existingTunnel.setOutNodeId(firstInNode.getId());
+                existingTunnel.setOutIp(firstInNode.getServerIp());
+            }
+        }
+        if (existingTunnel.getType() == TUNNEL_TYPE_TUNNEL_FORWARD && tunnelUpdateDto.getOutNodeId() != null) {
+            List<Long> currentInNodeIds = new ArrayList<>();
+            if (!resolvedInNodeIds.isEmpty()) {
+                currentInNodeIds = resolvedInNodeIds;
+            } else if (existingTunnel.getInNodeIds() != null && !existingTunnel.getInNodeIds().trim().isEmpty()) {
+                for (String part : existingTunnel.getInNodeIds().split(",")) {
+                    String trimmed = part.trim();
+                    if (!trimmed.isEmpty()) {
+                        try {
+                            currentInNodeIds.add(Long.parseLong(trimmed));
+                        } catch (NumberFormatException ignored) {
+                        }
+                    }
+                }
+            } else if (existingTunnel.getInNodeId() != null) {
+                currentInNodeIds.add(existingTunnel.getInNodeId());
+            }
+
+            if (currentInNodeIds.contains(tunnelUpdateDto.getOutNodeId())) {
+                return R.err(ERROR_SAME_NODE_NOT_ALLOWED);
+            }
+
+            if (!Objects.equals(existingTunnel.getOutNodeId(), tunnelUpdateDto.getOutNodeId())) {
+                Node outNode = nodeService.getById(tunnelUpdateDto.getOutNodeId());
+                if (outNode == null) {
+                    return R.err(ERROR_OUT_NODE_NOT_FOUND);
+                }
+                if (outNode.getStatus() != NODE_STATUS_ONLINE) {
+                    return R.err(ERROR_OUT_NODE_OFFLINE);
+                }
+                existingTunnel.setOutNodeId(outNode.getId());
+                existingTunnel.setOutIp(outNode.getServerIp());
+                outNodeChanged = true;
             }
         }
         int up = 0;
@@ -217,7 +260,7 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
         existingTunnel.setProtocol(tunnelUpdateDto.getProtocol());
         existingTunnel.setInterfaceName(tunnelUpdateDto.getInterfaceName());
         this.updateById(existingTunnel);
-        if (inNodeChanged) {
+        if (inNodeChanged || outNodeChanged) {
             R rebuildResult = forwardService.rebuildForwardsForTunnelUpdate(oldTunnelSnapshot, existingTunnel);
             if (rebuildResult.getCode() != 0) {
                 return rebuildResult;
@@ -266,15 +309,20 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
             return R.err(ERROR_TUNNEL_NOT_FOUND);
         }
 
-        // 2. 检查隧道使用情况
-        R usageCheckResult = checkTunnelUsage(id);
-        if (usageCheckResult.getCode() != 0) {
-            return usageCheckResult;
-        }
+        // 2. 删除隧道关联转发和权限
+        int forwardCleanupFailures = deleteTunnelForwards(id);
+        boolean userTunnelCleared = deleteUserTunnelPermissions(id);
 
         // 3. 执行删除操作
         boolean result = this.removeById(id);
-        return result ? R.ok(SUCCESS_DELETE_MSG) : R.err(ERROR_DELETE_MSG);
+        if (!result) {
+            return R.err(ERROR_DELETE_MSG);
+        }
+
+        if (forwardCleanupFailures > 0 || !userTunnelCleared) {
+            return R.ok("隧道删除成功，部分转发或权限清理失败");
+        }
+        return R.ok(SUCCESS_DELETE_MSG);
     }
 
     /**
@@ -593,6 +641,34 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
         }
         
         return R.ok();
+    }
+
+    private int deleteTunnelForwards(Long tunnelId) {
+        QueryWrapper<Forward> forwardQuery = new QueryWrapper<>();
+        forwardQuery.eq("tunnel_id", tunnelId);
+        List<Forward> forwards = forwardService.list(forwardQuery);
+
+        int failures = 0;
+        for (Forward forward : forwards) {
+            R deleteResult = forwardService.deleteForward(forward.getId());
+            if (deleteResult.getCode() != 0) {
+                R forceResult = forwardService.forceDeleteForward(forward.getId());
+                if (forceResult.getCode() != 0) {
+                    boolean removed = forwardService.removeById(forward.getId());
+                    if (!removed) {
+                        failures++;
+                    }
+                }
+            }
+        }
+
+        return failures;
+    }
+
+    private boolean deleteUserTunnelPermissions(Long tunnelId) {
+        QueryWrapper<UserTunnel> userTunnelQuery = new QueryWrapper<>();
+        userTunnelQuery.eq("tunnel_id", tunnelId);
+        return userTunnelService.remove(userTunnelQuery);
     }
 
     /**

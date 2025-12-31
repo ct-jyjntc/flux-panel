@@ -25,6 +25,8 @@ public class TunnelUpdateDto {
     private Long inNodeId;
 
     private List<Long> inNodeIds;
+
+    private Long outNodeId;
     
     // 流量倍率
     @DecimalMin(value = "0.0", inclusive = false, message = "流量倍率必须大于0.0")

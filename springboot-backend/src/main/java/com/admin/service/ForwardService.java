@@ -82,6 +82,21 @@ public interface ForwardService extends IService<Forward> {
     R updateForwardOrder(Map<String, Object> params);
 
     /**
+     * 批量删除转发
+     * @param forwardIds 转发ID列表
+     * @return 删除结果
+     */
+    R batchDeleteForwards(java.util.List<Long> forwardIds);
+
+    /**
+     * 批量更新转发绑定的隧道
+     * @param forwardIds 转发ID列表
+     * @param tunnelId 新隧道ID
+     * @return 更新结果
+     */
+    R batchUpdateForwardTunnel(java.util.List<Long> forwardIds, Integer tunnelId);
+
+    /**
      * 隧道入口节点变更时重建所有转发规则
      * @param oldTunnel 变更前隧道
      * @param newTunnel 变更后隧道

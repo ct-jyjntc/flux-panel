@@ -572,6 +572,99 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
         }
     }
 
+    @Override
+    public R batchDeleteForwards(List<Long> forwardIds) {
+        if (forwardIds == null || forwardIds.isEmpty()) {
+            return R.err("未选择转发");
+        }
+
+        int success = 0;
+        List<Map<String, Object>> failed = new ArrayList<>();
+
+        for (Long id : forwardIds) {
+            R deleteResult = deleteForward(id);
+            if (deleteResult.getCode() == 0) {
+                success++;
+                continue;
+            }
+
+            R forceResult = forceDeleteForward(id);
+            if (forceResult.getCode() == 0) {
+                success++;
+                continue;
+            }
+
+            boolean removed = this.removeById(id);
+            if (removed) {
+                success++;
+                continue;
+            }
+
+            Map<String, Object> failure = new HashMap<>();
+            failure.put("id", id);
+            failure.put("message", deleteResult.getMsg());
+            failed.add(failure);
+        }
+
+        Map<String, Object> summary = new HashMap<>();
+        summary.put("total", forwardIds.size());
+        summary.put("success", success);
+        summary.put("failed", failed.size());
+        summary.put("failedItems", failed);
+        return R.ok(summary);
+    }
+
+    @Override
+    public R batchUpdateForwardTunnel(List<Long> forwardIds, Integer tunnelId) {
+        if (forwardIds == null || forwardIds.isEmpty()) {
+            return R.err("未选择转发");
+        }
+        if (tunnelId == null) {
+            return R.err("隧道ID不能为空");
+        }
+
+        int success = 0;
+        List<Map<String, Object>> failed = new ArrayList<>();
+
+        for (Long id : forwardIds) {
+            Forward forward = this.getById(id);
+            if (forward == null) {
+                Map<String, Object> failure = new HashMap<>();
+                failure.put("id", id);
+                failure.put("message", "转发不存在");
+                failed.add(failure);
+                continue;
+            }
+
+            ForwardUpdateDto updateDto = new ForwardUpdateDto();
+            updateDto.setId(forward.getId());
+            updateDto.setUserId(forward.getUserId());
+            updateDto.setName(forward.getName());
+            updateDto.setTunnelId(tunnelId);
+            updateDto.setRemoteAddr(forward.getRemoteAddr());
+            updateDto.setStrategy(forward.getStrategy());
+            updateDto.setInPort(forward.getInPort());
+            updateDto.setInterfaceName(forward.getInterfaceName());
+
+            R updateResult = updateForward(updateDto);
+            if (updateResult.getCode() == 0) {
+                success++;
+            } else {
+                Map<String, Object> failure = new HashMap<>();
+                failure.put("id", id);
+                failure.put("message", updateResult.getMsg());
+                failed.add(failure);
+            }
+        }
+
+        Map<String, Object> summary = new HashMap<>();
+        summary.put("total", forwardIds.size());
+        summary.put("success", success);
+        summary.put("failed", failed.size());
+        summary.put("failedItems", failed);
+        return R.ok(summary);
+    }
+
     /**
      * 从地址字符串中提取IP地址
      * 支持格式: ip:port, [ipv6]:port, domain:port

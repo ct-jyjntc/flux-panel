@@ -779,7 +779,6 @@ export default function TunnelPage() {
                           isInvalid={!!errors.outNodeId}
                           errorMessage={errors.outNodeId}
                           variant="bordered"
-                          isDisabled={isEdit}
                         >
                           {nodes.map((node) => (
                             <SelectItem 
