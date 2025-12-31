@@ -28,7 +28,7 @@ services:
   backend:
     build:
       context: ./springboot-backend
-    image: flux-panel-backend:local
+    image: xiercloud/flux-panel-backend:local
     container_name: springboot-backend
     restart: unless-stopped
     environment:
@@ -58,7 +58,7 @@ services:
   frontend:
     build:
       context: ./vite-frontend
-    image: flux-panel-frontend:local
+    image: xiercloud/flux-panel-frontend:local
     container_name: vite-frontend
     restart: unless-stopped
     ports:

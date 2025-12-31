@@ -98,6 +98,7 @@ export default function ForwardPage() {
   const [loading, setLoading] = useState(true);
   const [forwards, setForwards] = useState<Forward[]>([]);
   const [tunnels, setTunnels] = useState<Tunnel[]>([]);
+  const [filterTunnelId, setFilterTunnelId] = useState<string>("all");
   
   // 拖拽排序相关状态
   const [forwardOrder, setForwardOrder] = useState<number[]>([]);
@@ -889,6 +890,13 @@ export default function ForwardPage() {
     if (currentUserId !== null) {
       filteredForwards = forwards.filter(forward => forward.userId === currentUserId);
     }
+
+    if (filterTunnelId !== "all") {
+      const tunnelId = Number(filterTunnelId);
+      if (!Number.isNaN(tunnelId)) {
+        filteredForwards = filteredForwards.filter(forward => forward.tunnelId === tunnelId);
+      }
+    }
     
     // 确保过滤后的转发列表有效
     if (!filteredForwards || filteredForwards.length === 0) {
@@ -1118,7 +1126,33 @@ export default function ForwardPage() {
     
       <div className="px-4 lg:px-6 py-6">
         {/* 页面头部 */}
-        <div className="flex items-center justify-end mb-6">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <Select
+              aria-label="按隧道筛选"
+              size="sm"
+              variant="bordered"
+              selectedKeys={[filterTunnelId]}
+              onSelectionChange={(keys) => {
+                const selectedKey = Array.from(keys)[0] as string;
+                setFilterTunnelId(selectedKey || "all");
+              }}
+              className="min-w-[180px]"
+              items={[
+                { id: "all", name: "全部隧道" },
+                ...tunnels.map((tunnel) => ({
+                  id: tunnel.id.toString(),
+                  name: tunnel.name,
+                })),
+              ]}
+            >
+              {(item) => (
+                <SelectItem key={item.id}>
+                  {item.name}
+                </SelectItem>
+              )}
+            </Select>
+          </div>
           <div className="flex items-center gap-3">
             <div className="text-xs text-default-500 px-2 py-1 border border-divider rounded-md">
               已选 {selectedForwardCount} 条
