@@ -7,15 +7,24 @@ import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from "@herou
 import { Chip } from "@heroui/chip";
 import { Spinner } from "@heroui/spinner";
 import { Switch } from "@heroui/switch";
-import { 
-  Table, 
-  TableHeader, 
-  TableColumn, 
-  TableBody, 
-  TableRow, 
-  TableCell 
-} from "@heroui/table";
+import { Checkbox } from "@heroui/checkbox";
 import toast from 'react-hot-toast';
+import {
+  DndContext,
+  PointerSensor,
+  KeyboardSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 
 import { 
@@ -28,6 +37,7 @@ import {
   pauseForwardService,
   resumeForwardService,
   diagnoseForward,
+  updateForwardOrder,
   batchDeleteForwards,
   batchUpdateForwardTunnel
 } from "@/api";
@@ -937,15 +947,9 @@ export default function ForwardPage() {
 
   const selectedForwardIds = Array.from(selectedForwardKeys).map(key => Number(key)).filter(id => !Number.isNaN(id));
   const selectedForwardCount = selectedForwardIds.length;
-
-  const handleForwardSelectionChange = (keys: "all" | Set<string>) => {
-    if (keys === "all") {
-      const allIds = getSortedForwards().map(forward => forward.id.toString());
-      setSelectedForwardKeys(new Set(allIds));
-      return;
-    }
-    setSelectedForwardKeys(new Set(keys));
-  };
+  const visibleForwardIds = getSortedForwards().map(forward => forward.id);
+  const allVisibleSelected = visibleForwardIds.length > 0 &&
+    visibleForwardIds.every(id => selectedForwardKeys.has(id.toString()));
 
   const handleBulkDelete = () => {
     if (selectedForwardCount === 0) return;
@@ -1028,86 +1032,183 @@ export default function ForwardPage() {
     );
   };
 
-  const renderForwardRows = (list: Forward[]) => (
-    list.map((forward) => {
-      const statusDisplay = getStatusDisplay(forward.status);
-      const strategyDisplay = getStrategyDisplay(forward.strategy);
-      const inPort = typeof forward.inPort === 'number' ? forward.inPort : 0;
+  const SortableForwardRow = ({ forward }: { forward: Forward }) => {
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      setActivatorNodeRef,
+      transform,
+      transition,
+      isDragging,
+    } = useSortable({ id: forward.id });
+    const style = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+      opacity: isDragging ? 0.6 : 1,
+    };
+    const statusDisplay = getStatusDisplay(forward.status);
+    const strategyDisplay = getStrategyDisplay(forward.strategy);
+    const inPort = typeof forward.inPort === 'number' ? forward.inPort : 0;
 
-      return (
-        <TableRow key={forward.id}>
-          <TableCell>
-            <div className="min-w-0">
-              <div className="text-sm font-medium text-foreground truncate">{forward.name}</div>
-              <div className="text-xs text-default-500 truncate">{forward.tunnelName}</div>
-            </div>
-          </TableCell>
-          <TableCell>
-            {renderAddressCell(forward.inIp, inPort, '入口端口')}
-          </TableCell>
-          <TableCell>
-            {renderAddressCell(forward.remoteAddr, null, '目标地址')}
-          </TableCell>
-          <TableCell>
-            <Chip color={strategyDisplay.color as any} variant="flat" size="sm" className="text-xs">
-              {strategyDisplay.text}
+    return (
+      <tr ref={setNodeRef} style={style} className="border-t border-divider hover:bg-default-50/60">
+        <td className="w-10 px-3 py-3 align-top">
+          <Checkbox
+            aria-label={`选择 ${forward.name}`}
+            isSelected={selectedForwardKeys.has(forward.id.toString())}
+            onValueChange={(checked) => {
+              const nextKeys = new Set(selectedForwardKeys);
+              if (checked) {
+                nextKeys.add(forward.id.toString());
+              } else {
+                nextKeys.delete(forward.id.toString());
+              }
+              setSelectedForwardKeys(nextKeys);
+            }}
+          />
+        </td>
+        <td className="w-12 px-3 py-3 align-top">
+          <button
+            type="button"
+            aria-label="拖拽排序"
+            ref={setActivatorNodeRef}
+            className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-divider text-default-400 hover:text-foreground hover:border-default-300 cursor-grab active:cursor-grabbing"
+            {...attributes}
+            {...listeners}
+          >
+            <span className="text-base leading-none">⋮⋮</span>
+          </button>
+        </td>
+        <td className="px-3 py-3 align-top">
+          <div className="min-w-0">
+            <div className="text-sm font-medium text-foreground truncate">{forward.name}</div>
+            <div className="text-xs text-default-500 truncate">{forward.tunnelName}</div>
+          </div>
+        </td>
+        <td className="px-3 py-3 align-top">
+          {renderAddressCell(forward.inIp, inPort, '入口端口')}
+        </td>
+        <td className="px-3 py-3 align-top">
+          {renderAddressCell(forward.remoteAddr, null, '目标地址')}
+        </td>
+        <td className="px-3 py-3 align-top">
+          <Chip color={strategyDisplay.color as any} variant="flat" size="sm" className="text-xs">
+            {strategyDisplay.text}
+          </Chip>
+        </td>
+        <td className="px-3 py-3 align-top">
+          <div className="flex items-center gap-2">
+            <Chip variant="flat" size="sm" className="text-xs" color="primary">
+              ↑{formatFlow(forward.inFlow || 0)}
             </Chip>
-          </TableCell>
-          <TableCell>
-            <div className="flex items-center gap-2">
-              <Chip variant="flat" size="sm" className="text-xs" color="primary">
-                ↑{formatFlow(forward.inFlow || 0)}
-              </Chip>
-              <Chip variant="flat" size="sm" className="text-xs" color="success">
-                ↓{formatFlow(forward.outFlow || 0)}
-              </Chip>
-            </div>
-          </TableCell>
-          <TableCell>
-            <div className="flex items-center gap-2">
-              <Switch
-                size="sm"
-                isSelected={forward.serviceRunning}
-                onValueChange={() => handleServiceToggle(forward)}
-                isDisabled={forward.status !== 1 && forward.status !== 0}
-              />
-              <Chip color={statusDisplay.color as any} variant="flat" size="sm" className="text-xs">
-                {statusDisplay.text}
-              </Chip>
-            </div>
-          </TableCell>
-          <TableCell>
-            <div className="flex justify-end gap-2">
-              <Button
-                size="sm"
-                variant="flat"
-                color="primary"
-                onPress={() => handleEdit(forward)}
-              >
-                编辑
-              </Button>
-              <Button
-                size="sm"
-                variant="flat"
-                color="warning"
-                onPress={() => handleDiagnose(forward)}
-              >
-                诊断
-              </Button>
-              <Button
-                size="sm"
-                variant="flat"
-                color="danger"
-                onPress={() => handleDelete(forward)}
-              >
-                删除
-              </Button>
-            </div>
-          </TableCell>
-        </TableRow>
-      );
-    })
+            <Chip variant="flat" size="sm" className="text-xs" color="success">
+              ↓{formatFlow(forward.outFlow || 0)}
+            </Chip>
+          </div>
+        </td>
+        <td className="px-3 py-3 align-top">
+          <div className="flex items-center gap-2">
+            <Switch
+              size="sm"
+              isSelected={forward.serviceRunning}
+              onValueChange={() => handleServiceToggle(forward)}
+              isDisabled={forward.status !== 1 && forward.status !== 0}
+            />
+            <Chip color={statusDisplay.color as any} variant="flat" size="sm" className="text-xs">
+              {statusDisplay.text}
+            </Chip>
+          </div>
+        </td>
+        <td className="px-3 py-3 align-top text-right">
+          <div className="flex justify-end gap-2">
+            <Button
+              size="sm"
+              variant="flat"
+              color="primary"
+              onPress={() => handleEdit(forward)}
+            >
+              编辑
+            </Button>
+            <Button
+              size="sm"
+              variant="flat"
+              color="warning"
+              onPress={() => handleDiagnose(forward)}
+            >
+              诊断
+            </Button>
+            <Button
+              size="sm"
+              variant="flat"
+              color="danger"
+              onPress={() => handleDelete(forward)}
+            >
+              删除
+            </Button>
+          </div>
+        </td>
+      </tr>
+    );
+  };
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor)
   );
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const visibleIds = getSortedForwards().map((forward) => forward.id);
+    const oldIndex = visibleIds.indexOf(Number(active.id));
+    const newIndex = visibleIds.indexOf(Number(over.id));
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const newVisibleOrder = arrayMove(visibleIds, oldIndex, newIndex);
+    const currentUserId = JwtUtil.getUserIdFromToken();
+    const allForwardIds = forwards
+      .filter((forward) => currentUserId === null || forward.userId === currentUserId)
+      .map((forward) => forward.id);
+    const baseOrder = forwardOrder.length > 0 ? forwardOrder : allForwardIds;
+    const visibleSet = new Set(visibleIds);
+    const updatedOrder: number[] = [];
+    const queue = [...newVisibleOrder];
+    baseOrder.forEach((id) => {
+      if (visibleSet.has(id)) {
+        const nextId = queue.shift();
+        if (nextId !== undefined) {
+          updatedOrder.push(nextId);
+        }
+      } else {
+        updatedOrder.push(id);
+      }
+    });
+    queue.forEach((id) => updatedOrder.push(id));
+
+    setForwardOrder(updatedOrder);
+    localStorage.setItem('forward-order', JSON.stringify(updatedOrder));
+    setForwards((prev) => {
+      const inxMap = new Map(updatedOrder.map((id, index) => [id, index + 1]));
+      return prev.map((forward) => {
+        const nextInx = inxMap.get(forward.id);
+        if (!nextInx) return forward;
+        return { ...forward, inx: nextInx };
+      });
+    });
+    try {
+      const res = await updateForwardOrder({
+        forwards: updatedOrder.map((id, index) => ({ id, inx: index + 1 })),
+      });
+      if (res.code !== 0) {
+        toast.error(res.msg || "同步排序失败");
+      }
+    } catch (error) {
+      console.error("同步排序失败:", error);
+      toast.error("同步排序失败，请重试");
+    }
+  };
 
   if (loading) {
     return (
@@ -1214,36 +1315,58 @@ export default function ForwardPage() {
 
         {getSortedForwards().length > 0 ? (
           <div className="border border-divider rounded-lg overflow-hidden">
-            <Table
-              removeWrapper
-              aria-label="转发列表"
-              selectionMode="multiple"
-              selectedKeys={selectedForwardKeys}
-              onSelectionChange={handleForwardSelectionChange as any}
-              classNames={{
-                th: "bg-default-50 text-default-600 text-xs",
-                td: "py-3 align-top",
-              }}
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
             >
-              <TableHeader>
-                <TableColumn>转发名称</TableColumn>
-                <TableColumn>入口</TableColumn>
-                <TableColumn>目标</TableColumn>
-                <TableColumn>策略</TableColumn>
-                <TableColumn>流量</TableColumn>
-                <TableColumn>状态</TableColumn>
-                <TableColumn className="text-right">操作</TableColumn>
-              </TableHeader>
-              <TableBody
-                emptyContent={
-                  <div className="text-default-500 text-sm py-8">
-                    暂无转发配置
-                  </div>
-                }
+              <SortableContext
+                items={getSortedForwards().map((forward) => forward.id)}
+                strategy={verticalListSortingStrategy}
               >
-                {renderForwardRows(getSortedForwards())}
-              </TableBody>
-            </Table>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-default-50 text-default-600 text-xs">
+                      <tr>
+                        <th className="w-10 px-3 py-3 text-left">
+                          <Checkbox
+                            aria-label="全选"
+                            isSelected={allVisibleSelected}
+                            onValueChange={(checked) => {
+                              const nextKeys = new Set(selectedForwardKeys);
+                              if (checked) {
+                                visibleForwardIds.forEach(id => nextKeys.add(id.toString()));
+                              } else {
+                                visibleForwardIds.forEach(id => nextKeys.delete(id.toString()));
+                              }
+                              setSelectedForwardKeys(nextKeys);
+                            }}
+                          />
+                        </th>
+                        <th className="w-12 px-3 py-3 text-left">排序</th>
+                        <th className="px-3 py-3 text-left">转发名称</th>
+                        <th className="px-3 py-3 text-left">入口</th>
+                        <th className="px-3 py-3 text-left">目标</th>
+                        <th className="px-3 py-3 text-left">策略</th>
+                        <th className="px-3 py-3 text-left">流量</th>
+                        <th className="px-3 py-3 text-left">状态</th>
+                        <th className="px-3 py-3 text-right">操作</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {getSortedForwards().map((forward) => (
+                        <SortableForwardRow key={forward.id} forward={forward} />
+                      ))}
+                    </tbody>
+                  </table>
+                  {getSortedForwards().length === 0 && (
+                    <div className="text-default-500 text-sm py-8 text-center">
+                      暂无转发配置
+                    </div>
+                  )}
+                </div>
+              </SortableContext>
+            </DndContext>
           </div>
         ) : (
           <div className="border border-gray-200 dark:border-gray-700 rounded-lg text-center py-16">
