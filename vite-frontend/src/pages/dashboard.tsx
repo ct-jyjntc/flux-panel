@@ -1,5 +1,3 @@
-import { Button } from "@heroui/button";
-import { Modal, ModalContent, ModalHeader, ModalBody } from "@heroui/modal";
 import { useState, useEffect } from "react";
 import toast from 'react-hot-toast';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -41,13 +39,6 @@ interface Forward {
   outFlow: number;
 }
 
-interface AddressItem {
-  id: number;
-  ip: string;
-  address: string;
-  copying: boolean;
-}
-
 interface StatisticsFlow {
   id: number;
   userId: number;
@@ -63,10 +54,6 @@ export default function DashboardPage() {
   const [forwardList, setForwardList] = useState<Forward[]>([]);
   const [statisticsFlows, setStatisticsFlows] = useState<StatisticsFlow[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
-  
-  const [addressModalOpen, setAddressModalOpen] = useState(false);
-  const [addressModalTitle, setAddressModalTitle] = useState('');
-  const [addressList, setAddressList] = useState<AddressItem[]>([]);
 
   // 检查有效期通知
   const checkExpirationNotifications = (userInfo: UserInfo, tunnels: UserTunnel[]) => {
@@ -408,169 +395,6 @@ export default function DashboardPage() {
     }
   };
 
-  const groupedForwards = () => {
-    const groups: { [key: string]: { tunnelName: string; forwards: Forward[] } } = {};
-    forwardList.forEach(forward => {
-      const tunnelName = forward.tunnelName || '未知隧道';
-      if (!groups[tunnelName]) {
-        groups[tunnelName] = {
-          tunnelName,
-          forwards: []
-        };
-      }
-      groups[tunnelName].forwards.push(forward);
-    });
-    return Object.values(groups);
-  };
-
-  const formatInAddress = (ipString: string, port: number): string => {
-    if (!ipString || !port) return '';
-    
-    const ips = ipString.split(',').map(ip => ip.trim()).filter(ip => ip);
-    
-    if (ips.length === 0) return '';
-    
-    if (ips.length === 1) {
-      const ip = ips[0];
-      if (ip.includes(':') && !ip.startsWith('[')) {
-        return `[${ip}]:${port}`;
-      } else {
-        return `${ip}:${port}`;
-      }
-    }
-    
-    const firstIp = ips[0];
-    let formattedFirstIp;
-    
-    if (firstIp.includes(':') && !firstIp.startsWith('[')) {
-      formattedFirstIp = `[${firstIp}]`;
-    } else {
-      formattedFirstIp = firstIp;
-    }
-    
-    return `${formattedFirstIp}:${port} (+${ips.length - 1})`;
-  };
-
-  const formatRemoteAddress = (remoteAddr: string): string => {
-    if (!remoteAddr) return '';
-    
-    const addresses = remoteAddr.split(',').map(addr => addr.trim()).filter(addr => addr);
-    
-    if (addresses.length === 0) return '';
-    
-    if (addresses.length === 1) {
-      return addresses[0];
-    }
-    
-    return `${addresses[0]} (+${addresses.length - 1})`;
-  };
-
-  const hasMultipleIps = (ipString: string): boolean => {
-    if (!ipString) return false;
-    const ips = ipString.split(',').map(ip => ip.trim()).filter(ip => ip);
-    return ips.length > 1;
-  };
-
-  const hasMultipleRemoteAddresses = (remoteAddr: string): boolean => {
-    if (!remoteAddr) return false;
-    const addresses = remoteAddr.split(',').map(addr => addr.trim()).filter(addr => addr);
-    return addresses.length > 1;
-  };
-
-  const showAddressModal = (ipString: string, port: number, title: string) => {
-    if (!ipString || !port) return;
-    
-    const ips = ipString.split(',').map(ip => ip.trim()).filter(ip => ip);
-    
-    if (ips.length <= 1) {
-              copyToClipboard(formatInAddress(ipString, port));
-      return;
-    }
-    
-    const formattedList = ips.map((ip, index) => {
-      let formattedAddress;
-      if (ip.includes(':') && !ip.startsWith('[')) {
-        formattedAddress = `[${ip}]:${port}`;
-      } else {
-        formattedAddress = `${ip}:${port}`;
-      }
-      return {
-        id: index,
-        ip: ip,
-        address: formattedAddress,
-        copying: false
-      };
-    });
-    
-    setAddressList(formattedList);
-    setAddressModalTitle(`${title} (${ips.length}个)`);
-    setAddressModalOpen(true);
-  };
-
-  const showRemoteAddressModal = (remoteAddr: string, title: string) => {
-    if (!remoteAddr) return;
-    
-    const addresses = remoteAddr.split(',').map(addr => addr.trim()).filter(addr => addr);
-    
-    if (addresses.length <= 1) {
-              copyToClipboard(remoteAddr);
-      return;
-    }
-    
-    const formattedList = addresses.map((address, index) => {
-      return {
-        id: index,
-        ip: address,
-        address: address,
-        copying: false
-      };
-    });
-    
-    setAddressList(formattedList);
-    setAddressModalTitle(`${title} (${addresses.length}个)`);
-    setAddressModalOpen(true);
-  };
-
-  const copyToClipboard = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      toast.success(`已复制`);
-    } catch (error) {
-      toast.error('复制失败');
-    }
-  };
-
-  const copyAddress = async (addressItem: AddressItem) => {
-    try {
-      setAddressList(prev => prev.map(item => 
-        item.id === addressItem.id ? { ...item, copying: true } : item
-      ));
-      await copyToClipboard(addressItem.address);
-    } catch (error) {
-      toast.error('复制失败');
-    } finally {
-      setAddressList(prev => prev.map(item => 
-        item.id === addressItem.id ? { ...item, copying: false } : item
-      ));
-    }
-  };
-
-  const copyAllAddresses = async () => {
-    if (addressList.length === 0) return;
-    const allAddresses = addressList.map(item => item.address).join('\n');
-    await copyToClipboard(allAddresses);
-  };
-
-  const calculateForwardBillingFlow = (forward: Forward): number => {
-    if (!forward) return 0;
-    
-    const inFlow = forward.inFlow || 0;
-    const outFlow = forward.outFlow || 0;
-    
-    // 后端已按计费类型处理流量，前端直接使用入站+出站总和
-    return inFlow + outFlow;
-  };
-
       if (loading) {
       return (
         
@@ -827,38 +651,6 @@ export default function DashboardPage() {
         </div>
          )}
 
-        {/* 地址列表弹窗 */}
-        <Modal isOpen={addressModalOpen} onClose={() => setAddressModalOpen(false)} size="2xl" 
-        scrollBehavior="outside"
-        backdrop="blur"
-        placement="center">
-          <ModalContent>
-            <ModalHeader className="text-base">{addressModalTitle}</ModalHeader>
-            <ModalBody className="pb-6">
-              <div className="mb-4 text-right">
-                <Button size="sm" onClick={copyAllAddresses}>
-                  复制全部
-                </Button>
-              </div>
-              
-              <div className="space-y-2 max-h-60 overflow-y-auto">
-                {addressList.map((item) => (
-                  <div key={item.id} className="flex justify-between items-center p-3 border border-default-200 dark:border-default-100 rounded-lg">
-                    <code className="text-sm flex-1 mr-3 text-foreground">{item.address}</code>
-                    <Button
-                      size="sm"
-                      variant="light"
-                      isLoading={item.copying}
-                      onClick={() => copyAddress(item)}
-                    >
-                      复制
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </ModalBody>
-          </ModalContent>
-        </Modal>
       </div>
           
   );

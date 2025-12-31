@@ -30,6 +30,11 @@ public class Tunnel extends BaseEntity {
     private Long inNodeId;
 
     /**
+     * 入口节点ID列表（逗号分隔）
+     */
+    private String inNodeIds;
+
+    /**
      * 入口IP (兼容字段)
      */
     private String inIp;

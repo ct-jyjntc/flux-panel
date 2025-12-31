@@ -5,11 +5,10 @@ import com.baomidou.mybatisplus.annotation.TableField;
 import lombok.Data;
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
-import javax.validation.constraints.Min;
-import javax.validation.constraints.Max;
 import javax.validation.constraints.DecimalMin;
 import javax.validation.constraints.DecimalMax;
 import java.math.BigDecimal;
+import java.util.List;
 
 @Data
 public class TunnelUpdateDto {
@@ -23,8 +22,9 @@ public class TunnelUpdateDto {
     @NotNull(message = "流量计算类型不能为空")
     private Integer flow;
 
-    @NotNull(message = "入口节点不能为空")
     private Long inNodeId;
+
+    private List<Long> inNodeIds;
     
     // 流量倍率
     @DecimalMin(value = "0.0", inclusive = false, message = "流量倍率必须大于0.0")

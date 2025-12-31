@@ -6,7 +6,6 @@ import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from "@herou
 import { Chip } from "@heroui/chip";
 import { Switch } from "@heroui/switch";
 import { Spinner } from "@heroui/spinner";
-import { Progress } from "@heroui/progress";
 import { 
   Table, 
   TableHeader, 
@@ -333,14 +332,6 @@ export default function NodePage() {
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
-
-  // 获取进度条颜色
-  const getProgressColor = (value: number, offline = false): "default" | "primary" | "secondary" | "success" | "warning" | "danger" => {
-    if (offline) return "default";
-    if (value <= 50) return "success";
-    if (value <= 80) return "warning";
-    return "danger";
   };
 
   // 验证IP地址格式

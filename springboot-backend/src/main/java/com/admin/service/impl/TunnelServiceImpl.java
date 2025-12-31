@@ -122,17 +122,21 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
             }
         }
 
-        // 3. 验证入口节点和端口
-        NodeValidationResult inNodeValidation = validateInNode(tunnelDto);
+        // 3. 验证入口节点
+        List<Long> inNodeIds = resolveInNodeIds(tunnelDto.getInNodeIds(), tunnelDto.getInNodeId());
+        if (inNodeIds.isEmpty()) {
+            return R.err("入口节点不能为空");
+        }
+        NodeValidationResult inNodeValidation = validateInNodes(inNodeIds);
         if (inNodeValidation.isHasError()) {
             return R.err(inNodeValidation.getErrorMessage());
         }
 
         // 4. 构建隧道实体
-        Tunnel tunnel = buildTunnelEntity(tunnelDto, inNodeValidation.getNode());
+        Tunnel tunnel = buildTunnelEntity(tunnelDto, inNodeValidation.getNodes());
 
         // 5. 根据隧道类型设置出口参数
-        R outNodeSetupResult = setupOutNodeParameters(tunnel, tunnelDto, inNodeValidation.getNode().getServerIp());
+        R outNodeSetupResult = setupOutNodeParameters(tunnel, tunnelDto, inNodeValidation.getNodes().get(0).getServerIp());
         if (outNodeSetupResult.getCode() != 0) {
             return outNodeSetupResult;
         }
@@ -177,21 +181,23 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
             return nameValidationResult;
         }
         boolean inNodeChanged = false;
-        if (!Objects.equals(existingTunnel.getInNodeId(), tunnelUpdateDto.getInNodeId())) {
-            Node inNode = nodeService.getById(tunnelUpdateDto.getInNodeId());
-            if (inNode == null) {
-                return R.err(ERROR_IN_NODE_NOT_FOUND);
-            }
-            if (inNode.getStatus() != NODE_STATUS_ONLINE) {
-                return R.err(ERROR_IN_NODE_OFFLINE);
+        List<Long> resolvedInNodeIds = resolveInNodeIds(tunnelUpdateDto.getInNodeIds(), tunnelUpdateDto.getInNodeId());
+        if (!resolvedInNodeIds.isEmpty()) {
+            NodeValidationResult inNodeValidation = validateInNodes(resolvedInNodeIds);
+            if (inNodeValidation.isHasError()) {
+                return R.err(inNodeValidation.getErrorMessage());
             }
             if (existingTunnel.getType() == TUNNEL_TYPE_TUNNEL_FORWARD &&
-                    Objects.equals(tunnelUpdateDto.getInNodeId(), existingTunnel.getOutNodeId())) {
+                    resolvedInNodeIds.contains(existingTunnel.getOutNodeId())) {
                 return R.err(ERROR_SAME_NODE_NOT_ALLOWED);
             }
-            existingTunnel.setInNodeId(inNode.getId());
-            existingTunnel.setInIp(inNode.getIp());
-            inNodeChanged = true;
+            String nextInNodeIds = joinNodeIds(resolvedInNodeIds);
+            if (!Objects.equals(existingTunnel.getInNodeIds(), nextInNodeIds)) {
+                existingTunnel.setInNodeIds(nextInNodeIds);
+                existingTunnel.setInNodeId(inNodeValidation.getNodes().get(0).getId());
+                existingTunnel.setInIp(joinNodeIps(inNodeValidation.getNodes()));
+                inNodeChanged = true;
+            }
         }
         int up = 0;
         if (!Objects.equals(existingTunnel.getTcpListenAddr(), tunnelUpdateDto.getTcpListenAddr()) ||
@@ -356,19 +362,43 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
      * @param tunnelDto 隧道创建DTO
      * @return 节点验证结果
      */
-    private NodeValidationResult validateInNode(TunnelDto tunnelDto) {
-        // 验证入口节点是否存在
-        Node inNode = nodeService.getById(tunnelDto.getInNodeId());
-        if (inNode == null) {
-            return NodeValidationResult.error(ERROR_IN_NODE_NOT_FOUND);
+    private NodeValidationResult validateInNodes(List<Long> inNodeIds) {
+        List<Node> nodes = new ArrayList<>();
+        Set<Long> uniqueIds = new LinkedHashSet<>(inNodeIds);
+        for (Long nodeId : uniqueIds) {
+            Node inNode = nodeService.getById(nodeId);
+            if (inNode == null) {
+                return NodeValidationResult.error(ERROR_IN_NODE_NOT_FOUND);
+            }
+            if (inNode.getStatus() != NODE_STATUS_ONLINE) {
+                return NodeValidationResult.error(ERROR_IN_NODE_OFFLINE);
+            }
+            nodes.add(inNode);
         }
+        return NodeValidationResult.success(nodes);
+    }
 
-        // 验证入口节点是否在线
-        if (inNode.getStatus() != NODE_STATUS_ONLINE) {
-            return NodeValidationResult.error(ERROR_IN_NODE_OFFLINE);
+    private List<Long> resolveInNodeIds(List<Long> inNodeIds, Long inNodeId) {
+        if (inNodeIds != null && !inNodeIds.isEmpty()) {
+            return new ArrayList<>(new LinkedHashSet<>(inNodeIds));
         }
+        if (inNodeId != null) {
+            return Collections.singletonList(inNodeId);
+        }
+        return Collections.emptyList();
+    }
 
-        return NodeValidationResult.success(inNode);
+    private String joinNodeIds(List<Long> nodeIds) {
+        return nodeIds.stream()
+                .map(String::valueOf)
+                .collect(Collectors.joining(","));
+    }
+
+    private String joinNodeIps(List<Node> nodes) {
+        return nodes.stream()
+                .map(Node::getIp)
+                .filter(Objects::nonNull)
+                .collect(Collectors.joining(","));
     }
 
     /**
@@ -378,13 +408,14 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
      * @param inNode 入口节点
      * @return 构建完成的隧道对象
      */
-    private Tunnel buildTunnelEntity(TunnelDto tunnelDto, Node inNode) {
+    private Tunnel buildTunnelEntity(TunnelDto tunnelDto, List<Node> inNodes) {
         Tunnel tunnel = new Tunnel();
         BeanUtils.copyProperties(tunnelDto, tunnel);
         
         // 设置入口节点信息
-        tunnel.setInNodeId(tunnelDto.getInNodeId());
-        tunnel.setInIp(inNode.getIp());
+        tunnel.setInNodeIds(joinNodeIds(inNodes.stream().map(Node::getId).collect(Collectors.toList())));
+        tunnel.setInNodeId(inNodes.get(0).getId());
+        tunnel.setInIp(joinNodeIps(inNodes));
         
         // 设置流量计算类型
         tunnel.setFlow(tunnelDto.getFlow());
@@ -440,7 +471,7 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
      * @return 设置结果响应
      */
     private R setupPortForwardOutParameters(Tunnel tunnel, TunnelDto tunnelDto, String server_ip) {
-        tunnel.setOutNodeId(tunnelDto.getInNodeId());
+        tunnel.setOutNodeId(tunnel.getInNodeId());
         tunnel.setOutIp(server_ip);
         return R.ok();
     }
@@ -459,7 +490,8 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
         }
         
         // 验证入口和出口不能是同一个节点
-        if (tunnelDto.getInNodeId().equals(tunnelDto.getOutNodeId())) {
+        List<Long> inNodeIds = resolveInNodeIds(tunnelDto.getInNodeIds(), tunnelDto.getInNodeId());
+        if (inNodeIds.contains(tunnelDto.getOutNodeId())) {
             return R.err(ERROR_SAME_NODE_NOT_ALLOWED);
         }
         
@@ -665,8 +697,8 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
         }
 
         // 2. 获取入口和出口节点信息
-        Node inNode = nodeService.getById(tunnel.getInNodeId());
-        if (inNode == null) {
+        List<Node> inNodes = resolveInNodesForDiagnosis(tunnel);
+        if (inNodes.isEmpty()) {
             return R.err(ERROR_IN_NODE_NOT_FOUND);
         }
 
@@ -683,13 +715,17 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
         // 3. 根据隧道类型执行不同的诊断策略
         if (tunnel.getType() == TUNNEL_TYPE_PORT_FORWARD) {
             // 端口转发：只给入口节点发送诊断指令，TCP ping谷歌443端口
-            DiagnosisResult inResult = performTcpPingDiagnosisWithConnectionCheck(inNode, "www.google.com", 443, "入口->外网");
-            results.add(inResult);
+            for (Node inNode : inNodes) {
+                DiagnosisResult inResult = performTcpPingDiagnosisWithConnectionCheck(inNode, "www.google.com", 443, "入口->外网");
+                results.add(inResult);
+            }
         } else {
             // 隧道转发：入口TCP ping出口，出口TCP ping谷歌443端口
             int outNodePort = getOutNodeTcpPort(tunnel.getId());
-            DiagnosisResult inToOutResult = performTcpPingDiagnosisWithConnectionCheck(inNode, outNode.getServerIp(), outNodePort, "入口->出口");
-            results.add(inToOutResult);
+            for (Node inNode : inNodes) {
+                DiagnosisResult inToOutResult = performTcpPingDiagnosisWithConnectionCheck(inNode, outNode.getServerIp(), outNodePort, "入口->出口");
+                results.add(inToOutResult);
+            }
 
             // 先检查出口节点的真实连接状态，然后再进行诊断
             DiagnosisResult outToExternalResult = performTcpPingDiagnosisWithConnectionCheck(outNode, "www.google.com", 443, "出口->外网");
@@ -705,6 +741,40 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
         diagnosisReport.put("timestamp", System.currentTimeMillis());
 
         return R.ok(diagnosisReport);
+    }
+
+    private List<Node> resolveInNodesForDiagnosis(Tunnel tunnel) {
+        List<Long> inNodeIds = new ArrayList<>();
+        if (tunnel.getInNodeIds() != null && !tunnel.getInNodeIds().trim().isEmpty()) {
+            String[] parts = tunnel.getInNodeIds().split(",");
+            for (String part : parts) {
+                String trimmed = part.trim();
+                if (!trimmed.isEmpty()) {
+                    try {
+                        inNodeIds.add(Long.parseLong(trimmed));
+                    } catch (NumberFormatException ignored) {
+                        // ignore invalid id
+                    }
+                }
+            }
+        }
+        if (inNodeIds.isEmpty() && tunnel.getInNodeId() != null) {
+            inNodeIds.add(tunnel.getInNodeId());
+        }
+        if (inNodeIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<Node> nodes = new ArrayList<>();
+        Set<Long> uniqueIds = new LinkedHashSet<>(inNodeIds);
+        for (Long nodeId : uniqueIds) {
+            Node node = nodeService.getById(nodeId);
+            if (node == null) {
+                return Collections.emptyList();
+            }
+            nodes.add(node);
+        }
+        return nodes;
     }
 
     /**
@@ -855,16 +925,16 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
     private static class NodeValidationResult {
         private final boolean hasError;
         private final String errorMessage;
-        private final Node node;
+        private final List<Node> nodes;
 
-        private NodeValidationResult(boolean hasError, String errorMessage, Node node) {
+        private NodeValidationResult(boolean hasError, String errorMessage, List<Node> nodes) {
             this.hasError = hasError;
             this.errorMessage = errorMessage;
-            this.node = node;
+            this.nodes = nodes;
         }
 
-        public static NodeValidationResult success(Node node) {
-            return new NodeValidationResult(false, null, node);
+        public static NodeValidationResult success(List<Node> nodes) {
+            return new NodeValidationResult(false, null, nodes);
         }
 
         public static NodeValidationResult error(String errorMessage) {

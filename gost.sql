@@ -112,6 +112,7 @@ CREATE TABLE `tunnel` (
   `name` varchar(100) NOT NULL,
   `traffic_ratio` decimal(10,1) NOT NULL DEFAULT '1.0',
   `in_node_id` int(10) NOT NULL,
+  `in_node_ids` varchar(255) DEFAULT NULL,
   `in_ip` varchar(100) NOT NULL,
   `out_node_id` int(10) NOT NULL,
   `out_ip` varchar(100) NOT NULL,
