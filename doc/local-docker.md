@@ -1,6 +1,6 @@
 # 本地 Docker 部署（开发/自构建）
 
-本说明用于在本机通过 Docker Compose **本地构建**并运行面板与后端。
+本说明用于在本机通过 Docker Compose **本地构建**并运行面板与后端（包含 MySQL）。
 
 ## 1. 前置条件
 
@@ -9,7 +9,7 @@
 
 ## 2. 准备环境变量
 
-在项目根目录创建 `.env`：
+在项目根目录执行：
 
 ```bash
 cat <<'EOF' > .env
@@ -25,6 +25,8 @@ EOF
 按需修改端口或数据库账号密码即可。
 
 ## 3. 本地构建并启动
+
+在项目根目录执行：
 
 ```bash
 docker compose -f docker-compose-v4.yml up -d --build
@@ -88,5 +90,12 @@ docker compose -f docker-compose-v4.yml up -d --build
 
 ## 7. 常见问题
 
+- **前端/后端无法访问**
+  - 检查端口是否被占用（`.env` 中 `BACKEND_PORT`/`FRONTEND_PORT`）。
+  - 查看容器日志确认是否启动完成。
+- **登录失败**
+  - 首次登录账号密码为 `admin_user / admin_user`，区分大小写。
+- **重建后未生效**
+  - 确保使用了 `--build`，或先执行 `docker compose -f docker-compose-v4.yml build`。
+
 - Apple Silicon（M 系列）建议使用 `docker-compose-v4.yml`（已使用 `mysql:8.0`）。
-- 如果端口被占用，修改 `.env` 的 `BACKEND_PORT` / `FRONTEND_PORT` 后重启即可。
