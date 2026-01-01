@@ -44,6 +44,12 @@ public class TunnelUpdateDto {
     @NotBlank
     private String udpListenAddr;
 
+    // 是否启用单端口多路复用（仅隧道转发）
+    private Boolean muxEnabled;
+
+    // 单端口多路复用绑定端口（可为空自动分配）
+    private Integer muxPort;
+
     @TableField(updateStrategy = FieldStrategy.IGNORED)
     private String interfaceName;
 } 

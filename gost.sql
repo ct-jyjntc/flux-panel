@@ -122,6 +122,8 @@ CREATE TABLE `tunnel` (
   `tcp_listen_addr` varchar(100) NOT NULL DEFAULT '[::]',
   `udp_listen_addr` varchar(100) NOT NULL DEFAULT '[::]',
   `interface_name` varchar(200) DEFAULT NULL,
+  `mux_enabled` tinyint(1) NOT NULL DEFAULT '0',
+  `mux_port` int(10) DEFAULT NULL,
   `created_time` bigint(20) NOT NULL,
   `updated_time` bigint(20) NOT NULL,
   `status` int(10) NOT NULL

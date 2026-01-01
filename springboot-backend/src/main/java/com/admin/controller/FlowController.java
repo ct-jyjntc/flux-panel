@@ -304,7 +304,7 @@ public class FlowController extends BaseController {
             Tunnel tunnel = tunnelService.getById(forward.getTunnelId());
             if (tunnel != null){
                 GostUtil.PauseService(tunnel.getInNodeId(), name);
-                if (tunnel.getType() == 2){
+                if (tunnel.getType() == 2 && !Boolean.TRUE.equals(tunnel.getMuxEnabled())){
                     GostUtil.PauseRemoteService(tunnel.getOutNodeId(), name);
                 }
             }

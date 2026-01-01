@@ -39,6 +39,8 @@ interface Tunnel {
   tcpListenAddr: string;
   udpListenAddr: string;
   interfaceName?: string;
+  muxEnabled?: boolean;
+  muxPort?: number;
   flow: number; // 1: 单向, 2: 双向
   trafficRatio: number;
   status: number;
@@ -61,6 +63,8 @@ interface TunnelForm {
   tcpListenAddr: string;
   udpListenAddr: string;
   interfaceName?: string;
+  muxEnabled: boolean;
+  muxPort?: number | null;
   flow: number;
   trafficRatio: number;
   status: number;
@@ -110,6 +114,8 @@ export default function TunnelPage() {
     tcpListenAddr: '[::]',
     udpListenAddr: '[::]',
     interfaceName: '',
+    muxEnabled: false,
+    muxPort: null,
     flow: 1,
     trafficRatio: 1.0,
     status: 1
@@ -216,6 +222,8 @@ export default function TunnelPage() {
       tcpListenAddr: '[::]',
       udpListenAddr: '[::]',
       interfaceName: '',
+      muxEnabled: false,
+      muxPort: null,
       flow: 1,
       trafficRatio: 1.0,
       status: 1
@@ -237,6 +245,8 @@ export default function TunnelPage() {
       tcpListenAddr: tunnel.tcpListenAddr || '[::]',
       udpListenAddr: tunnel.udpListenAddr || '[::]',
       interfaceName: tunnel.interfaceName || '',
+      muxEnabled: tunnel.muxEnabled ?? false,
+      muxPort: tunnel.muxPort ?? null,
       flow: tunnel.flow,
       trafficRatio: tunnel.trafficRatio,
       status: tunnel.status
@@ -279,7 +289,9 @@ export default function TunnelPage() {
       ...prev,
       type,
       outNodeId: type === 1 ? null : prev.outNodeId,
-      protocol: type === 1 ? 'tls' : prev.protocol
+      protocol: type === 1 ? 'tls' : prev.protocol,
+      muxEnabled: type === 1 ? false : true,
+      muxPort: type === 1 ? null : prev.muxPort
     }));
   };
 
@@ -291,7 +303,8 @@ export default function TunnelPage() {
     try {
       const data = { 
         ...form,
-        inNodeId: form.inNodeIds[0] ?? null
+        inNodeId: form.inNodeIds[0] ?? null,
+        muxEnabled: form.type === 1 ? false : true
       };
       
       const response = isEdit 
@@ -805,6 +818,22 @@ export default function TunnelPage() {
                             </SelectItem>
                           ))}
                         </Select>
+
+                        <Input
+                          label="绑定端口"
+                          value={form.muxPort !== null && form.muxPort !== undefined ? form.muxPort.toString() : ''}
+                          variant="bordered"
+                          placeholder="自动分配"
+                          description="留空则自动分配一个未使用端口"
+                          onValueChange={(value) => {
+                            const trimmed = value.trim();
+                            const parsed = trimmed === '' ? null : Number(trimmed);
+                            setForm(prev => ({
+                              ...prev,
+                              muxPort: Number.isNaN(parsed) ? prev.muxPort : parsed
+                            }));
+                          }}
+                        />
                       </>
                     )}
 

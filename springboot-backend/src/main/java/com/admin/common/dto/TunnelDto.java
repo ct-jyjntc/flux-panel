@@ -42,4 +42,10 @@ public class TunnelDto {
     
     // UDP监听地址，默认为0.0.0.0
     private String udpListenAddr = "0.0.0.0";
+
+    // 是否启用单端口多路复用（仅隧道转发）
+    private Boolean muxEnabled;
+
+    // 单端口多路复用绑定端口（可为空自动分配）
+    private Integer muxPort;
 } 

@@ -43,6 +43,8 @@ import java.util.stream.Collectors;
  */
 @Service
 public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> implements TunnelService {
+    private static final String GOST_SUCCESS_MSG = "OK";
+    private static final String GOST_NOT_FOUND_MSG = "not found";
 
     // ========== 常量定义 ==========
     
@@ -78,6 +80,7 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
     private static final String ERROR_NO_AVAILABLE_TUNNELS = "暂无可用隧道";
     private static final String ERROR_IN_NODE_OFFLINE = "入口节点当前离线，请确保节点正常运行";
     private static final String ERROR_OUT_NODE_OFFLINE = "出口节点当前离线，请确保节点正常运行";
+    private static final String ERROR_MUX_PORT_ALLOCATE_FAILED = "多路复用端口已满，无法分配新端口";
     
     /** 使用检查相关消息 */
     private static final String ERROR_FORWARDS_IN_USE = "该隧道还有 %d 个转发在使用，请先删除相关转发";
@@ -140,12 +143,42 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
         if (outNodeSetupResult.getCode() != 0) {
             return outNodeSetupResult;
         }
+        if (tunnel.getType() == TUNNEL_TYPE_TUNNEL_FORWARD) {
+            Integer desiredMuxPort = tunnelDto.getMuxPort();
+            Integer muxPort;
+            if (desiredMuxPort != null) {
+                if (!isMuxPortAvailable(tunnel.getOutNodeId(), desiredMuxPort, null)) {
+                    return R.err("指定的出口端口不可用");
+                }
+                muxPort = desiredMuxPort;
+            } else {
+                muxPort = allocateMuxPort(tunnel.getOutNodeId(), null);
+                if (muxPort == null) {
+                    return R.err(ERROR_MUX_PORT_ALLOCATE_FAILED);
+                }
+            }
+            tunnel.setMuxEnabled(true);
+            tunnel.setMuxPort(muxPort);
+        } else {
+            tunnel.setMuxEnabled(false);
+            tunnel.setMuxPort(null);
+        }
 
         // 6. 设置默认属性并保存
         setDefaultTunnelProperties(tunnel);
         boolean result = this.save(tunnel);
-        
-        return result ? R.ok(SUCCESS_CREATE_MSG) : R.err(ERROR_CREATE_MSG);
+        if (!result) {
+            return R.err(ERROR_CREATE_MSG);
+        }
+        if (tunnel.getType() == TUNNEL_TYPE_TUNNEL_FORWARD) {
+            R muxResult = ensureMuxService(tunnel);
+            if (muxResult.getCode() != 0) {
+                this.removeById(tunnel.getId());
+                return muxResult;
+            }
+        }
+
+        return R.ok(SUCCESS_CREATE_MSG);
     }
 
     /**
@@ -182,6 +215,7 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
         }
         boolean inNodeChanged = false;
         boolean outNodeChanged = false;
+        boolean muxChanged = false;
         List<Long> resolvedInNodeIds = resolveInNodeIds(tunnelUpdateDto.getInNodeIds(), tunnelUpdateDto.getInNodeId());
         NodeValidationResult inNodeValidation = null;
         if (!resolvedInNodeIds.isEmpty()) {
@@ -259,8 +293,42 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
         existingTunnel.setTrafficRatio(tunnelUpdateDto.getTrafficRatio());
         existingTunnel.setProtocol(tunnelUpdateDto.getProtocol());
         existingTunnel.setInterfaceName(tunnelUpdateDto.getInterfaceName());
+        if (existingTunnel.getType() == TUNNEL_TYPE_TUNNEL_FORWARD) {
+            Integer desiredMuxPort = tunnelUpdateDto.getMuxPort();
+            Integer muxPort = existingTunnel.getMuxPort();
+            if (desiredMuxPort != null) {
+                if (!isMuxPortAvailable(existingTunnel.getOutNodeId(), desiredMuxPort, existingTunnel.getId())) {
+                    return R.err("指定的出口端口不可用");
+                }
+                muxPort = desiredMuxPort;
+            } else if (muxPort == null || outNodeChanged) {
+                muxPort = allocateMuxPort(existingTunnel.getOutNodeId(), existingTunnel.getId());
+                if (muxPort == null) {
+                    return R.err(ERROR_MUX_PORT_ALLOCATE_FAILED);
+                }
+            }
+            existingTunnel.setMuxPort(muxPort);
+            existingTunnel.setMuxEnabled(true);
+            muxChanged = !Objects.equals(oldTunnelSnapshot.getMuxPort(), existingTunnel.getMuxPort())
+                    || !Boolean.TRUE.equals(oldTunnelSnapshot.getMuxEnabled());
+        } else {
+            existingTunnel.setMuxEnabled(false);
+            existingTunnel.setMuxPort(null);
+            muxChanged = Boolean.TRUE.equals(oldTunnelSnapshot.getMuxEnabled());
+        }
         this.updateById(existingTunnel);
-        if (inNodeChanged || outNodeChanged) {
+        if (existingTunnel.getType() == TUNNEL_TYPE_TUNNEL_FORWARD) {
+            R muxResult = ensureMuxService(existingTunnel);
+            if (muxResult.getCode() != 0) {
+                return muxResult;
+            }
+        }
+        if (Boolean.TRUE.equals(oldTunnelSnapshot.getMuxEnabled()) && !Boolean.TRUE.equals(existingTunnel.getMuxEnabled())) {
+            deleteMuxService(oldTunnelSnapshot);
+        } else if (outNodeChanged && Boolean.TRUE.equals(oldTunnelSnapshot.getMuxEnabled())) {
+            deleteMuxService(oldTunnelSnapshot);
+        }
+        if (inNodeChanged || outNodeChanged || muxChanged) {
             R rebuildResult = forwardService.rebuildForwardsForTunnelUpdate(oldTunnelSnapshot, existingTunnel);
             if (rebuildResult.getCode() != 0) {
                 return rebuildResult;
@@ -305,13 +373,18 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
     @Override
     public R deleteTunnel(Long id) {
         // 1. 验证隧道是否存在
-        if (!isTunnelExists(id)) {
+        Tunnel tunnel = this.getById(id);
+        if (tunnel == null) {
             return R.err(ERROR_TUNNEL_NOT_FOUND);
         }
 
         // 2. 删除隧道关联转发和权限
         int forwardCleanupFailures = deleteTunnelForwards(id);
         boolean userTunnelCleared = deleteUserTunnelPermissions(id);
+
+        if (Boolean.TRUE.equals(tunnel.getMuxEnabled())) {
+            deleteMuxService(tunnel);
+        }
 
         // 3. 执行删除操作
         boolean result = this.removeById(id);
@@ -494,6 +567,74 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
         return tunnel;
     }
 
+    private Integer allocateMuxPort(Long nodeId, Long excludeTunnelId) {
+        Node node = nodeService.getNodeById(nodeId);
+        if (node == null) {
+            return null;
+        }
+        Set<Integer> usedPorts = collectMuxUsedPorts(nodeId, excludeTunnelId);
+        for (int port = node.getPortSta(); port <= node.getPortEnd(); port++) {
+            if (!usedPorts.contains(port)) {
+                return port;
+            }
+        }
+        return null;
+    }
+
+    private boolean isMuxPortAvailable(Long nodeId, Integer port, Long excludeTunnelId) {
+        if (nodeId == null || port == null) {
+            return false;
+        }
+        Node node = nodeService.getNodeById(nodeId);
+        if (node == null || port < node.getPortSta() || port > node.getPortEnd()) {
+            return false;
+        }
+        Set<Integer> usedPorts = collectMuxUsedPorts(nodeId, excludeTunnelId);
+        return !usedPorts.contains(port);
+    }
+
+    private Set<Integer> collectMuxUsedPorts(Long nodeId, Long excludeTunnelId) {
+        Set<Integer> usedPorts = new HashSet<>();
+
+        List<Tunnel> inTunnels = this.list(new QueryWrapper<Tunnel>().eq("in_node_id", nodeId));
+        if (!inTunnels.isEmpty()) {
+            Set<Long> inTunnelIds = inTunnels.stream()
+                    .map(Tunnel::getId)
+                    .collect(Collectors.toSet());
+            QueryWrapper<Forward> inQueryWrapper = new QueryWrapper<Forward>().in("tunnel_id", inTunnelIds);
+            List<Forward> inForwards = forwardService.list(inQueryWrapper);
+            for (Forward forward : inForwards) {
+                if (forward.getInPort() != null) {
+                    usedPorts.add(forward.getInPort());
+                }
+            }
+        }
+
+        List<Tunnel> outTunnels = this.list(new QueryWrapper<Tunnel>().eq("out_node_id", nodeId));
+        if (!outTunnels.isEmpty()) {
+            Set<Long> outTunnelIds = outTunnels.stream()
+                    .map(Tunnel::getId)
+                    .collect(Collectors.toSet());
+            QueryWrapper<Forward> outQueryWrapper = new QueryWrapper<Forward>().in("tunnel_id", outTunnelIds);
+            List<Forward> outForwards = forwardService.list(outQueryWrapper);
+            for (Forward forward : outForwards) {
+                if (forward.getOutPort() != null) {
+                    usedPorts.add(forward.getOutPort());
+                }
+            }
+            for (Tunnel tunnel : outTunnels) {
+                if (excludeTunnelId != null && Objects.equals(tunnel.getId().longValue(), excludeTunnelId)) {
+                    continue;
+                }
+                if (Boolean.TRUE.equals(tunnel.getMuxEnabled()) && tunnel.getMuxPort() != null) {
+                    usedPorts.add(tunnel.getMuxPort());
+                }
+            }
+        }
+
+        return usedPorts;
+    }
+
     /**
      * 设置出口节点参数
      * 
@@ -671,6 +812,42 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
         return userTunnelService.remove(userTunnelQuery);
     }
 
+    private void deleteMuxService(Tunnel tunnel) {
+        if (tunnel == null || tunnel.getOutNodeId() == null) {
+            return;
+        }
+        Node outNode = nodeService.getNodeById(tunnel.getOutNodeId());
+        if (outNode == null) {
+            return;
+        }
+        String muxServiceName = buildMuxServiceName(tunnel.getId());
+        GostUtil.DeleteMuxService(outNode.getId(), muxServiceName);
+    }
+
+    private String buildMuxServiceName(Long tunnelId) {
+        return "tunnel_mux_" + tunnelId;
+    }
+
+    private R ensureMuxService(Tunnel tunnel) {
+        if (tunnel.getOutNodeId() == null || tunnel.getMuxPort() == null) {
+            return R.err("多路复用端口未分配");
+        }
+        Node outNode = nodeService.getNodeById(tunnel.getOutNodeId());
+        if (outNode == null) {
+            return R.err(ERROR_OUT_NODE_NOT_FOUND);
+        }
+        String muxServiceName = buildMuxServiceName(tunnel.getId());
+        GostDto updateResult = GostUtil.UpdateMuxService(outNode.getId(), muxServiceName, tunnel.getMuxPort(), tunnel.getProtocol(), tunnel.getInterfaceName());
+        if (updateResult.getMsg().contains(GOST_NOT_FOUND_MSG)) {
+            updateResult = GostUtil.AddMuxService(outNode.getId(), muxServiceName, tunnel.getMuxPort(), tunnel.getProtocol(), tunnel.getInterfaceName());
+        }
+        return isGostOperationSuccess(updateResult) ? R.ok() : R.err(updateResult.getMsg());
+    }
+
+    private boolean isGostOperationSuccess(GostDto gostResult) {
+        return gostResult != null && Objects.equals(gostResult.getMsg(), GOST_SUCCESS_MSG);
+    }
+
     /**
      * 获取用户可访问的隧道列表
      * 
@@ -792,7 +969,7 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
         if (tunnel.getType() == TUNNEL_TYPE_PORT_FORWARD) {
             // 端口转发：只给入口节点发送诊断指令，TCP ping谷歌443端口
             for (Node inNode : inNodes) {
-                DiagnosisResult inResult = performTcpPingDiagnosisWithConnectionCheck(inNode, "www.google.com", 443, "入口->外网");
+                DiagnosisResult inResult = performTcpPingDiagnosisWithConnectionCheck(inNode, "www.icloud.com.cn", 443, "入口->外网");
                 results.add(inResult);
             }
         } else {
@@ -804,7 +981,7 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
             }
 
             // 先检查出口节点的真实连接状态，然后再进行诊断
-            DiagnosisResult outToExternalResult = performTcpPingDiagnosisWithConnectionCheck(outNode, "www.google.com", 443, "出口->外网");
+            DiagnosisResult outToExternalResult = performTcpPingDiagnosisWithConnectionCheck(outNode, "www.icloud.com.cn", 443, "出口->外网");
             results.add(outToExternalResult);
         }
 
@@ -861,6 +1038,10 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
      * @return TCP端口号
      */
     private int getOutNodeTcpPort(Long tunnelId) {
+        Tunnel tunnel = this.getById(tunnelId);
+        if (tunnel != null && Boolean.TRUE.equals(tunnel.getMuxEnabled()) && tunnel.getMuxPort() != null) {
+            return tunnel.getMuxPort();
+        }
         List<Forward> forwards = forwardService.list(new QueryWrapper<Forward>().eq("tunnel_id", tunnelId).eq("status", TUNNEL_STATUS_ACTIVE));
         if (!forwards.isEmpty()) {
             return forwards.get(0).getOutPort();
@@ -1017,6 +1198,7 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
             return new NodeValidationResult(true, errorMessage, null);
         }
     }
+
 
     /**
      * 诊断结果数据类

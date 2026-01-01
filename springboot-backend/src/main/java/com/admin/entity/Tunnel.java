@@ -75,4 +75,14 @@ public class Tunnel extends BaseEntity {
     private String udpListenAddr;
 
     private String interfaceName;
+
+    /**
+     * 是否启用单端口多路复用（仅隧道转发）
+     */
+    private Boolean muxEnabled;
+
+    /**
+     * 多路复用绑定端口（仅隧道转发）
+     */
+    private Integer muxPort;
 }

@@ -107,6 +107,30 @@ public class GostUtil {
         return WebSocketServer.send_msg(node_id, services, "AddService");
     }
 
+    public static GostDto AddMuxService(Long node_id, String name, Integer port, String protocol, String interfaceName) {
+        JSONObject data = new JSONObject();
+        data.put("name", name + "_mux");
+        data.put("addr", ":" + port);
+
+        if (StringUtils.isNotBlank(interfaceName)) {
+            JSONObject metadata = new JSONObject();
+            metadata.put("interface", interfaceName);
+            data.put("metadata", metadata);
+        }
+
+        JSONObject handler = new JSONObject();
+        handler.put("type", "socks");
+        data.put("handler", handler);
+
+        JSONObject listener = new JSONObject();
+        listener.put("type", protocol);
+        data.put("listener", listener);
+
+        JSONArray services = new JSONArray();
+        services.add(data);
+        return WebSocketServer.send_msg(node_id, services, "AddService");
+    }
+
     public static GostDto UpdateRemoteService(Long node_id, String name, Integer out_port, String remoteAddr,String protocol, String strategy, String interfaceName) {
         JSONObject data = new JSONObject();
         data.put("name", name + "_tls");
@@ -153,9 +177,41 @@ public class GostUtil {
         return WebSocketServer.send_msg(node_id, services, "UpdateService");
     }
 
+    public static GostDto UpdateMuxService(Long node_id, String name, Integer port, String protocol, String interfaceName) {
+        JSONObject data = new JSONObject();
+        data.put("name", name + "_mux");
+        data.put("addr", ":" + port);
+
+        if (StringUtils.isNotBlank(interfaceName)) {
+            JSONObject metadata = new JSONObject();
+            metadata.put("interface", interfaceName);
+            data.put("metadata", metadata);
+        }
+
+        JSONObject handler = new JSONObject();
+        handler.put("type", "socks");
+        data.put("handler", handler);
+
+        JSONObject listener = new JSONObject();
+        listener.put("type", protocol);
+        data.put("listener", listener);
+
+        JSONArray services = new JSONArray();
+        services.add(data);
+        return WebSocketServer.send_msg(node_id, services, "UpdateService");
+    }
+
     public static GostDto DeleteRemoteService(Long node_id, String name) {
         JSONArray data = new JSONArray();
         data.add(name + "_tls");
+        JSONObject req = new JSONObject();
+        req.put("services", data);
+        return WebSocketServer.send_msg(node_id, req, "DeleteService");
+    }
+
+    public static GostDto DeleteMuxService(Long node_id, String name) {
+        JSONArray data = new JSONArray();
+        data.add(name + "_mux");
         JSONObject req = new JSONObject();
         req.put("services", data);
         return WebSocketServer.send_msg(node_id, req, "DeleteService");
@@ -195,7 +251,7 @@ public class GostUtil {
         return WebSocketServer.send_msg(node_id, data, "ResumeService");
     }
 
-    public static GostDto AddChains(Long node_id, String name, String remoteAddr, String protocol, String interfaceName) {
+    public static GostDto AddChains(Long node_id, String name, String remoteAddr, String protocol, String interfaceName, boolean useSocks) {
         JSONObject dialer = new JSONObject();
         dialer.put("type", protocol);
         if (Objects.equals(protocol, "quic")){
@@ -209,7 +265,7 @@ public class GostUtil {
 
 
         JSONObject connector = new JSONObject();
-        connector.put("type", "relay");
+        connector.put("type", useSocks ? "socks5" : "relay");
 
         JSONObject node = new JSONObject();
         node.put("name", "node-" + name);
@@ -239,7 +295,7 @@ public class GostUtil {
         return WebSocketServer.send_msg(node_id, data, "AddChains");
     }
 
-    public static GostDto UpdateChains(Long node_id, String name, String remoteAddr, String protocol, String interfaceName) {
+    public static GostDto UpdateChains(Long node_id, String name, String remoteAddr, String protocol, String interfaceName, boolean useSocks) {
         JSONObject dialer = new JSONObject();
         dialer.put("type", protocol);
 
@@ -252,7 +308,7 @@ public class GostUtil {
 
 
         JSONObject connector = new JSONObject();
-        connector.put("type", "relay");
+        connector.put("type", useSocks ? "socks5" : "relay");
 
         JSONObject node = new JSONObject();
         node.put("name", "node-" + name);
@@ -327,8 +383,9 @@ public class GostUtil {
         JSONObject listener = createListener(protocol);
         service.put("listener", listener);
 
-        // 端口转发需要配置转发器
-        if (isPortForwarding(fow_type)) {
+        boolean enableForwarder = isPortForwarding(fow_type)
+                || (isTunnelForwarding(fow_type) && tunnel != null && Boolean.TRUE.equals(tunnel.getMuxEnabled()));
+        if (enableForwarder) {
             JSONObject forwarder = createForwarder(remoteAddr, strategy);
             service.put("forwarder", forwarder);
         }
