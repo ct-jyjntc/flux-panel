@@ -83,6 +83,7 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
     private static final String ERROR_NO_AVAILABLE_TUNNELS = "暂无可用隧道";
     private static final String ERROR_IN_NODE_OFFLINE = "入口节点当前离线，请确保节点正常运行";
     private static final String ERROR_OUT_NODE_OFFLINE = "出口节点当前离线，请确保节点正常运行";
+    private static final String ERROR_OUT_NODE_MULTI_NOT_SUPPORTED = "暂不支持多个出口节点";
     private static final String ERROR_MUX_PORT_ALLOCATE_FAILED = "多路复用端口已满，无法分配新端口";
     private static final String DEFAULT_OUT_STRATEGY = "fifo";
     private static final Set<String> SUPPORTED_OUT_STRATEGIES = new HashSet<>(Arrays.asList("fifo", "round", "random", "hash"));
@@ -580,6 +581,9 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
         if (outNodeIds == null || outNodeIds.isEmpty()) {
             return NodeValidationResult.error(ERROR_OUT_NODE_REQUIRED);
         }
+        if (outNodeIds.size() > 1) {
+            return NodeValidationResult.error(ERROR_OUT_NODE_MULTI_NOT_SUPPORTED);
+        }
         List<Node> nodes = new ArrayList<>();
         Set<Long> uniqueIds = new LinkedHashSet<>(outNodeIds);
         for (Long nodeId : uniqueIds) {
@@ -796,6 +800,9 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
         // 验证出口节点不能为空
         if (outNodes == null || outNodes.isEmpty()) {
             return R.err(ERROR_OUT_NODE_REQUIRED);
+        }
+        if (outNodes.size() > 1) {
+            return R.err(ERROR_OUT_NODE_MULTI_NOT_SUPPORTED);
         }
 
         // 验证入口和出口不能是同一个节点
@@ -1169,6 +1176,9 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
         }
         if (outNodeIds.isEmpty() && tunnel.getOutNodeId() != null) {
             outNodeIds.add(tunnel.getOutNodeId());
+        }
+        if (outNodeIds.size() > 1) {
+            return Collections.singletonList(outNodeIds.get(0));
         }
         return outNodeIds;
     }

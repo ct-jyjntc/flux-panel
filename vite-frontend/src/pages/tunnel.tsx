@@ -185,7 +185,7 @@ export default function TunnelPage() {
         .split(',')
         .map((id) => parseInt(id.trim(), 10))
         .filter((id) => !Number.isNaN(id));
-      if (parsed.length > 0) return parsed;
+      if (parsed.length > 0) return [parsed[0]];
     }
     return tunnel.outNodeId ? [tunnel.outNodeId] : [];
   };
@@ -216,6 +216,8 @@ export default function TunnelPage() {
     if (form.type === 2) {
       if (!form.outNodeIds.length) {
         newErrors.outNodeId = '请选择出口节点';
+      } else if (form.outNodeIds.length > 1) {
+        newErrors.outNodeId = '出口节点仅支持一个';
       } else if (form.outNodeIds.some((id) => form.inNodeIds.includes(id))) {
         newErrors.outNodeId = '隧道转发模式下，入口和出口不能是同一个节点';
       }
@@ -753,12 +755,11 @@ export default function TunnelPage() {
                         <Select
                           label="出口节点"
                           placeholder="请选择出口节点"
-                          selectionMode="multiple"
-                          selectedKeys={form.outNodeIds.map((id) => id.toString())}
+                          selectedKeys={form.outNodeIds.length ? [form.outNodeIds[0].toString()] : []}
                           onSelectionChange={(keys) => {
-                            const selected = Array.from(keys)
-                              .map((key) => parseInt(key as string, 10))
-                              .filter((id) => !Number.isNaN(id));
+                            const selectedKey = Array.from(keys)[0] as string;
+                            const selectedId = Number.parseInt(selectedKey, 10);
+                            const selected = Number.isNaN(selectedId) ? [] : [selectedId];
                             const firstOutNode = selected.length > 0
                               ? outNodeOptions.find((node) => node.id === selected[0])
                               : null;
@@ -797,24 +798,6 @@ export default function TunnelPage() {
                               </div>
                             </SelectItem>
                           ))}
-                        </Select>
-
-                        <Select
-                          label="出口负载策略"
-                          placeholder="请选择负载策略"
-                          selectedKeys={[form.outStrategy]}
-                          onSelectionChange={(keys) => {
-                            const selectedKey = Array.from(keys)[0] as string;
-                            if (selectedKey) {
-                              setForm(prev => ({ ...prev, outStrategy: selectedKey }));
-                            }
-                          }}
-                          variant="bordered"
-                        >
-                          <SelectItem key="fifo">主备模式（自上而下）</SelectItem>
-                          <SelectItem key="round">轮询模式（依次轮换）</SelectItem>
-                          <SelectItem key="random">随机模式</SelectItem>
-                          <SelectItem key="hash">哈希模式（IP哈希）</SelectItem>
                         </Select>
 
                         <Input

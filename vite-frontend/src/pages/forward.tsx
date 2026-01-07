@@ -263,20 +263,21 @@ export default function ForwardPage() {
       newErrors.tunnelId = '请选择关联隧道';
     }
     
-    if (!form.remoteAddr.trim()) {
+    const trimmedRemoteAddr = form.remoteAddr.trim();
+    if (!trimmedRemoteAddr) {
       newErrors.remoteAddr = '请输入远程地址';
     } else {
       // 验证地址格式
-      const addresses = form.remoteAddr.split('\n').map(addr => addr.trim()).filter(addr => addr);
+      const addresses = trimmedRemoteAddr.split('\n').map(addr => addr.trim()).filter(addr => addr);
+      if (addresses.length > 1 || trimmedRemoteAddr.includes(',')) {
+        newErrors.remoteAddr = '目标地址仅支持一个';
+      } else {
       const ipv4Pattern = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?):\d+$/;
       const ipv6FullPattern = /^\[((([0-9a-fA-F]{1,4}:){7}([0-9a-fA-F]{1,4}|:))|(([0-9a-fA-F]{1,4}:){6}(:[0-9a-fA-F]{1,4}|((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9a-fA-F]{1,4}:){5}(((:[0-9a-fA-F]{1,4}){1,2})|:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9a-fA-F]{1,4}:){4}(((:[0-9a-fA-F]{1,4}){1,3})|((:[0-9a-fA-F]{1,4})?:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9a-fA-F]{1,4}:){3}(((:[0-9a-fA-F]{1,4}){1,4})|((:[0-9a-fA-F]{1,4}){0,2}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9a-fA-F]{1,4}:){2}(((:[0-9a-fA-F]{1,4}){1,5})|((:[0-9a-fA-F]{1,4}){0,3}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9a-fA-F]{1,4}:){1}(((:[0-9a-fA-F]{1,4}){1,6})|((:[0-9a-fA-F]{1,4}){0,4}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(:(((:[0-9a-fA-F]{1,4}){1,7})|((:[0-9a-fA-F]{1,4}){0,5}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:)))\]:\d+$/;
       const domainPattern = /^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*:\d+$/;
-      
-      for (let i = 0; i < addresses.length; i++) {
-        const addr = addresses[i];
+        const addr = addresses[0];
         if (!ipv4Pattern.test(addr) && !ipv6FullPattern.test(addr) && !domainPattern.test(addr)) {
-          newErrors.remoteAddr = `第${i + 1}行地址格式错误`;
-          break;
+          newErrors.remoteAddr = '目标地址格式错误';
         }
       }
     }
@@ -320,7 +321,7 @@ export default function ForwardPage() {
       name: forward.name,
       tunnelId: forward.tunnelId,
       inPort: forward.inPort,
-      remoteAddr: forward.remoteAddr.split(',').join('\n'),
+      remoteAddr: forward.remoteAddr,
       interfaceName: forward.interfaceName || '',
       strategy: forward.strategy || 'fifo'
     });
@@ -382,13 +383,7 @@ export default function ForwardPage() {
     
     setSubmitLoading(true);
     try {
-      const processedRemoteAddr = form.remoteAddr
-        .split('\n')
-        .map(addr => addr.trim())
-        .filter(addr => addr)
-        .join(',');
-
-      const addressCount = processedRemoteAddr.split(',').length;
+      const processedRemoteAddr = form.remoteAddr.trim();
       
       let res;
       if (isEdit) {
@@ -401,7 +396,7 @@ export default function ForwardPage() {
           inPort: form.inPort,
           remoteAddr: processedRemoteAddr,
           interfaceName: form.interfaceName,
-          strategy: addressCount > 1 ? form.strategy : 'fifo'
+          strategy: 'fifo'
         };
         res = await updateForward(updateData);
       } else {
@@ -412,7 +407,7 @@ export default function ForwardPage() {
           inPort: form.inPort,
           remoteAddr: processedRemoteAddr,
           interfaceName: form.interfaceName,
-          strategy: addressCount > 1 ? form.strategy : 'fifo'
+          strategy: 'fifo'
         };
         res = await createForward(createData);
       }
@@ -585,9 +580,7 @@ export default function ForwardPage() {
     
     const addresses = addressString.split(',').map(addr => addr.trim()).filter(addr => addr);
     if (addresses.length === 0) return '';
-    if (addresses.length === 1) return addresses[0];
-    
-    return `${addresses[0]} (+${addresses.length - 1})`;
+    return addresses[0];
   };
 
   // 检查是否有多个地址
@@ -764,29 +757,34 @@ export default function ForwardPage() {
           continue;
         }
 
-        // 验证远程地址格式 - 支持单个地址或多个地址用逗号分隔
-        const addresses = remoteAddr.trim().split(',');
-        const isValidFormat = addresses.every((addr) => {
-          const trimmed = addr.trim();
-          if (!trimmed) return false;
-          // IPv6: [ipv6]:port
-          if (trimmed.startsWith('[')) {
-            const endBracket = trimmed.indexOf(']');
+        if (remoteAddr.includes(',')) {
+          setImportResults(prev => [{
+            line,
+            success: false,
+            message: '目标地址仅支持一个，请移除多余地址'
+          }, ...prev]);
+          continue;
+        }
+
+        const trimmedRemoteAddr = remoteAddr.trim();
+        const isValidFormat = (() => {
+          if (!trimmedRemoteAddr) return false;
+          if (trimmedRemoteAddr.startsWith('[')) {
+            const endBracket = trimmedRemoteAddr.indexOf(']');
             if (endBracket <= 0) return false;
-            const portPart = trimmed.slice(endBracket + 1);
+            const portPart = trimmedRemoteAddr.slice(endBracket + 1);
             if (!portPart.startsWith(':')) return false;
             const port = portPart.slice(1);
             return /^\d+$/.test(port);
           }
-          // IPv4/域名: host:port
-          return /^[^:\s]+:\d+$/.test(trimmed);
-        });
+          return /^[^:\s]+:\d+$/.test(trimmedRemoteAddr);
+        })();
         
         if (!isValidFormat) {
           setImportResults(prev => [{
             line,
             success: false,
-            message: '目标地址格式错误，应为 地址:端口 或 [IPv6]:端口，多个地址用逗号分隔'
+            message: '目标地址格式错误，应为 地址:端口 或 [IPv6]:端口'
           }, ...prev]);
           continue;
         }
@@ -812,7 +810,7 @@ export default function ForwardPage() {
             name: name.trim(),
             tunnelId: selectedTunnelForImport, // 使用用户选择的隧道
             inPort: portNumber, // 使用指定端口或自动分配
-            remoteAddr: remoteAddr.trim(),
+            remoteAddr: trimmedRemoteAddr,
             strategy: 'fifo'
           });
 
@@ -864,27 +862,6 @@ export default function ForwardPage() {
       default:
         return { color: 'default', text: '未知' };
     }
-  };
-
-  // 获取策略显示
-  const getStrategyDisplay = (strategy: string) => {
-    switch (strategy) {
-      case 'fifo':
-        return { color: 'primary', text: '主备' };
-      case 'round':
-        return { color: 'success', text: '轮询' };
-      case 'rand':
-        return { color: 'warning', text: '随机' };
-      default:
-        return { color: 'default', text: '未知' };
-    }
-  };
-
-  // 获取地址数量
-  const getAddressCount = (addressString: string): number => {
-    if (!addressString) return 0;
-    const addresses = addressString.split('\n').map(addr => addr.trim()).filter(addr => addr);
-    return addresses.length;
   };
 
   // 根据排序顺序获取转发列表
@@ -1014,9 +991,9 @@ export default function ForwardPage() {
     }
   };
 
-  const renderAddressCell = (address: string, port: number | null, title: string) => {
+  const renderAddressCell = (address: string, port: number | null, title: string, showMultiple: boolean) => {
     const display = port === null ? formatRemoteAddress(address) : formatInAddress(address, port);
-    const hasMultiple = hasMultipleAddresses(address);
+    const hasMultiple = showMultiple && hasMultipleAddresses(address);
     return (
       <button
         type="button"
@@ -1048,7 +1025,6 @@ export default function ForwardPage() {
       opacity: isDragging ? 0.6 : 1,
     };
     const statusDisplay = getStatusDisplay(forward.status);
-    const strategyDisplay = getStrategyDisplay(forward.strategy);
     const inPort = typeof forward.inPort === 'number' ? forward.inPort : 0;
 
     return (
@@ -1087,15 +1063,10 @@ export default function ForwardPage() {
           </div>
         </td>
         <td className="px-3 py-3 align-top">
-          {renderAddressCell(forward.inIp, inPort, '入口端口')}
+          {renderAddressCell(forward.inIp, inPort, '入口端口', true)}
         </td>
         <td className="px-3 py-3 align-top">
-          {renderAddressCell(forward.remoteAddr, null, '目标地址')}
-        </td>
-        <td className="px-3 py-3 align-top">
-          <Chip color={strategyDisplay.color as any} variant="flat" size="sm" className="text-xs">
-            {strategyDisplay.text}
-          </Chip>
+          {renderAddressCell(forward.remoteAddr, null, '目标地址', false)}
         </td>
         <td className="px-3 py-3 align-top">
           <div className="flex items-center gap-2">
@@ -1347,7 +1318,6 @@ export default function ForwardPage() {
                         <th className="px-3 py-3 text-left">转发名称</th>
                         <th className="px-3 py-3 text-left">入口</th>
                         <th className="px-3 py-3 text-left">目标</th>
-                        <th className="px-3 py-3 text-left">策略</th>
                         <th className="px-3 py-3 text-left">流量</th>
                         <th className="px-3 py-3 text-left">状态</th>
                         <th className="px-3 py-3 text-right">操作</th>
@@ -1456,17 +1426,15 @@ export default function ForwardPage() {
                       }
                     />
                     
-                    <Textarea
+                    <Input
                       label="远程地址"
-                      placeholder="请输入远程地址，多个地址用换行分隔&#10;例如:&#10;192.168.1.100:8080&#10;example.com:3000"
+                      placeholder="请输入远程地址，例如: 192.168.1.100:8080"
                       value={form.remoteAddr}
                       onChange={(e) => setForm(prev => ({ ...prev, remoteAddr: e.target.value }))}
                       isInvalid={!!errors.remoteAddr}
                       errorMessage={errors.remoteAddr}
                       variant="bordered"
-                      description="格式: IP:端口 或 域名:端口，支持多个地址（每行一个）"
-                      minRows={3}
-                      maxRows={6}
+                      description="格式: IP:端口 或 域名:端口，仅支持单个地址"
                     />
                     
                     <Input
@@ -1480,24 +1448,6 @@ export default function ForwardPage() {
                       description="用于多IP服务器指定使用那个IP请求远程地址，不懂的默认为空就行"
                     />
                     
-                    {getAddressCount(form.remoteAddr) > 1 && (
-                      <Select
-                        label="负载策略"
-                        placeholder="请选择负载均衡策略"
-                        selectedKeys={[form.strategy]}
-                        onSelectionChange={(keys) => {
-                          const selectedKey = Array.from(keys)[0] as string;
-                          setForm(prev => ({ ...prev, strategy: selectedKey }));
-                        }}
-                        variant="bordered"
-                        description="多个目标地址的负载均衡策略"
-                      >
-                        <SelectItem key="fifo" >主备模式 - 自上而下</SelectItem>
-                        <SelectItem key="round" >轮询模式 - 依次轮换</SelectItem>
-                        <SelectItem key="rand" >随机模式 - 随机选择</SelectItem>
-                        <SelectItem key="hash" >哈希模式 - IP哈希</SelectItem>
-                      </Select>
-                    )}
                   </div>
                 </ModalBody>
                 <ModalFooter>
@@ -1734,7 +1684,7 @@ export default function ForwardPage() {
                 格式：目标地址|转发名称|入口端口，每行一个，入口端口留空将自动分配可用端口
               </p>
               <p className="text-small text-default-400">
-                目标地址支持单个地址(如：example.com:8080)或多个地址用逗号分隔(如：3.3.3.3:3,4.4.4.4:4)
+                目标地址仅支持单个地址(如：example.com:8080 或 [IPv6]:端口)
               </p>
             </ModalHeader>
             <ModalBody className="pb-6">

@@ -76,6 +76,10 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
         // 1. 获取当前用户信息
         UserInfo currentUser = getCurrentUserInfo();
 
+        if (hasMultipleTargets(forwardDto.getRemoteAddr())) {
+            return R.err("目标地址只支持一个，请移除多余的目标");
+        }
+
         // 2. 检查隧道是否存在和可用
         Tunnel tunnel = validateTunnel(forwardDto.getTunnelId());
         if (tunnel == null) {
@@ -148,6 +152,10 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
             User user = userService.getById(currentUser.getUserId());
             if (user == null) return R.err("用户不存在");
             if (user.getStatus() == 0) return R.err("用户已到期或被禁用");
+        }
+
+        if (hasMultipleTargets(forwardUpdateDto.getRemoteAddr())) {
+            return R.err("目标地址只支持一个，请移除多余的目标");
         }
 
 
@@ -806,6 +814,13 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
         Integer roleId = JwtUtil.getRoleIdFromToken();
         String userName = JwtUtil.getNameFromToken();
         return new UserInfo(userId, roleId, userName);
+    }
+
+    private boolean hasMultipleTargets(String remoteAddr) {
+        if (StringUtils.isBlank(remoteAddr)) {
+            return false;
+        }
+        return remoteAddr.contains(",") || remoteAddr.contains("\n") || remoteAddr.contains("\r");
     }
 
     private Set<Long> getOutOnlyNodeIdsForUser(Integer userId) {
