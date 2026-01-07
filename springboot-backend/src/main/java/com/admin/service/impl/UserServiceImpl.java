@@ -845,7 +845,15 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
      * @return 节点权限详情列表
      */
     private List<UserPackageDto.UserNodeDetailDto> getNodePermissions(Long userId) {
-        return userMapper.getUserNodeDetails(userId.intValue());
+        List<UserPackageDto.UserNodeDetailDto> details = userMapper.getUserNodeDetails(userId.intValue());
+        if (details != null) {
+            for (UserPackageDto.UserNodeDetailDto detail : details) {
+                if (detail != null && detail.getAccessType() != null && detail.getAccessType() == 2) {
+                    detail.setServerIp("隐藏");
+                }
+            }
+        }
+        return details;
     }
 
     /**

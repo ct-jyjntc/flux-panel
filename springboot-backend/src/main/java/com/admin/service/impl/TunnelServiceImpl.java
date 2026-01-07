@@ -58,6 +58,11 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
     
     /** 用户角色常量 */
     private static final int ADMIN_ROLE_ID = 0;             // 管理员角色ID
+
+    /** 用户节点权限类型 */
+    private static final int ACCESS_TYPE_BOTH = 0;
+    private static final int ACCESS_TYPE_IN = 1;
+    private static final int ACCESS_TYPE_OUT = 2;
     
     /** 成功响应消息 */
     private static final String SUCCESS_CREATE_MSG = "隧道创建成功";
@@ -211,6 +216,7 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
             tunnelList = this.list();
         } else {
             tunnelList = this.list(new QueryWrapper<Tunnel>().eq("owner_id", currentUser.getUserId()));
+            maskOutIpForUser(tunnelList, currentUser.getUserId());
         }
         return R.ok(tunnelList);
     }
@@ -1023,14 +1029,64 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
                 .collect(Collectors.toList());
     }
 
-    private R validateUserNodeAccess(Integer userId, List<Node> inNodes, List<Node> outNodes) {
-        Set<Long> allowedNodeIds = userNodeService.list(new QueryWrapper<UserNode>().eq("user_id", userId))
+    private void maskOutIpForUser(List<Tunnel> tunnels, Integer userId) {
+        if (tunnels == null || tunnels.isEmpty()) {
+            return;
+        }
+        Set<Long> outOnlyNodeIds = getOutOnlyNodeIdsForUser(userId);
+        if (outOnlyNodeIds.isEmpty()) {
+            return;
+        }
+        Set<Long> outNodeIds = new LinkedHashSet<>();
+        for (Tunnel tunnel : tunnels) {
+            outNodeIds.addAll(resolveOutNodeIdsFromTunnel(tunnel));
+        }
+        if (outNodeIds.isEmpty()) {
+            return;
+        }
+        Map<Long, Node> nodeMap = nodeService.listByIds(outNodeIds).stream()
+                .filter(Objects::nonNull)
+                .collect(Collectors.toMap(Node::getId, node -> node, (first, second) -> first));
+        for (Tunnel tunnel : tunnels) {
+            List<Long> tunnelOutNodeIds = resolveOutNodeIdsFromTunnel(tunnel);
+            if (tunnelOutNodeIds.isEmpty()) {
+                continue;
+            }
+            List<String> maskedIps = new ArrayList<>();
+            for (Long nodeId : tunnelOutNodeIds) {
+                if (outOnlyNodeIds.contains(nodeId)) {
+                    maskedIps.add("隐藏");
+                    continue;
+                }
+                Node node = nodeMap.get(nodeId);
+                maskedIps.add(node != null && node.getServerIp() != null ? node.getServerIp() : "");
+            }
+            tunnel.setOutIp(String.join(",", maskedIps));
+        }
+    }
+
+    private Set<Long> getOutOnlyNodeIdsForUser(Integer userId) {
+        if (userId == null) {
+            return Collections.emptySet();
+        }
+        return userNodeService.list(new QueryWrapper<UserNode>().eq("user_id", userId))
                 .stream()
+                .filter(userNode -> userNode.getAccessType() != null && userNode.getAccessType() == ACCESS_TYPE_OUT)
                 .map(UserNode::getNodeId)
+                .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
+    }
+
+    private R validateUserNodeAccess(Integer userId, List<Node> inNodes, List<Node> outNodes) {
+        Map<Long, Integer> accessTypeMap = userNodeService.list(new QueryWrapper<UserNode>().eq("user_id", userId))
+                .stream()
+                .filter(userNode -> userNode.getNodeId() != null)
+                .collect(Collectors.toMap(UserNode::getNodeId,
+                        userNode -> userNode.getAccessType() == null ? ACCESS_TYPE_BOTH : userNode.getAccessType(),
+                        (first, second) -> first));
 
         for (Node inNode : inNodes) {
-            if (!hasNodeAccess(userId, inNode, allowedNodeIds)) {
+            if (!hasInNodeAccess(userId, inNode, accessTypeMap)) {
                 return R.err("无权限使用入口节点");
             }
         }
@@ -1040,7 +1096,7 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
                 if (outNode == null) {
                     return R.err(ERROR_OUT_NODE_NOT_FOUND);
                 }
-                if (!hasNodeAccess(userId, outNode, allowedNodeIds)) {
+                if (!hasOutNodeAccess(userId, outNode, accessTypeMap)) {
                     return R.err("无权限使用出口节点");
                 }
             }
@@ -1049,14 +1105,26 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
         return R.ok();
     }
 
-    private boolean hasNodeAccess(Integer userId, Node node, Set<Long> allowedNodeIds) {
+    private boolean hasInNodeAccess(Integer userId, Node node, Map<Long, Integer> accessTypeMap) {
         if (node == null) {
             return false;
         }
         if (Objects.equals(node.getOwnerId(), userId.longValue())) {
             return true;
         }
-        return allowedNodeIds.contains(node.getId());
+        Integer accessType = accessTypeMap.get(node.getId());
+        return accessType != null && (accessType == ACCESS_TYPE_BOTH || accessType == ACCESS_TYPE_IN);
+    }
+
+    private boolean hasOutNodeAccess(Integer userId, Node node, Map<Long, Integer> accessTypeMap) {
+        if (node == null) {
+            return false;
+        }
+        if (Objects.equals(node.getOwnerId(), userId.longValue())) {
+            return true;
+        }
+        Integer accessType = accessTypeMap.get(node.getId());
+        return accessType != null && (accessType == ACCESS_TYPE_BOTH || accessType == ACCESS_TYPE_OUT);
     }
 
     private List<Node> resolveInNodesFromTunnel(Tunnel tunnel) {
@@ -1161,6 +1229,10 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
         if (tunnel == null) {
             return R.err(ERROR_TUNNEL_NOT_FOUND);
         }
+        UserInfo currentUser = getCurrentUserInfo();
+        Set<Long> outOnlyNodeIds = currentUser.getRoleId() == ADMIN_ROLE_ID
+                ? Collections.emptySet()
+                : getOutOnlyNodeIdsForUser(currentUser.getUserId());
 
         // 2. 获取入口和出口节点信息
         List<Node> inNodes = resolveInNodesForDiagnosis(tunnel);
@@ -1195,6 +1267,9 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
                             outNode.getServerIp(),
                             outNodePort,
                             "入口->出口(" + outNode.getName() + ")");
+                    if (outOnlyNodeIds.contains(outNode.getId())) {
+                        inToOutResult.setTargetIp("隐藏");
+                    }
                     results.add(inToOutResult);
                 }
 

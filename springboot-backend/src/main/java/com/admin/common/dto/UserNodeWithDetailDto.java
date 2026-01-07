@@ -10,6 +10,7 @@ public class UserNodeWithDetailDto {
     private Integer id;
     private Integer userId;
     private Long nodeId;
+    private Integer accessType;
     private String nodeName;
     private String ip;
     private String serverIp;

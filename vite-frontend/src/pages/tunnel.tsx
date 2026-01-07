@@ -52,6 +52,7 @@ interface Node {
   name: string;
   status: number; // 1: 在线, 0: 离线
   outPort?: number | null;
+  accessType?: number;
 }
 
 interface TunnelForm {
@@ -92,6 +93,7 @@ export default function TunnelPage() {
   const [loading, setLoading] = useState(true);
   const [tunnels, setTunnels] = useState<Tunnel[]>([]);
   const [nodes, setNodes] = useState<Node[]>([]);
+  const isAdmin = localStorage.getItem('admin') === 'true';
   
   // 模态框状态
   const [modalOpen, setModalOpen] = useState(false);
@@ -124,6 +126,15 @@ export default function TunnelPage() {
   
   // 表单验证错误
   const [errors, setErrors] = useState<{[key: string]: string}>({});
+
+  const canUseAsInNode = (node: Node) =>
+    isAdmin || node.accessType === undefined || node.accessType === 0 || node.accessType === 1;
+
+  const canUseAsOutNode = (node: Node) =>
+    isAdmin || node.accessType === undefined || node.accessType === 0 || node.accessType === 2;
+
+  const inNodeOptions = nodes.filter(canUseAsInNode);
+  const outNodeOptions = nodes.filter(canUseAsOutNode);
 
   useEffect(() => {
     loadData();
@@ -647,7 +658,7 @@ export default function TunnelPage() {
                       errorMessage={errors.inNodeId}
                       variant="bordered"
                     >
-                      {nodes.map((node) => (
+                      {inNodeOptions.map((node) => (
                         <SelectItem 
                           key={node.id}
                           textValue={`${node.name} (${node.status === 1 ? '在线' : '离线'})`}
@@ -749,7 +760,7 @@ export default function TunnelPage() {
                               .map((key) => parseInt(key as string, 10))
                               .filter((id) => !Number.isNaN(id));
                             const firstOutNode = selected.length > 0
-                              ? nodes.find((node) => node.id === selected[0])
+                              ? outNodeOptions.find((node) => node.id === selected[0])
                               : null;
                             setForm(prev => ({ 
                               ...prev, 
@@ -762,7 +773,7 @@ export default function TunnelPage() {
                           errorMessage={errors.outNodeId}
                           variant="bordered"
                         >
-                          {nodes.map((node) => (
+                          {outNodeOptions.map((node) => (
                             <SelectItem 
                               key={node.id}
                               textValue={`${node.name} (${node.status === 1 ? '在线' : '离线'})`}

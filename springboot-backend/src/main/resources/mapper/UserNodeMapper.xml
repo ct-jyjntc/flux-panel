@@ -7,6 +7,7 @@
             un.id,
             un.user_id as userId,
             un.node_id as nodeId,
+            un.access_type as accessType,
             n.name as nodeName,
             n.ip as ip,
             n.server_ip as serverIp,

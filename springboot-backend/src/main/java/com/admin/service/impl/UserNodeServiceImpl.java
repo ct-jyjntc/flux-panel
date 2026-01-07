@@ -18,6 +18,11 @@ public class UserNodeServiceImpl extends ServiceImpl<UserNodeMapper, UserNode> i
 
     private static final String ERROR_PERMISSION_EXISTS = "该用户已拥有此节点权限";
     private static final String ERROR_PERMISSION_NOT_FOUND = "未找到对应的节点权限记录";
+    private static final String ERROR_ACCESS_TYPE_INVALID = "节点权限类型不合法";
+
+    private static final int ACCESS_TYPE_BOTH = 0;
+    private static final int ACCESS_TYPE_IN = 1;
+    private static final int ACCESS_TYPE_OUT = 2;
 
     @Override
     public R assignUserNode(UserNodeDto userNodeDto) {
@@ -27,9 +32,15 @@ public class UserNodeServiceImpl extends ServiceImpl<UserNodeMapper, UserNode> i
             return R.err(ERROR_PERMISSION_EXISTS);
         }
 
+        Integer normalizedAccessType = normalizeAccessType(userNodeDto.getAccessType());
+        if (normalizedAccessType == null) {
+            return R.err(ERROR_ACCESS_TYPE_INVALID);
+        }
+
         UserNode userNode = new UserNode();
         userNode.setUserId(userNodeDto.getUserId());
         userNode.setNodeId(userNodeDto.getNodeId());
+        userNode.setAccessType(normalizedAccessType);
         userNode.setCreatedTime(System.currentTimeMillis());
 
         return this.save(userNode) ? R.ok("节点权限分配成功") : R.err("节点权限分配失败");
@@ -45,5 +56,15 @@ public class UserNodeServiceImpl extends ServiceImpl<UserNodeMapper, UserNode> i
     public R removeUserNode(Integer id) {
         boolean result = this.removeById(id);
         return result ? R.ok("节点权限删除成功") : R.err(ERROR_PERMISSION_NOT_FOUND);
+    }
+
+    private Integer normalizeAccessType(Integer accessType) {
+        if (accessType == null) {
+            return ACCESS_TYPE_BOTH;
+        }
+        if (accessType == ACCESS_TYPE_BOTH || accessType == ACCESS_TYPE_IN || accessType == ACCESS_TYPE_OUT) {
+            return accessType;
+        }
+        return null;
     }
 }

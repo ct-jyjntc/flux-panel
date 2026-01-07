@@ -17,6 +17,7 @@ interface UserInfo {
 interface UserNode {
   id: number;
   nodeId: number;
+  accessType: number;
   nodeName: string;
   ip: string;
   serverIp: string;

@@ -40,6 +40,7 @@ export interface UserNode {
   id: number;
   userId: number;
   nodeId: number;
+  accessType: number;
   nodeName: string;
   ip: string;
   serverIp: string;
@@ -47,6 +48,7 @@ export interface UserNode {
 
 export interface UserNodeForm {
   nodeId: number | null;
+  accessType: number;
 }
 
 export interface Node {
@@ -59,6 +61,7 @@ export interface Node {
   outPort?: number;
   status?: number;
   trafficRatio?: number;
+  accessType?: number;
 }
 
 export interface Tunnel {

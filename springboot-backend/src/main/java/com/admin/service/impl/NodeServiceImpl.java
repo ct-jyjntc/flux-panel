@@ -36,6 +36,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
@@ -312,7 +313,33 @@ public class NodeServiceImpl extends ServiceImpl<NodeMapper, Node> implements No
             queryWrapper.or().in("id", nodeIds);
         }
 
-        return this.list(queryWrapper);
+        List<Node> nodes = this.list(queryWrapper);
+        if (!nodes.isEmpty()) {
+            Map<Long, Integer> accessTypeMap = userNodes.stream()
+                    .filter(userNode -> userNode.getNodeId() != null)
+                    .collect(Collectors.toMap(UserNode::getNodeId,
+                            userNode -> userNode.getAccessType() == null ? 0 : userNode.getAccessType(),
+                            (first, second) -> first));
+            for (Node node : nodes) {
+                if (node == null) {
+                    continue;
+                }
+                if (Objects.equals(node.getOwnerId(), userId.longValue())) {
+                    node.setAccessType(0);
+                    continue;
+                }
+                Integer accessType = accessTypeMap.get(node.getId());
+                if (accessType == null) {
+                    accessType = 0;
+                }
+                node.setAccessType(accessType);
+                if (accessType == 2) {
+                    node.setServerIp("隐藏");
+                }
+            }
+        }
+
+        return nodes;
     }
 
     private static class UserInfo {

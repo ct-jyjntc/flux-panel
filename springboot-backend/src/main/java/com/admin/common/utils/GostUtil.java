@@ -11,6 +11,7 @@ import org.aspectj.apache.bcel.generic.RET;
 import java.util.Objects;
 
 public class GostUtil {
+    private static final long FAIL_TIMEOUT_NANOS = 600_000_000_000L;
 
 
     public static GostDto AddLimiters(Long node_id, Long name, String speed) {
@@ -98,7 +99,7 @@ public class GostUtil {
         JSONObject selector = new JSONObject();
         selector.put("strategy", strategy);
         selector.put("maxFails", 1);
-        selector.put("failTimeout", "600s");
+        selector.put("failTimeout", FAIL_TIMEOUT_NANOS);
         forwarder.put("selector", selector);
 
         data.put("forwarder", forwarder);
@@ -168,7 +169,7 @@ public class GostUtil {
         JSONObject selector = new JSONObject();
         selector.put("strategy", strategy);
         selector.put("maxFails", 1);
-        selector.put("failTimeout", "600s");
+        selector.put("failTimeout", FAIL_TIMEOUT_NANOS);
         forwarder.put("selector", selector);
 
         data.put("forwarder", forwarder);
@@ -292,7 +293,7 @@ public class GostUtil {
         JSONObject selector = new JSONObject();
         selector.put("strategy", strategy);
         selector.put("maxFails", 1);
-        selector.put("failTimeout", "600s");
+        selector.put("failTimeout", FAIL_TIMEOUT_NANOS);
         hop.put("selector", selector);
 
         JSONArray hops = new JSONArray();
@@ -345,7 +346,7 @@ public class GostUtil {
         JSONObject selector = new JSONObject();
         selector.put("strategy", strategy);
         selector.put("maxFails", 1);
-        selector.put("failTimeout", "600s");
+        selector.put("failTimeout", FAIL_TIMEOUT_NANOS);
         hop.put("selector", selector);
 
         JSONArray hops = new JSONArray();
@@ -459,7 +460,7 @@ public class GostUtil {
         JSONObject selector = new JSONObject();
         selector.put("strategy", strategy);
         selector.put("maxFails", 1);
-        selector.put("failTimeout", "600s");
+        selector.put("failTimeout", FAIL_TIMEOUT_NANOS);
         forwarder.put("selector", selector);
         return forwarder;
     }

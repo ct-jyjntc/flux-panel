@@ -18,5 +18,7 @@ public class UserNode implements Serializable {
 
     private Long nodeId;
 
+    private Integer accessType;
+
     private Long createdTime;
 }

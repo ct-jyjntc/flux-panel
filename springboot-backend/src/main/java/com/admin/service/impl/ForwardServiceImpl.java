@@ -50,6 +50,7 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
     private static final int FORWARD_STATUS_PAUSED = 0;
     private static final int FORWARD_STATUS_ERROR = -1;
     private static final int TUNNEL_STATUS_ACTIVE = 1;
+    private static final int ACCESS_TYPE_OUT = 2;
 
     private static final long BYTES_TO_GB = 1024L * 1024L * 1024L;
 
@@ -65,6 +66,9 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
 
     @Resource
     SpeedLimitService speedLimitService;
+
+    @Resource
+    UserNodeService userNodeService;
 
 
     @Override
@@ -402,6 +406,9 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
     public R diagnoseForward(Long id) {
         // 1. 获取当前用户信息
         UserInfo currentUser = getCurrentUserInfo();
+        Set<Long> outOnlyNodeIds = currentUser.getRoleId() == ADMIN_ROLE_ID
+                ? Collections.emptySet()
+                : getOutOnlyNodeIdsForUser(currentUser.getUserId());
 
         // 2. 检查转发是否存在且用户有权限访问
         Forward forward = validateForwardExists(id, currentUser);
@@ -453,6 +460,9 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
                 }
                 for (Node inNode : inNodes) {
                     DiagnosisResult inToOutResult = performTcpPingDiagnosis(inNode, outNode.getServerIp(), outPort, "入口->出口(" + outNode.getName() + ")");
+                    if (outOnlyNodeIds.contains(outNode.getId())) {
+                        inToOutResult.setTargetIp("隐藏");
+                    }
                     results.add(inToOutResult);
                 }
 
@@ -796,6 +806,18 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
         Integer roleId = JwtUtil.getRoleIdFromToken();
         String userName = JwtUtil.getNameFromToken();
         return new UserInfo(userId, roleId, userName);
+    }
+
+    private Set<Long> getOutOnlyNodeIdsForUser(Integer userId) {
+        if (userId == null) {
+            return Collections.emptySet();
+        }
+        return userNodeService.list(new QueryWrapper<UserNode>().eq("user_id", userId))
+                .stream()
+                .filter(userNode -> userNode.getAccessType() != null && userNode.getAccessType() == ACCESS_TYPE_OUT)
+                .map(UserNode::getNodeId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
     }
 
     /**

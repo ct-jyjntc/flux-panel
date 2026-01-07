@@ -2,6 +2,7 @@ package com.admin.entity;
 
 import java.io.Serializable;
 import java.math.BigDecimal;
+import com.baomidou.mybatisplus.annotation.TableField;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
@@ -38,6 +39,9 @@ public class Node extends BaseEntity {
     private Long ownerId;
 
     private BigDecimal trafficRatio;
+
+    @TableField(exist = false)
+    private Integer accessType;
 
     private Integer http;
 

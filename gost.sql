@@ -174,6 +174,7 @@ CREATE TABLE `user_node` (
   `id` int(10) NOT NULL,
   `user_id` int(10) NOT NULL,
   `node_id` int(10) NOT NULL,
+  `access_type` tinyint(1) NOT NULL DEFAULT 0,
   `created_time` bigint(20) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

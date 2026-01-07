@@ -88,6 +88,17 @@ const getUserStatus = (user: User) => {
   }
 };
 
+const getNodeAccessTypeLabel = (accessType?: number) => {
+  switch (accessType) {
+    case 1:
+      return '仅入口';
+    case 2:
+      return '仅出口';
+    default:
+      return '出/入口';
+  }
+};
+
 const calculateUserTotalUsedFlow = (user: User): number => {
   return (user.inFlow || 0) + (user.outFlow || 0);
 };
@@ -127,7 +138,8 @@ export default function UserPage() {
 
   // 分配新节点权限相关状态
   const [nodeForm, setNodeForm] = useState<UserNodeForm>({
-    nodeId: null
+    nodeId: null,
+    accessType: 0
   });
   const [assignLoading, setAssignLoading] = useState(false);
 
@@ -315,7 +327,7 @@ export default function UserPage() {
   // 节点权限管理操作
   const handleManageNodes = (user: User) => {
     setCurrentUser(user);
-    setNodeForm({ nodeId: null });
+    setNodeForm({ nodeId: null, accessType: 0 });
     onNodeModalOpen();
     loadUserNodes(user.id);
   };
@@ -330,12 +342,13 @@ export default function UserPage() {
     try {
       const response = await assignUserNode({
         userId: currentUser.id,
-        nodeId: nodeForm.nodeId
+        nodeId: nodeForm.nodeId,
+        accessType: nodeForm.accessType
       });
 
       if (response.code === 0) {
         toast.success('分配成功');
-        setNodeForm({ nodeId: null });
+        setNodeForm({ nodeId: null, accessType: 0 });
         loadUserNodes(currentUser.id);
       } else {
         toast.error(response.msg || '分配失败');
@@ -771,21 +784,33 @@ export default function UserPage() {
             <div className="space-y-6">
               <div>
                 <h3 className="text-lg font-semibold mb-4">分配节点</h3>
-                <div className="flex flex-col sm:flex-row gap-3 items-end">
+                <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-3 items-end">
                   <Select
                     label="选择节点"
                     selectedKeys={nodeForm.nodeId ? [nodeForm.nodeId.toString()] : []}
                     onSelectionChange={(keys) => {
                       const value = Array.from(keys)[0] as string;
-                      setNodeForm({ nodeId: Number(value) || null });
+                      setNodeForm((prev) => ({ ...prev, nodeId: Number(value) || null }));
                     }}
-                    className="flex-1"
                   >
                     {availableNodes.map((node) => (
                       <SelectItem key={node.id.toString()} textValue={node.name}>
                         {node.name} ({node.ip})
                       </SelectItem>
                     ))}
+                  </Select>
+                  <Select
+                    label="权限类型"
+                    selectedKeys={[nodeForm.accessType.toString()]}
+                    onSelectionChange={(keys) => {
+                      const value = Array.from(keys)[0] as string;
+                      const parsed = Number(value);
+                      setNodeForm((prev) => ({ ...prev, accessType: Number.isNaN(parsed) ? 0 : parsed }));
+                    }}
+                  >
+                    <SelectItem key="0">出/入口</SelectItem>
+                    <SelectItem key="1">仅入口</SelectItem>
+                    <SelectItem key="2">仅出口</SelectItem>
                   </Select>
                   <Button
                     color="primary"
@@ -808,6 +833,7 @@ export default function UserPage() {
                 >
                   <TableHeader>
                     <TableColumn>节点名称</TableColumn>
+                    <TableColumn>权限类型</TableColumn>
                     <TableColumn>入口IP</TableColumn>
                     <TableColumn>服务器IP</TableColumn>
                     <TableColumn className="text-right">操作</TableColumn>
@@ -821,6 +847,7 @@ export default function UserPage() {
                     {(userNode) => (
                       <TableRow key={userNode.id}>
                         <TableCell>{userNode.nodeName}</TableCell>
+                        <TableCell>{getNodeAccessTypeLabel(userNode.accessType)}</TableCell>
                         <TableCell>{userNode.ip}</TableCell>
                         <TableCell>{userNode.serverIp}</TableCell>
                         <TableCell>
