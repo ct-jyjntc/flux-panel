@@ -26,6 +26,9 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 
@@ -298,7 +301,7 @@ public class UserTunnelServiceImpl extends ServiceImpl<UserTunnelMapper, UserTun
             }
 
             Node inNode = nodeService.getById(tunnel.getInNodeId());
-            Node outNode = nodeService.getById(tunnel.getOutNodeId());
+            List<Node> outNodes = resolveOutNodesFromTunnel(tunnel);
             
             String serviceName = buildServiceName(forward.getId(), Long.valueOf(userId), userTunnelId);
             
@@ -312,11 +315,16 @@ public class UserTunnelServiceImpl extends ServiceImpl<UserTunnelMapper, UserTun
             }
             
             // 2. 如果是隧道转发，删除远端服务
-            if (tunnel.getType() == 1 && outNode != null && !outNode.getId().equals(inNode != null ? inNode.getId() : null)) {
-                try {
-                    GostUtil.DeleteRemoteService(outNode.getId(), serviceName);
-                } catch (Exception e) {
-                    // 远端服务删除失败，记录但继续
+            if (tunnel.getType() == 1 && !outNodes.isEmpty()) {
+                for (Node outNode : outNodes) {
+                    if (outNode == null || outNode.getId().equals(inNode != null ? inNode.getId() : null)) {
+                        continue;
+                    }
+                    try {
+                        GostUtil.DeleteRemoteService(outNode.getId(), serviceName);
+                    } catch (Exception e) {
+                        // 远端服务删除失败，记录但继续
+                    }
                 }
             }
             
@@ -350,6 +358,38 @@ public class UserTunnelServiceImpl extends ServiceImpl<UserTunnelMapper, UserTun
         } catch (Exception e) {
             return null;
         }
+    }
+
+    private List<Node> resolveOutNodesFromTunnel(Tunnel tunnel) {
+        if (tunnel == null) {
+            return Collections.emptyList();
+        }
+        List<Long> outNodeIds = new ArrayList<>();
+        if (tunnel.getOutNodeIds() != null && !tunnel.getOutNodeIds().trim().isEmpty()) {
+            for (String part : tunnel.getOutNodeIds().split(",")) {
+                String trimmed = part.trim();
+                if (!trimmed.isEmpty()) {
+                    try {
+                        outNodeIds.add(Long.parseLong(trimmed));
+                    } catch (NumberFormatException ignored) {
+                    }
+                }
+            }
+        }
+        if (outNodeIds.isEmpty() && tunnel.getOutNodeId() != null) {
+            outNodeIds.add(tunnel.getOutNodeId());
+        }
+        if (outNodeIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<Node> nodes = new ArrayList<>();
+        for (Long id : new LinkedHashSet<>(outNodeIds)) {
+            Node node = nodeService.getById(id);
+            if (node != null) {
+                nodes.add(node);
+            }
+        }
+        return nodes;
     }
     
     /**

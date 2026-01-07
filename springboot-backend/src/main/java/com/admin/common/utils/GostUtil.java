@@ -251,7 +251,7 @@ public class GostUtil {
         return WebSocketServer.send_msg(node_id, data, "ResumeService");
     }
 
-    public static GostDto AddChains(Long node_id, String name, String remoteAddr, String protocol, String interfaceName, boolean useSocks) {
+    public static GostDto AddChains(Long node_id, String name, String remoteAddr, String protocol, String interfaceName, boolean useSocks, String strategy) {
         JSONObject dialer = new JSONObject();
         dialer.put("type", protocol);
         if (Objects.equals(protocol, "quic")){
@@ -267,23 +267,33 @@ public class GostUtil {
         JSONObject connector = new JSONObject();
         connector.put("type", useSocks ? "socks5" : "relay");
 
-        JSONObject node = new JSONObject();
-        node.put("name", "node-" + name);
-        node.put("addr", remoteAddr);
-        node.put("connector", connector);
-        node.put("dialer", dialer);
-
-        if (StringUtils.isNotBlank(interfaceName)) {
-            node.put("interface", interfaceName);
-        }
-
-
         JSONArray nodes = new JSONArray();
-        nodes.add(node);
+        String[] split = remoteAddr.split(",");
+        int num = 1;
+        for (String addr : split) {
+            JSONObject node = new JSONObject();
+            node.put("name", "node-" + name + "-" + num);
+            node.put("addr", addr);
+            node.put("connector", connector);
+            node.put("dialer", dialer);
+            if (StringUtils.isNotBlank(interfaceName)) {
+                node.put("interface", interfaceName);
+            }
+            nodes.add(node);
+            num++;
+        }
 
         JSONObject hop = new JSONObject();
         hop.put("name", "hop-" + name);
         hop.put("nodes", nodes);
+        if (strategy == null || strategy.equals("")){
+            strategy = "fifo";
+        }
+        JSONObject selector = new JSONObject();
+        selector.put("strategy", strategy);
+        selector.put("maxFails", 1);
+        selector.put("failTimeout", "600s");
+        hop.put("selector", selector);
 
         JSONArray hops = new JSONArray();
         hops.add(hop);
@@ -295,7 +305,7 @@ public class GostUtil {
         return WebSocketServer.send_msg(node_id, data, "AddChains");
     }
 
-    public static GostDto UpdateChains(Long node_id, String name, String remoteAddr, String protocol, String interfaceName, boolean useSocks) {
+    public static GostDto UpdateChains(Long node_id, String name, String remoteAddr, String protocol, String interfaceName, boolean useSocks, String strategy) {
         JSONObject dialer = new JSONObject();
         dialer.put("type", protocol);
 
@@ -310,22 +320,33 @@ public class GostUtil {
         JSONObject connector = new JSONObject();
         connector.put("type", useSocks ? "socks5" : "relay");
 
-        JSONObject node = new JSONObject();
-        node.put("name", "node-" + name);
-        node.put("addr", remoteAddr);
-        node.put("connector", connector);
-        node.put("dialer", dialer);
-
-        if (StringUtils.isNotBlank(interfaceName)) {
-            node.put("interface", interfaceName);
-        }
-
         JSONArray nodes = new JSONArray();
-        nodes.add(node);
+        String[] split = remoteAddr.split(",");
+        int num = 1;
+        for (String addr : split) {
+            JSONObject node = new JSONObject();
+            node.put("name", "node-" + name + "-" + num);
+            node.put("addr", addr);
+            node.put("connector", connector);
+            node.put("dialer", dialer);
+            if (StringUtils.isNotBlank(interfaceName)) {
+                node.put("interface", interfaceName);
+            }
+            nodes.add(node);
+            num++;
+        }
 
         JSONObject hop = new JSONObject();
         hop.put("name", "hop-" + name);
         hop.put("nodes", nodes);
+        if (strategy == null || strategy.equals("")){
+            strategy = "fifo";
+        }
+        JSONObject selector = new JSONObject();
+        selector.put("strategy", strategy);
+        selector.put("maxFails", 1);
+        selector.put("failTimeout", "600s");
+        hop.put("selector", selector);
 
         JSONArray hops = new JSONArray();
         hops.add(hop);

@@ -16,6 +16,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 
 import javax.annotation.Resource;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 
@@ -146,11 +148,33 @@ public class ResetFlowAsync {
         if (tunnel == null) return;
 
         GostUtil.PauseService(tunnel.getInNodeId(), buildServiceName(forward.getId(), forward.getUserId()));
-        if (tunnel.getType() == 2){
-            if (!Boolean.TRUE.equals(tunnel.getMuxEnabled())) {
-                GostUtil.PauseRemoteService(tunnel.getOutNodeId(), buildServiceName(forward.getId(), forward.getUserId()));
+        if (tunnel.getType() == 2 && !Boolean.TRUE.equals(tunnel.getMuxEnabled())) {
+            for (Long outNodeId : resolveOutNodeIds(tunnel)) {
+                GostUtil.PauseRemoteService(outNodeId, buildServiceName(forward.getId(), forward.getUserId()));
             }
         }
+    }
+
+    private List<Long> resolveOutNodeIds(Tunnel tunnel) {
+        if (tunnel == null) {
+            return Collections.emptyList();
+        }
+        List<Long> outNodeIds = new ArrayList<>();
+        if (tunnel.getOutNodeIds() != null && !tunnel.getOutNodeIds().trim().isEmpty()) {
+            for (String part : tunnel.getOutNodeIds().split(",")) {
+                String trimmed = part.trim();
+                if (!trimmed.isEmpty()) {
+                    try {
+                        outNodeIds.add(Long.parseLong(trimmed));
+                    } catch (NumberFormatException ignored) {
+                    }
+                }
+            }
+        }
+        if (outNodeIds.isEmpty() && tunnel.getOutNodeId() != null) {
+            outNodeIds.add(tunnel.getOutNodeId());
+        }
+        return outNodeIds;
     }
 
 

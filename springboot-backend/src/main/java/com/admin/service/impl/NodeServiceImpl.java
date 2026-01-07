@@ -32,6 +32,9 @@ import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
@@ -215,12 +218,15 @@ public class NodeServiceImpl extends ServiceImpl<NodeMapper, Node> implements No
         }
 
         // 更新服务器出口ip
-        List<Tunnel> outNodeId = tunnelService.list(new QueryWrapper<Tunnel>().eq("out_node_id", updateNode.getId()));
-        if (!outNodeId.isEmpty()) {
-            for (Tunnel tunnel : outNodeId) {
-                tunnel.setOutIp(updateNode.getServerIp());
+        List<Tunnel> outTunnels = tunnelService.list(new QueryWrapper<Tunnel>().eq("type", 2));
+        List<Tunnel> matchedOutTunnels = outTunnels.stream()
+                .filter(tunnel -> tunnelUsesOutNode(tunnel, updateNode.getId()))
+                .collect(Collectors.toList());
+        if (!matchedOutTunnels.isEmpty()) {
+            for (Tunnel tunnel : matchedOutTunnels) {
+                tunnel.setOutIp(buildOutIpForTunnel(tunnel));
             }
-            tunnelService.updateBatchById(outNodeId);
+            tunnelService.updateBatchById(matchedOutTunnels);
         }
 
         if (result && !Objects.equals(oldOutPort, updateNode.getOutPort())) {
@@ -394,37 +400,43 @@ public class NodeServiceImpl extends ServiceImpl<NodeMapper, Node> implements No
         if (nodeId == null || outPort == null) {
             return;
         }
-        List<Tunnel> outTunnels = tunnelService.list(new QueryWrapper<Tunnel>()
-                .eq("out_node_id", nodeId)
-                .eq("type", 2));
-        if (outTunnels.isEmpty()) {
+        List<Tunnel> outTunnels = tunnelService.list(new QueryWrapper<Tunnel>().eq("type", 2));
+        List<Tunnel> matchedOutTunnels = outTunnels.stream()
+                .filter(tunnel -> tunnelUsesOutNode(tunnel, nodeId))
+                .collect(Collectors.toList());
+        if (matchedOutTunnels.isEmpty()) {
             return;
         }
-        for (Tunnel tunnel : outTunnels) {
+        for (Tunnel tunnel : matchedOutTunnels) {
             Tunnel oldTunnel = new Tunnel();
             BeanUtils.copyProperties(tunnel, oldTunnel);
+            List<Node> outNodes = resolveOutNodesFromTunnel(tunnel);
+            if (outNodes.isEmpty()) {
+                continue;
+            }
             tunnel.setMuxEnabled(true);
-            tunnel.setMuxPort(outPort);
+            tunnel.setMuxPort(outNodes.get(0).getOutPort());
             tunnel.setUpdatedTime(System.currentTimeMillis());
             tunnelService.updateById(tunnel);
 
-            ensureMuxService(tunnel);
+            ensureMuxService(tunnel, outNodes);
             forwardService.rebuildForwardsForTunnelUpdate(oldTunnel, tunnel);
         }
     }
 
-    private void ensureMuxService(Tunnel tunnel) {
-        if (tunnel.getOutNodeId() == null || tunnel.getMuxPort() == null) {
+    private void ensureMuxService(Tunnel tunnel, List<Node> outNodes) {
+        if (outNodes == null || outNodes.isEmpty()) {
             return;
         }
-        Node outNode = this.getById(tunnel.getOutNodeId());
-        if (outNode == null) {
-            return;
-        }
-        String muxServiceName = "node_mux_" + outNode.getId();
-        GostDto updateResult = GostUtil.UpdateMuxService(outNode.getId(), muxServiceName, tunnel.getMuxPort(), tunnel.getProtocol(), tunnel.getInterfaceName());
-        if (updateResult != null && updateResult.getMsg() != null && updateResult.getMsg().contains(GOST_NOT_FOUND_MSG)) {
-            GostUtil.AddMuxService(outNode.getId(), muxServiceName, tunnel.getMuxPort(), tunnel.getProtocol(), tunnel.getInterfaceName());
+        for (Node outNode : outNodes) {
+            if (outNode.getOutPort() == null) {
+                continue;
+            }
+            String muxServiceName = "node_mux_" + outNode.getId();
+            GostDto updateResult = GostUtil.UpdateMuxService(outNode.getId(), muxServiceName, outNode.getOutPort(), tunnel.getProtocol(), tunnel.getInterfaceName());
+            if (updateResult != null && updateResult.getMsg() != null && updateResult.getMsg().contains(GOST_NOT_FOUND_MSG)) {
+                GostUtil.AddMuxService(outNode.getId(), muxServiceName, outNode.getOutPort(), tunnel.getProtocol(), tunnel.getInterfaceName());
+            }
         }
     }
 
@@ -435,6 +447,74 @@ public class NodeServiceImpl extends ServiceImpl<NodeMapper, Node> implements No
         if (outPort < 1 || outPort > 65535) {
             throw new RuntimeException(ERROR_PORT_RANGE_INVALID);
         }
+    }
+
+    private boolean tunnelUsesOutNode(Tunnel tunnel, Long nodeId) {
+        if (tunnel == null || nodeId == null) {
+            return false;
+        }
+        if (Objects.equals(tunnel.getOutNodeId(), nodeId)) {
+            return true;
+        }
+        if (StrUtil.isBlank(tunnel.getOutNodeIds())) {
+            return false;
+        }
+        for (String part : tunnel.getOutNodeIds().split(",")) {
+            String trimmed = part.trim();
+            if (trimmed.isEmpty()) {
+                continue;
+            }
+            try {
+                if (Objects.equals(Long.parseLong(trimmed), nodeId)) {
+                    return true;
+                }
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return false;
+    }
+
+    private List<Node> resolveOutNodesFromTunnel(Tunnel tunnel) {
+        if (tunnel == null) {
+            return Collections.emptyList();
+        }
+        List<Long> outNodeIds = new ArrayList<>();
+        if (StrUtil.isNotBlank(tunnel.getOutNodeIds())) {
+            for (String part : tunnel.getOutNodeIds().split(",")) {
+                String trimmed = part.trim();
+                if (!trimmed.isEmpty()) {
+                    try {
+                        outNodeIds.add(Long.parseLong(trimmed));
+                    } catch (NumberFormatException ignored) {
+                    }
+                }
+            }
+        }
+        if (outNodeIds.isEmpty() && tunnel.getOutNodeId() != null) {
+            outNodeIds.add(tunnel.getOutNodeId());
+        }
+        if (outNodeIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<Node> nodes = new ArrayList<>();
+        for (Long id : new LinkedHashSet<>(outNodeIds)) {
+            Node node = this.getById(id);
+            if (node != null) {
+                nodes.add(node);
+            }
+        }
+        return nodes;
+    }
+
+    private String buildOutIpForTunnel(Tunnel tunnel) {
+        List<Node> nodes = resolveOutNodesFromTunnel(tunnel);
+        if (nodes.isEmpty()) {
+            return tunnel.getOutIp();
+        }
+        return nodes.stream()
+                .map(Node::getServerIp)
+                .filter(Objects::nonNull)
+                .collect(Collectors.joining(","));
     }
 
 
@@ -482,10 +562,10 @@ public class NodeServiceImpl extends ServiceImpl<NodeMapper, Node> implements No
      * @return 检查结果响应
      */
     private R checkOutNodeUsage(Long nodeId) {
-        QueryWrapper<Tunnel> query = new QueryWrapper<>();
-        query.eq("out_node_id", nodeId);
-        
-        long tunnelCount = tunnelMapper.selectCount(query);
+        List<Tunnel> tunnels = tunnelService.list(new QueryWrapper<Tunnel>().eq("type", 2));
+        long tunnelCount = tunnels.stream()
+                .filter(tunnel -> tunnelUsesOutNode(tunnel, nodeId))
+                .count();
         if (tunnelCount > 0) {
             String errorMsg = String.format(ERROR_OUT_NODE_IN_USE, tunnelCount);
             return R.err(errorMsg);

@@ -67,8 +67,10 @@ export interface Tunnel {
   inNodeId?: number;
   inNodeIds?: string;
   outNodeId?: number;
+  outNodeIds?: string;
   inIp?: string;
   outIp?: string;
+  outStrategy?: string;
   status?: number;
   type?: number;
   muxEnabled?: boolean;

@@ -26,6 +26,8 @@ import javax.annotation.Resource;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 
@@ -600,11 +602,45 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
      * @param inNode 入口节点
      */
     private void deleteGostTunnelForwardServices(Tunnel tunnel, String serviceName, Node inNode) {
-        Node outNode = nodeService.getNodeById(tunnel.getOutNodeId());
-        if (outNode != null) {
+        List<Node> outNodes = resolveOutNodesFromTunnel(tunnel);
+        if (!outNodes.isEmpty()) {
             GostUtil.DeleteChains(inNode.getId(), serviceName);
-            GostUtil.DeleteRemoteService(outNode.getId(), serviceName);
+            for (Node outNode : outNodes) {
+                GostUtil.DeleteRemoteService(outNode.getId(), serviceName);
+            }
         }
+    }
+
+    private List<Node> resolveOutNodesFromTunnel(Tunnel tunnel) {
+        if (tunnel == null) {
+            return Collections.emptyList();
+        }
+        List<Long> outNodeIds = new ArrayList<>();
+        if (tunnel.getOutNodeIds() != null && !tunnel.getOutNodeIds().trim().isEmpty()) {
+            for (String part : tunnel.getOutNodeIds().split(",")) {
+                String trimmed = part.trim();
+                if (!trimmed.isEmpty()) {
+                    try {
+                        outNodeIds.add(Long.parseLong(trimmed));
+                    } catch (NumberFormatException ignored) {
+                    }
+                }
+            }
+        }
+        if (outNodeIds.isEmpty() && tunnel.getOutNodeId() != null) {
+            outNodeIds.add(tunnel.getOutNodeId());
+        }
+        if (outNodeIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<Node> nodes = new ArrayList<>();
+        for (Long id : new LinkedHashSet<>(outNodeIds)) {
+            Node node = nodeService.getNodeById(id);
+            if (node != null) {
+                nodes.add(node);
+            }
+        }
+        return nodes;
     }
 
     /**

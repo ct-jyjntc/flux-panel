@@ -33,9 +33,11 @@ interface Tunnel {
   inNodeId: number;
   inNodeIds?: string;
   outNodeId?: number;
+  outNodeIds?: string;
   inIp: string;
   outIp?: string;
   protocol?: string;
+  outStrategy?: string;
   tcpListenAddr: string;
   udpListenAddr: string;
   interfaceName?: string;
@@ -57,8 +59,10 @@ interface TunnelForm {
   name: string;
   type: number;
   inNodeIds: number[];
+  outNodeIds: number[];
   outNodeId?: number | null;
   protocol: string;
+  outStrategy: string;
   tcpListenAddr: string;
   udpListenAddr: string;
   interfaceName?: string;
@@ -106,8 +110,10 @@ export default function TunnelPage() {
     name: '',
     type: 1,
     inNodeIds: [],
+    outNodeIds: [],
     outNodeId: null,
     protocol: 'tls',
+    outStrategy: 'fifo',
     tcpListenAddr: '[::]',
     udpListenAddr: '[::]',
     interfaceName: '',
@@ -162,6 +168,17 @@ export default function TunnelPage() {
     return tunnel.inNodeId ? [tunnel.inNodeId] : [];
   };
 
+  const getTunnelOutNodeIds = (tunnel: Tunnel): number[] => {
+    if (tunnel.outNodeIds) {
+      const parsed = tunnel.outNodeIds
+        .split(',')
+        .map((id) => parseInt(id.trim(), 10))
+        .filter((id) => !Number.isNaN(id));
+      if (parsed.length > 0) return parsed;
+    }
+    return tunnel.outNodeId ? [tunnel.outNodeId] : [];
+  };
+
   // 表单验证
   const validateForm = (): boolean => {
     const newErrors: {[key: string]: string} = {};
@@ -186,9 +203,9 @@ export default function TunnelPage() {
     
     // 隧道转发时的验证
     if (form.type === 2) {
-      if (!form.outNodeId) {
+      if (!form.outNodeIds.length) {
         newErrors.outNodeId = '请选择出口节点';
-      } else if (form.inNodeIds.includes(form.outNodeId)) {
+      } else if (form.outNodeIds.some((id) => form.inNodeIds.includes(id))) {
         newErrors.outNodeId = '隧道转发模式下，入口和出口不能是同一个节点';
       }
       
@@ -208,8 +225,10 @@ export default function TunnelPage() {
       name: '',
       type: 1,
       inNodeIds: [],
+      outNodeIds: [],
       outNodeId: null,
       protocol: 'tls',
+      outStrategy: 'fifo',
       tcpListenAddr: '[::]',
       udpListenAddr: '[::]',
       interfaceName: '',
@@ -224,13 +243,16 @@ export default function TunnelPage() {
   // 编辑隧道 - 只能修改部分字段
   const handleEdit = (tunnel: Tunnel) => {
     setIsEdit(true);
+    const outNodeIds = getTunnelOutNodeIds(tunnel);
     setForm({
       id: tunnel.id,
       name: tunnel.name,
       type: tunnel.type,
       inNodeIds: getTunnelInNodeIds(tunnel),
-      outNodeId: tunnel.outNodeId || null,
+      outNodeIds,
+      outNodeId: outNodeIds[0] ?? null,
       protocol: tunnel.protocol || 'tls',
+      outStrategy: tunnel.outStrategy || 'fifo',
       tcpListenAddr: tunnel.tcpListenAddr || '[::]',
       udpListenAddr: tunnel.udpListenAddr || '[::]',
       interfaceName: tunnel.interfaceName || '',
@@ -275,10 +297,14 @@ export default function TunnelPage() {
     setForm(prev => ({
       ...prev,
       type,
-      outNodeId: type === 1 ? null : prev.outNodeId,
+      outNodeIds: type === 1 ? [] : prev.outNodeIds,
+      outNodeId: type === 1 ? null : (prev.outNodeIds[0] ?? prev.outNodeId),
       protocol: type === 1 ? 'tls' : prev.protocol,
+      outStrategy: type === 1 ? 'fifo' : prev.outStrategy,
       muxEnabled: type === 1 ? false : true,
-      muxPort: type === 1 ? null : (nodes.find((node) => node.id === prev.outNodeId)?.outPort ?? prev.muxPort)
+      muxPort: type === 1
+        ? null
+        : (nodes.find((node) => node.id === (prev.outNodeIds[0] ?? prev.outNodeId))?.outPort ?? prev.muxPort)
     }));
   };
 
@@ -291,6 +317,7 @@ export default function TunnelPage() {
       const data = { 
         ...form,
         inNodeId: form.inNodeIds[0] ?? null,
+        outNodeId: form.outNodeIds[0] ?? null,
         muxEnabled: form.type === 1 ? false : true
       };
       
@@ -422,6 +449,13 @@ export default function TunnelPage() {
     return { text: '😵 很差', color: 'danger' };
   };
 
+  const selectedOutPorts = form.outNodeIds
+    .map((id) => nodes.find((node) => node.id === id)?.outPort)
+    .filter((port): port is number => port !== null && port !== undefined);
+  const outPortDisplay = selectedOutPorts.length > 0
+    ? selectedOutPorts.join(' / ')
+    : (form.muxPort !== null && form.muxPort !== undefined ? form.muxPort.toString() : '未配置');
+
   if (loading) {
     return (
       
@@ -478,7 +512,8 @@ export default function TunnelPage() {
                 const statusDisplay = getStatusDisplay(tunnel.status);
                 const typeDisplay = getTypeDisplay(tunnel.type);
                 const inNodeIds = getTunnelInNodeIds(tunnel);
-                const outNodeName = tunnel.type === 1 ? getNodeNames(inNodeIds) : getNodeNames(tunnel.outNodeId ? [tunnel.outNodeId] : []);
+                const outNodeIds = tunnel.type === 1 ? inNodeIds : getTunnelOutNodeIds(tunnel);
+                const outNodeName = getNodeNames(outNodeIds);
                 const outIp = tunnel.type === 1 ? getDisplayIp(tunnel.inIp) : getDisplayIp(tunnel.outIp);
 
                 return (
@@ -707,18 +742,21 @@ export default function TunnelPage() {
                         <Select
                           label="出口节点"
                           placeholder="请选择出口节点"
-                          selectedKeys={form.outNodeId ? [form.outNodeId.toString()] : []}
+                          selectionMode="multiple"
+                          selectedKeys={form.outNodeIds.map((id) => id.toString())}
                           onSelectionChange={(keys) => {
-                            const selectedKey = Array.from(keys)[0] as string;
-                            if (selectedKey) {
-                              const selectedId = parseInt(selectedKey);
-                              const selectedNode = nodes.find((node) => node.id === selectedId);
-                              setForm(prev => ({ 
-                                ...prev, 
-                                outNodeId: selectedId,
-                                muxPort: selectedNode?.outPort ?? null
-                              }));
-                            }
+                            const selected = Array.from(keys)
+                              .map((key) => parseInt(key as string, 10))
+                              .filter((id) => !Number.isNaN(id));
+                            const firstOutNode = selected.length > 0
+                              ? nodes.find((node) => node.id === selected[0])
+                              : null;
+                            setForm(prev => ({ 
+                              ...prev, 
+                              outNodeIds: selected,
+                              outNodeId: selected[0] ?? null,
+                              muxPort: firstOutNode?.outPort ?? null
+                            }));
                           }}
                           isInvalid={!!errors.outNodeId}
                           errorMessage={errors.outNodeId}
@@ -750,9 +788,27 @@ export default function TunnelPage() {
                           ))}
                         </Select>
 
+                        <Select
+                          label="出口负载策略"
+                          placeholder="请选择负载策略"
+                          selectedKeys={[form.outStrategy]}
+                          onSelectionChange={(keys) => {
+                            const selectedKey = Array.from(keys)[0] as string;
+                            if (selectedKey) {
+                              setForm(prev => ({ ...prev, outStrategy: selectedKey }));
+                            }
+                          }}
+                          variant="bordered"
+                        >
+                          <SelectItem key="fifo">主备模式（自上而下）</SelectItem>
+                          <SelectItem key="round">轮询模式（依次轮换）</SelectItem>
+                          <SelectItem key="random">随机模式</SelectItem>
+                          <SelectItem key="hash">哈希模式（IP哈希）</SelectItem>
+                        </Select>
+
                         <Input
                           label="绑定端口"
-                          value={form.muxPort !== null && form.muxPort !== undefined ? form.muxPort.toString() : '未配置'}
+                          value={outPortDisplay}
                           variant="bordered"
                           isReadOnly
                           description="端口来自出口节点设置"

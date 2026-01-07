@@ -21,6 +21,8 @@ public class TunnelUpdateDto {
     private List<Long> inNodeIds;
 
     private Long outNodeId;
+
+    private List<Long> outNodeIds;
     
     @NotBlank
     private String protocol;
@@ -35,4 +37,6 @@ public class TunnelUpdateDto {
 
     @TableField(updateStrategy = FieldStrategy.IGNORED)
     private String interfaceName;
+
+    private String outStrategy;
 } 

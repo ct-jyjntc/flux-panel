@@ -79,6 +79,8 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
     private static final String ERROR_IN_NODE_OFFLINE = "入口节点当前离线，请确保节点正常运行";
     private static final String ERROR_OUT_NODE_OFFLINE = "出口节点当前离线，请确保节点正常运行";
     private static final String ERROR_MUX_PORT_ALLOCATE_FAILED = "多路复用端口已满，无法分配新端口";
+    private static final String DEFAULT_OUT_STRATEGY = "fifo";
+    private static final Set<String> SUPPORTED_OUT_STRATEGIES = new HashSet<>(Arrays.asList("fifo", "round", "random", "hash"));
     
     /** 使用检查相关消息 */
     private static final String ERROR_FORWARDS_IN_USE = "该隧道还有 %d 个转发在使用，请先删除相关转发";
@@ -129,9 +131,18 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
         if (inNodeValidation.isHasError()) {
             return R.err(inNodeValidation.getErrorMessage());
         }
+        List<Long> outNodeIds = resolveOutNodeIds(tunnelDto.getOutNodeIds(), tunnelDto.getOutNodeId());
+        NodeValidationResult outNodeValidation = null;
+        if (tunnelDto.getType() == TUNNEL_TYPE_TUNNEL_FORWARD) {
+            outNodeValidation = validateOutNodes(outNodeIds);
+            if (outNodeValidation.isHasError()) {
+                return R.err(outNodeValidation.getErrorMessage());
+            }
+        }
 
         if (currentUser.getRoleId() != ADMIN_ROLE_ID) {
-            R accessResult = validateUserNodeAccess(currentUser.getUserId(), inNodeValidation.getNodes(), tunnelDto.getOutNodeId());
+            R accessResult = validateUserNodeAccess(currentUser.getUserId(), inNodeValidation.getNodes(),
+                    outNodeValidation != null ? outNodeValidation.getNodes() : Collections.emptyList());
             if (accessResult.getCode() != 0) {
                 return accessResult;
             }
@@ -144,24 +155,27 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
         }
 
         // 5. 根据隧道类型设置出口参数
-        R outNodeSetupResult = setupOutNodeParameters(tunnel, tunnelDto, inNodeValidation.getNodes().get(0).getServerIp());
+        R outNodeSetupResult = setupOutNodeParameters(tunnel, tunnelDto, inNodeValidation.getNodes().get(0).getServerIp(), inNodeIds,
+                outNodeValidation != null ? outNodeValidation.getNodes() : Collections.emptyList());
         if (outNodeSetupResult.getCode() != 0) {
             return outNodeSetupResult;
         }
         if (tunnel.getType() == TUNNEL_TYPE_TUNNEL_FORWARD) {
-            Node outNode = nodeService.getById(tunnel.getOutNodeId());
-            if (outNode == null) {
+            List<Node> outNodes = outNodeValidation != null ? outNodeValidation.getNodes() : Collections.emptyList();
+            if (outNodes.isEmpty()) {
                 return R.err(ERROR_OUT_NODE_NOT_FOUND);
             }
-            if (outNode.getOutPort() == null) {
-                return R.err("出口共享端口未配置");
-            }
-            R sharedConfigResult = validateSharedOutNodeConfig(outNode.getId(), tunnel.getProtocol(), tunnel.getInterfaceName(), null);
-            if (sharedConfigResult.getCode() != 0) {
-                return sharedConfigResult;
+            for (Node outNode : outNodes) {
+                if (outNode.getOutPort() == null) {
+                    return R.err("出口共享端口未配置");
+                }
+                R sharedConfigResult = validateSharedOutNodeConfig(outNode.getId(), tunnel.getProtocol(), tunnel.getInterfaceName(), null);
+                if (sharedConfigResult.getCode() != 0) {
+                    return sharedConfigResult;
+                }
             }
             tunnel.setMuxEnabled(true);
-            tunnel.setMuxPort(outNode.getOutPort());
+            tunnel.setMuxPort(outNodes.get(0).getOutPort());
         } else {
             tunnel.setMuxEnabled(false);
             tunnel.setMuxPort(null);
@@ -236,9 +250,13 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
             if (inNodeValidation.isHasError()) {
                 return R.err(inNodeValidation.getErrorMessage());
             }
-            if (existingTunnel.getType() == TUNNEL_TYPE_TUNNEL_FORWARD &&
-                    resolvedInNodeIds.contains(existingTunnel.getOutNodeId())) {
-                return R.err(ERROR_SAME_NODE_NOT_ALLOWED);
+            if (existingTunnel.getType() == TUNNEL_TYPE_TUNNEL_FORWARD) {
+                List<Long> existingOutNodeIdsForCheck = resolveOutNodeIdsFromTunnel(existingTunnel);
+                for (Long nodeId : resolvedInNodeIds) {
+                    if (existingOutNodeIdsForCheck.contains(nodeId)) {
+                        return R.err(ERROR_SAME_NODE_NOT_ALLOWED);
+                    }
+                }
             }
             String nextInNodeIds = joinNodeIds(resolvedInNodeIds);
             if (!Objects.equals(existingTunnel.getInNodeIds(), nextInNodeIds)) {
@@ -255,51 +273,78 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
             }
         }
 
+        List<Long> currentInNodeIds = !resolvedInNodeIds.isEmpty()
+                ? resolvedInNodeIds
+                : resolveInNodesFromTunnel(existingTunnel).stream()
+                    .map(Node::getId)
+                    .collect(Collectors.toList());
+
+        List<Long> existingOutNodeIds = resolveOutNodeIdsFromTunnel(existingTunnel);
+        boolean hasOutNodeUpdate = (tunnelUpdateDto.getOutNodeIds() != null && !tunnelUpdateDto.getOutNodeIds().isEmpty())
+                || tunnelUpdateDto.getOutNodeId() != null;
+        List<Long> requestedOutNodeIds = resolveOutNodeIds(tunnelUpdateDto.getOutNodeIds(), tunnelUpdateDto.getOutNodeId());
+        List<Long> nextOutNodeIds = existingTunnel.getType() == TUNNEL_TYPE_TUNNEL_FORWARD
+                ? (hasOutNodeUpdate ? requestedOutNodeIds : existingOutNodeIds)
+                : Collections.emptyList();
+        NodeValidationResult outNodeValidation = null;
+        List<Node> outNodes = Collections.emptyList();
+        boolean outStrategyChanged = false;
+
+        if (existingTunnel.getType() == TUNNEL_TYPE_TUNNEL_FORWARD) {
+            if (nextOutNodeIds.isEmpty()) {
+                return R.err(ERROR_OUT_NODE_REQUIRED);
+            }
+            outNodeValidation = validateOutNodes(nextOutNodeIds);
+            if (outNodeValidation.isHasError()) {
+                return R.err(outNodeValidation.getErrorMessage());
+            }
+            outNodes = outNodeValidation.getNodes();
+            for (Node outNode : outNodes) {
+                if (currentInNodeIds.contains(outNode.getId())) {
+                    return R.err(ERROR_SAME_NODE_NOT_ALLOWED);
+                }
+            }
+
+            String nextOutNodeIdsValue = joinNodeIds(nextOutNodeIds);
+            if (!Objects.equals(existingTunnel.getOutNodeIds(), nextOutNodeIdsValue)) {
+                existingTunnel.setOutNodeIds(nextOutNodeIdsValue);
+                existingTunnel.setOutNodeId(outNodes.get(0).getId());
+                existingTunnel.setOutIp(joinOutNodeIps(outNodes));
+                outNodeChanged = true;
+            } else if (existingTunnel.getOutNodeId() == null && !outNodes.isEmpty()) {
+                existingTunnel.setOutNodeId(outNodes.get(0).getId());
+            }
+
+            String normalizedStrategy;
+            if (StringUtils.isBlank(tunnelUpdateDto.getOutStrategy())) {
+                normalizedStrategy = StringUtils.isBlank(existingTunnel.getOutStrategy())
+                        ? DEFAULT_OUT_STRATEGY
+                        : existingTunnel.getOutStrategy();
+            } else {
+                normalizedStrategy = normalizeOutStrategy(tunnelUpdateDto.getOutStrategy());
+            }
+            if (normalizedStrategy == null) {
+                return R.err("出口负载策略不支持");
+            }
+            if (!Objects.equals(existingTunnel.getOutStrategy(), normalizedStrategy)) {
+                existingTunnel.setOutStrategy(normalizedStrategy);
+                outStrategyChanged = true;
+            }
+        } else {
+            existingTunnel.setOutNodeIds(null);
+            existingTunnel.setOutStrategy(null);
+        }
+
         if (currentUser.getRoleId() != ADMIN_ROLE_ID) {
             List<Node> inNodesToCheck = inNodeValidation != null ? inNodeValidation.getNodes() : resolveInNodesFromTunnel(existingTunnel);
-            Long outNodeIdToCheck = existingTunnel.getType() == TUNNEL_TYPE_TUNNEL_FORWARD
-                    ? (tunnelUpdateDto.getOutNodeId() != null ? tunnelUpdateDto.getOutNodeId() : existingTunnel.getOutNodeId())
-                    : null;
-            R accessResult = validateUserNodeAccess(currentUser.getUserId(), inNodesToCheck, outNodeIdToCheck);
+            List<Node> outNodesToCheck = existingTunnel.getType() == TUNNEL_TYPE_TUNNEL_FORWARD ? outNodes : Collections.emptyList();
+            R accessResult = validateUserNodeAccess(currentUser.getUserId(), inNodesToCheck, outNodesToCheck);
             if (accessResult.getCode() != 0) {
                 return accessResult;
             }
         }
-        if (existingTunnel.getType() == TUNNEL_TYPE_TUNNEL_FORWARD && tunnelUpdateDto.getOutNodeId() != null) {
-            List<Long> currentInNodeIds = new ArrayList<>();
-            if (!resolvedInNodeIds.isEmpty()) {
-                currentInNodeIds = resolvedInNodeIds;
-            } else if (existingTunnel.getInNodeIds() != null && !existingTunnel.getInNodeIds().trim().isEmpty()) {
-                for (String part : existingTunnel.getInNodeIds().split(",")) {
-                    String trimmed = part.trim();
-                    if (!trimmed.isEmpty()) {
-                        try {
-                            currentInNodeIds.add(Long.parseLong(trimmed));
-                        } catch (NumberFormatException ignored) {
-                        }
-                    }
-                }
-            } else if (existingTunnel.getInNodeId() != null) {
-                currentInNodeIds.add(existingTunnel.getInNodeId());
-            }
-
-            if (currentInNodeIds.contains(tunnelUpdateDto.getOutNodeId())) {
-                return R.err(ERROR_SAME_NODE_NOT_ALLOWED);
-            }
-
-            if (!Objects.equals(existingTunnel.getOutNodeId(), tunnelUpdateDto.getOutNodeId())) {
-                Node outNode = nodeService.getById(tunnelUpdateDto.getOutNodeId());
-                if (outNode == null) {
-                    return R.err(ERROR_OUT_NODE_NOT_FOUND);
-                }
-                if (outNode.getStatus() != NODE_STATUS_ONLINE) {
-                    return R.err(ERROR_OUT_NODE_OFFLINE);
-                }
-                existingTunnel.setOutNodeId(outNode.getId());
-                existingTunnel.setOutIp(outNode.getServerIp());
-                outNodeChanged = true;
-            }
-        }
+        Set<Long> removedOutNodeIds = new LinkedHashSet<>(existingOutNodeIds);
+        removedOutNodeIds.removeAll(nextOutNodeIds);
         int up = 0;
         if (!Objects.equals(existingTunnel.getTcpListenAddr(), tunnelUpdateDto.getTcpListenAddr()) ||
                 !Objects.equals(existingTunnel.getUdpListenAddr(), tunnelUpdateDto.getUdpListenAddr()) ||
@@ -317,18 +362,19 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
         existingTunnel.setInterfaceName(tunnelUpdateDto.getInterfaceName());
         existingTunnel.setFlow(1);
         if (existingTunnel.getType() == TUNNEL_TYPE_TUNNEL_FORWARD) {
-            Node outNode = nodeService.getById(existingTunnel.getOutNodeId());
-            if (outNode == null) {
+            if (outNodes.isEmpty()) {
                 return R.err(ERROR_OUT_NODE_NOT_FOUND);
             }
-            if (outNode.getOutPort() == null) {
-                return R.err("出口共享端口未配置");
+            for (Node outNode : outNodes) {
+                if (outNode.getOutPort() == null) {
+                    return R.err("出口共享端口未配置");
+                }
+                R sharedConfigResult = validateSharedOutNodeConfig(outNode.getId(), existingTunnel.getProtocol(), existingTunnel.getInterfaceName(), existingTunnel.getId());
+                if (sharedConfigResult.getCode() != 0) {
+                    return sharedConfigResult;
+                }
             }
-            R sharedConfigResult = validateSharedOutNodeConfig(outNode.getId(), existingTunnel.getProtocol(), existingTunnel.getInterfaceName(), existingTunnel.getId());
-            if (sharedConfigResult.getCode() != 0) {
-                return sharedConfigResult;
-            }
-            existingTunnel.setMuxPort(outNode.getOutPort());
+            existingTunnel.setMuxPort(outNodes.get(0).getOutPort());
             existingTunnel.setMuxEnabled(true);
             muxChanged = !Objects.equals(oldTunnelSnapshot.getMuxPort(), existingTunnel.getMuxPort())
                     || !Boolean.TRUE.equals(oldTunnelSnapshot.getMuxEnabled());
@@ -345,11 +391,11 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
             }
         }
         if (Boolean.TRUE.equals(oldTunnelSnapshot.getMuxEnabled()) && !Boolean.TRUE.equals(existingTunnel.getMuxEnabled())) {
-            deleteMuxService(oldTunnelSnapshot);
-        } else if (outNodeChanged && Boolean.TRUE.equals(oldTunnelSnapshot.getMuxEnabled())) {
-            deleteMuxService(oldTunnelSnapshot);
+            deleteMuxServiceForNodes(existingOutNodeIds, oldTunnelSnapshot.getId());
+        } else if (outNodeChanged && Boolean.TRUE.equals(oldTunnelSnapshot.getMuxEnabled()) && !removedOutNodeIds.isEmpty()) {
+            deleteMuxServiceForNodes(removedOutNodeIds, oldTunnelSnapshot.getId());
         }
-        if (inNodeChanged || outNodeChanged || muxChanged) {
+        if (inNodeChanged || outNodeChanged || muxChanged || outStrategyChanged) {
             R rebuildResult = forwardService.rebuildForwardsForTunnelUpdate(oldTunnelSnapshot, existingTunnel);
             if (rebuildResult.getCode() != 0) {
                 return rebuildResult;
@@ -491,8 +537,13 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
      */
     private R validateTunnelForwardCreate(TunnelDto tunnelDto) {
         // 验证出口节点不能为空
-        if (tunnelDto.getOutNodeId() == null) {
+        List<Long> outNodeIds = resolveOutNodeIds(tunnelDto.getOutNodeIds(), tunnelDto.getOutNodeId());
+        if (outNodeIds.isEmpty()) {
             return R.err(ERROR_OUT_NODE_REQUIRED);
+        }
+        String normalizedStrategy = normalizeOutStrategy(tunnelDto.getOutStrategy());
+        if (normalizedStrategy == null) {
+            return R.err("出口负载策略不支持");
         }
         return R.ok();
     }
@@ -519,12 +570,41 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
         return NodeValidationResult.success(nodes);
     }
 
+    private NodeValidationResult validateOutNodes(List<Long> outNodeIds) {
+        if (outNodeIds == null || outNodeIds.isEmpty()) {
+            return NodeValidationResult.error(ERROR_OUT_NODE_REQUIRED);
+        }
+        List<Node> nodes = new ArrayList<>();
+        Set<Long> uniqueIds = new LinkedHashSet<>(outNodeIds);
+        for (Long nodeId : uniqueIds) {
+            Node outNode = nodeService.getById(nodeId);
+            if (outNode == null) {
+                return NodeValidationResult.error(ERROR_OUT_NODE_NOT_FOUND);
+            }
+            if (outNode.getStatus() != NODE_STATUS_ONLINE) {
+                return NodeValidationResult.error(ERROR_OUT_NODE_OFFLINE);
+            }
+            nodes.add(outNode);
+        }
+        return NodeValidationResult.success(nodes);
+    }
+
     private List<Long> resolveInNodeIds(List<Long> inNodeIds, Long inNodeId) {
         if (inNodeIds != null && !inNodeIds.isEmpty()) {
             return new ArrayList<>(new LinkedHashSet<>(inNodeIds));
         }
         if (inNodeId != null) {
             return Collections.singletonList(inNodeId);
+        }
+        return Collections.emptyList();
+    }
+
+    private List<Long> resolveOutNodeIds(List<Long> outNodeIds, Long outNodeId) {
+        if (outNodeIds != null && !outNodeIds.isEmpty()) {
+            return new ArrayList<>(new LinkedHashSet<>(outNodeIds));
+        }
+        if (outNodeId != null) {
+            return Collections.singletonList(outNodeId);
         }
         return Collections.emptyList();
     }
@@ -540,6 +620,21 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
                 .map(Node::getIp)
                 .filter(Objects::nonNull)
                 .collect(Collectors.joining(","));
+    }
+
+    private String joinOutNodeIps(List<Node> nodes) {
+        return nodes.stream()
+                .map(Node::getServerIp)
+                .filter(Objects::nonNull)
+                .collect(Collectors.joining(","));
+    }
+
+    private String normalizeOutStrategy(String strategy) {
+        if (StringUtils.isBlank(strategy)) {
+            return DEFAULT_OUT_STRATEGY;
+        }
+        String normalized = strategy.trim().toLowerCase();
+        return SUPPORTED_OUT_STRATEGIES.contains(normalized) ? normalized : null;
     }
 
     /**
@@ -624,9 +719,12 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
             }
         }
 
-        List<Tunnel> outTunnels = this.list(new QueryWrapper<Tunnel>().eq("out_node_id", nodeId));
-        if (!outTunnels.isEmpty()) {
-            Set<Long> outTunnelIds = outTunnels.stream()
+        List<Tunnel> outTunnels = this.list(new QueryWrapper<Tunnel>().eq("type", TUNNEL_TYPE_TUNNEL_FORWARD));
+        List<Tunnel> matchedOutTunnels = outTunnels.stream()
+                .filter(tunnel -> resolveOutNodeIdsFromTunnel(tunnel).contains(nodeId))
+                .collect(Collectors.toList());
+        if (!matchedOutTunnels.isEmpty()) {
+            Set<Long> outTunnelIds = matchedOutTunnels.stream()
                     .map(Tunnel::getId)
                     .collect(Collectors.toSet());
             QueryWrapper<Forward> outQueryWrapper = new QueryWrapper<Forward>().in("tunnel_id", outTunnelIds);
@@ -636,7 +734,7 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
                     usedPorts.add(forward.getOutPort());
                 }
             }
-            for (Tunnel tunnel : outTunnels) {
+            for (Tunnel tunnel : matchedOutTunnels) {
                 if (excludeTunnelId != null && Objects.equals(tunnel.getId().longValue(), excludeTunnelId)) {
                     continue;
                 }
@@ -656,13 +754,13 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
      * @param tunnelDto 隧道创建DTO
      * @return 设置结果响应
      */
-    private R setupOutNodeParameters(Tunnel tunnel, TunnelDto tunnelDto, String server_ip) {
+    private R setupOutNodeParameters(Tunnel tunnel, TunnelDto tunnelDto, String serverIp, List<Long> inNodeIds, List<Node> outNodes) {
         if (tunnelDto.getType() == TUNNEL_TYPE_PORT_FORWARD) {
             // 端口转发：出口参数使用入口参数
-            return setupPortForwardOutParameters(tunnel, tunnelDto, server_ip);
+            return setupPortForwardOutParameters(tunnel, tunnelDto, serverIp);
         } else {
             // 隧道转发：需要验证出口参数
-            return setupTunnelForwardOutParameters(tunnel, tunnelDto);
+            return setupTunnelForwardOutParameters(tunnel, tunnelDto, inNodeIds, outNodes);
         }
     }
 
@@ -676,6 +774,8 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
     private R setupPortForwardOutParameters(Tunnel tunnel, TunnelDto tunnelDto, String server_ip) {
         tunnel.setOutNodeId(tunnel.getInNodeId());
         tunnel.setOutIp(server_ip);
+        tunnel.setOutNodeIds(null);
+        tunnel.setOutStrategy(null);
         return R.ok();
     }
 
@@ -686,38 +786,37 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
      * @param tunnelDto 隧道创建DTO
      * @return 设置结果响应
      */
-    private R setupTunnelForwardOutParameters(Tunnel tunnel, TunnelDto tunnelDto) {
+    private R setupTunnelForwardOutParameters(Tunnel tunnel, TunnelDto tunnelDto, List<Long> inNodeIds, List<Node> outNodes) {
         // 验证出口节点不能为空
-        if (tunnelDto.getOutNodeId() == null) {
+        if (outNodes == null || outNodes.isEmpty()) {
             return R.err(ERROR_OUT_NODE_REQUIRED);
         }
-        
+
         // 验证入口和出口不能是同一个节点
-        List<Long> inNodeIds = resolveInNodeIds(tunnelDto.getInNodeIds(), tunnelDto.getInNodeId());
-        if (inNodeIds.contains(tunnelDto.getOutNodeId())) {
-            return R.err(ERROR_SAME_NODE_NOT_ALLOWED);
+        if (inNodeIds != null) {
+            for (Node outNode : outNodes) {
+                if (inNodeIds.contains(outNode.getId())) {
+                    return R.err(ERROR_SAME_NODE_NOT_ALLOWED);
+                }
+            }
         }
-        
+
         // 验证协议类型
         String protocol = tunnelDto.getProtocol();
         if (StrUtil.isBlank(protocol)) {
             return R.err("协议类型必选");
         }
-        
-        // 验证出口节点是否存在
-        Node outNode = nodeService.getById(tunnelDto.getOutNodeId());
-        if (outNode == null) {
-            return R.err(ERROR_OUT_NODE_NOT_FOUND);
+
+        String normalizedStrategy = normalizeOutStrategy(tunnelDto.getOutStrategy());
+        if (normalizedStrategy == null) {
+            return R.err("出口负载策略不支持");
         }
-        
-        // 验证出口节点是否在线
-        if (outNode.getStatus() != NODE_STATUS_ONLINE) {
-            return R.err(ERROR_OUT_NODE_OFFLINE);
-        }
-        // 设置出口参数
-        tunnel.setOutNodeId(tunnelDto.getOutNodeId());
-        tunnel.setOutIp(outNode.getServerIp());
-        
+
+        tunnel.setOutNodeIds(joinNodeIds(outNodes.stream().map(Node::getId).collect(Collectors.toList())));
+        tunnel.setOutNodeId(outNodes.get(0).getId());
+        tunnel.setOutIp(joinOutNodeIps(outNodes));
+        tunnel.setOutStrategy(normalizedStrategy);
+
         return R.ok();
     }
 
@@ -726,11 +825,12 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
             return R.ok();
         }
         String normalizedInterface = StringUtils.isBlank(interfaceName) ? null : interfaceName.trim();
-        List<Tunnel> tunnels = this.list(new QueryWrapper<Tunnel>()
-                .eq("out_node_id", outNodeId)
-                .eq("type", TUNNEL_TYPE_TUNNEL_FORWARD));
+        List<Tunnel> tunnels = this.list(new QueryWrapper<Tunnel>().eq("type", TUNNEL_TYPE_TUNNEL_FORWARD));
         for (Tunnel tunnel : tunnels) {
             if (excludeTunnelId != null && Objects.equals(tunnel.getId().longValue(), excludeTunnelId)) {
+                continue;
+            }
+            if (!resolveOutNodeIdsFromTunnel(tunnel).contains(outNodeId)) {
                 continue;
             }
             if (protocol != null && tunnel.getProtocol() != null && !Objects.equals(protocol, tunnel.getProtocol())) {
@@ -823,22 +923,48 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
     }
 
     private void deleteMuxService(Tunnel tunnel) {
-        if (tunnel == null || tunnel.getOutNodeId() == null) {
+        if (tunnel == null) {
             return;
         }
-        long remaining = this.count(new QueryWrapper<Tunnel>()
-                .eq("out_node_id", tunnel.getOutNodeId())
-                .eq("type", TUNNEL_TYPE_TUNNEL_FORWARD)
-                .ne("id", tunnel.getId()));
-        if (remaining > 0) {
+        deleteMuxServiceForNodes(resolveOutNodeIdsFromTunnel(tunnel), tunnel.getId());
+    }
+
+    private void deleteMuxServiceForNodes(Collection<Long> nodeIds, Long excludeTunnelId) {
+        if (nodeIds == null || nodeIds.isEmpty()) {
             return;
         }
-        Node outNode = nodeService.getNodeById(tunnel.getOutNodeId());
-        if (outNode == null) {
-            return;
+        for (Long nodeId : nodeIds) {
+            if (nodeId == null) {
+                continue;
+            }
+            long remaining = countTunnelsUsingOutNode(nodeId, excludeTunnelId);
+            if (remaining > 0) {
+                continue;
+            }
+            Node outNode = nodeService.getNodeById(nodeId);
+            if (outNode == null) {
+                continue;
+            }
+            String muxServiceName = buildMuxServiceName(outNode.getId());
+            GostUtil.DeleteMuxService(outNode.getId(), muxServiceName);
         }
-        String muxServiceName = buildMuxServiceName(outNode.getId());
-        GostUtil.DeleteMuxService(outNode.getId(), muxServiceName);
+    }
+
+    private long countTunnelsUsingOutNode(Long outNodeId, Long excludeTunnelId) {
+        if (outNodeId == null) {
+            return 0;
+        }
+        List<Tunnel> tunnels = this.list(new QueryWrapper<Tunnel>().eq("type", TUNNEL_TYPE_TUNNEL_FORWARD));
+        long count = 0;
+        for (Tunnel tunnel : tunnels) {
+            if (excludeTunnelId != null && Objects.equals(tunnel.getId().longValue(), excludeTunnelId)) {
+                continue;
+            }
+            if (resolveOutNodeIdsFromTunnel(tunnel).contains(outNodeId)) {
+                count++;
+            }
+        }
+        return count;
     }
 
     private String buildMuxServiceName(Long nodeId) {
@@ -846,19 +972,24 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
     }
 
     private R ensureMuxService(Tunnel tunnel) {
-        if (tunnel.getOutNodeId() == null || tunnel.getMuxPort() == null) {
-            return R.err("多路复用端口未分配");
-        }
-        Node outNode = nodeService.getNodeById(tunnel.getOutNodeId());
-        if (outNode == null) {
+        List<Node> outNodes = resolveOutNodesFromTunnel(tunnel);
+        if (outNodes.isEmpty()) {
             return R.err(ERROR_OUT_NODE_NOT_FOUND);
         }
-        String muxServiceName = buildMuxServiceName(outNode.getId());
-        GostDto updateResult = GostUtil.UpdateMuxService(outNode.getId(), muxServiceName, tunnel.getMuxPort(), tunnel.getProtocol(), tunnel.getInterfaceName());
-        if (updateResult.getMsg().contains(GOST_NOT_FOUND_MSG)) {
-            updateResult = GostUtil.AddMuxService(outNode.getId(), muxServiceName, tunnel.getMuxPort(), tunnel.getProtocol(), tunnel.getInterfaceName());
+        for (Node outNode : outNodes) {
+            if (outNode.getOutPort() == null) {
+                return R.err("出口共享端口未配置");
+            }
+            String muxServiceName = buildMuxServiceName(outNode.getId());
+            GostDto updateResult = GostUtil.UpdateMuxService(outNode.getId(), muxServiceName, outNode.getOutPort(), tunnel.getProtocol(), tunnel.getInterfaceName());
+            if (updateResult.getMsg().contains(GOST_NOT_FOUND_MSG)) {
+                updateResult = GostUtil.AddMuxService(outNode.getId(), muxServiceName, outNode.getOutPort(), tunnel.getProtocol(), tunnel.getInterfaceName());
+            }
+            if (!isGostOperationSuccess(updateResult)) {
+                return R.err(updateResult.getMsg());
+            }
         }
-        return isGostOperationSuccess(updateResult) ? R.ok() : R.err(updateResult.getMsg());
+        return R.ok();
     }
 
     private boolean isGostOperationSuccess(GostDto gostResult) {
@@ -892,7 +1023,7 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
                 .collect(Collectors.toList());
     }
 
-    private R validateUserNodeAccess(Integer userId, List<Node> inNodes, Long outNodeId) {
+    private R validateUserNodeAccess(Integer userId, List<Node> inNodes, List<Node> outNodes) {
         Set<Long> allowedNodeIds = userNodeService.list(new QueryWrapper<UserNode>().eq("user_id", userId))
                 .stream()
                 .map(UserNode::getNodeId)
@@ -904,13 +1035,14 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
             }
         }
 
-        if (outNodeId != null) {
-            Node outNode = nodeService.getById(outNodeId);
-            if (outNode == null) {
-                return R.err(ERROR_OUT_NODE_NOT_FOUND);
-            }
-            if (!hasNodeAccess(userId, outNode, allowedNodeIds)) {
-                return R.err("无权限使用出口节点");
+        if (outNodes != null) {
+            for (Node outNode : outNodes) {
+                if (outNode == null) {
+                    return R.err(ERROR_OUT_NODE_NOT_FOUND);
+                }
+                if (!hasNodeAccess(userId, outNode, allowedNodeIds)) {
+                    return R.err("无权限使用出口节点");
+                }
             }
         }
 
@@ -950,6 +1082,42 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
             if (node != null) {
                 nodes.add(node);
             }
+        }
+        return nodes;
+    }
+
+    private List<Long> resolveOutNodeIdsFromTunnel(Tunnel tunnel) {
+        List<Long> outNodeIds = new ArrayList<>();
+        if (tunnel.getOutNodeIds() != null && !tunnel.getOutNodeIds().trim().isEmpty()) {
+            for (String part : tunnel.getOutNodeIds().split(",")) {
+                String trimmed = part.trim();
+                if (!trimmed.isEmpty()) {
+                    try {
+                        outNodeIds.add(Long.parseLong(trimmed));
+                    } catch (NumberFormatException ignored) {
+                    }
+                }
+            }
+        }
+        if (outNodeIds.isEmpty() && tunnel.getOutNodeId() != null) {
+            outNodeIds.add(tunnel.getOutNodeId());
+        }
+        return outNodeIds;
+    }
+
+    private List<Node> resolveOutNodesFromTunnel(Tunnel tunnel) {
+        List<Long> outNodeIds = resolveOutNodeIdsFromTunnel(tunnel);
+        if (outNodeIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<Node> nodes = new ArrayList<>();
+        Set<Long> uniqueIds = new LinkedHashSet<>(outNodeIds);
+        for (Long nodeId : uniqueIds) {
+            Node node = nodeService.getNodeById(nodeId);
+            if (node == null) {
+                return Collections.emptyList();
+            }
+            nodes.add(node);
         }
         return nodes;
     }
@@ -1000,10 +1168,10 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
             return R.err(ERROR_IN_NODE_NOT_FOUND);
         }
 
-        Node outNode = null;
+        List<Node> outNodes = Collections.emptyList();
         if (tunnel.getType() == TUNNEL_TYPE_TUNNEL_FORWARD) {
-            outNode = nodeService.getById(tunnel.getOutNodeId());
-            if (outNode == null) {
+            outNodes = resolveOutNodesFromTunnel(tunnel);
+            if (outNodes.isEmpty()) {
                 return R.err(ERROR_OUT_NODE_NOT_FOUND);
             }
         }
@@ -1018,16 +1186,21 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
                 results.add(inResult);
             }
         } else {
-            // 隧道转发：入口TCP ping出口，出口TCP ping谷歌443端口
-            int outNodePort = getOutNodeTcpPort(tunnel.getId());
-            for (Node inNode : inNodes) {
-                DiagnosisResult inToOutResult = performTcpPingDiagnosisWithConnectionCheck(inNode, outNode.getServerIp(), outNodePort, "入口->出口");
-                results.add(inToOutResult);
-            }
+            // 隧道转发：入口TCP ping出口，出口TCP ping外网
+            for (Node outNode : outNodes) {
+                int outNodePort = getOutNodeTcpPort(tunnel, outNode);
+                for (Node inNode : inNodes) {
+                    DiagnosisResult inToOutResult = performTcpPingDiagnosisWithConnectionCheck(
+                            inNode,
+                            outNode.getServerIp(),
+                            outNodePort,
+                            "入口->出口(" + outNode.getName() + ")");
+                    results.add(inToOutResult);
+                }
 
-            // 先检查出口节点的真实连接状态，然后再进行诊断
-            DiagnosisResult outToExternalResult = performTcpPingDiagnosisWithConnectionCheck(outNode, "www.icloud.com.cn", 443, "出口->外网");
-            results.add(outToExternalResult);
+                DiagnosisResult outToExternalResult = performTcpPingDiagnosisWithConnectionCheck(outNode, "www.icloud.com.cn", 443, "出口->外网");
+                results.add(outToExternalResult);
+            }
         }
 
         // 4. 构建诊断报告
@@ -1082,6 +1255,19 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
      * @param tunnelId 隧道ID
      * @return TCP端口号
      */
+    private int getOutNodeTcpPort(Tunnel tunnel, Node outNode) {
+        if (tunnel == null) {
+            return 22;
+        }
+        if (Boolean.TRUE.equals(tunnel.getMuxEnabled()) && outNode != null && outNode.getOutPort() != null) {
+            return outNode.getOutPort();
+        }
+        if (outNode != null && outNode.getOutPort() != null) {
+            return outNode.getOutPort();
+        }
+        return getOutNodeTcpPort(tunnel.getId());
+    }
+
     private int getOutNodeTcpPort(Long tunnelId) {
         Tunnel tunnel = this.getById(tunnelId);
         if (tunnel != null && Boolean.TRUE.equals(tunnel.getMuxEnabled()) && tunnel.getMuxPort() != null) {

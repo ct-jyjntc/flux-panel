@@ -18,7 +18,10 @@ import lombok.extern.slf4j.Slf4j;
 
 import javax.annotation.Resource;
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
@@ -273,13 +276,38 @@ public class FlowController extends BaseController {
             Tunnel tunnel = tunnelService.getById(forward.getTunnelId());
             if (tunnel != null){
                 GostUtil.PauseService(tunnel.getInNodeId(), name);
-                if (tunnel.getType() == 2 && !Boolean.TRUE.equals(tunnel.getMuxEnabled())){
-                    GostUtil.PauseRemoteService(tunnel.getOutNodeId(), name);
+                if (tunnel.getType() == 2 && !Boolean.TRUE.equals(tunnel.getMuxEnabled())) {
+                    for (Long outNodeId : resolveOutNodeIds(tunnel)) {
+                        GostUtil.PauseRemoteService(outNodeId, name);
+                    }
                 }
             }
             forward.setStatus(0);
             forwardService.updateById(forward);
         }
+    }
+
+    private List<Long> resolveOutNodeIds(Tunnel tunnel) {
+        if (tunnel == null) {
+            return Collections.emptyList();
+        }
+        List<Long> outNodeIds = new ArrayList<>();
+        if (tunnel.getOutNodeIds() != null && !tunnel.getOutNodeIds().trim().isEmpty()) {
+            String[] parts = tunnel.getOutNodeIds().split(",");
+            for (String part : parts) {
+                String trimmed = part.trim();
+                if (!trimmed.isEmpty()) {
+                    try {
+                        outNodeIds.add(Long.parseLong(trimmed));
+                    } catch (NumberFormatException ignored) {
+                    }
+                }
+            }
+        }
+        if (outNodeIds.isEmpty() && tunnel.getOutNodeId() != null) {
+            outNodeIds.add(tunnel.getOutNodeId());
+        }
+        return outNodeIds;
     }
 
     private FlowDto filterFlowData(FlowDto flowDto, Forward forward, Node reportingNode) {
@@ -306,8 +334,10 @@ public class FlowController extends BaseController {
     private BigDecimal calculateNodeTrafficRatio(Tunnel tunnel, Node reportingNode) {
         BigDecimal inRatio = getNodeTrafficRatio(reportingNode);
         if (tunnel.getType() != null && tunnel.getType() == 2) {
-            Node outNode = nodeService.getNodeById(tunnel.getOutNodeId());
-            BigDecimal outRatio = getNodeTrafficRatio(outNode);
+            BigDecimal outRatio = BigDecimal.ZERO;
+            for (Node outNode : resolveOutNodes(tunnel)) {
+                outRatio = outRatio.add(getNodeTrafficRatio(outNode));
+            }
             return inRatio.add(outRatio);
         }
         return inRatio;
@@ -318,6 +348,39 @@ public class FlowController extends BaseController {
             return BigDecimal.ONE;
         }
         return node.getTrafficRatio();
+    }
+
+    private List<Node> resolveOutNodes(Tunnel tunnel) {
+        if (tunnel == null) {
+            return Collections.emptyList();
+        }
+        List<Long> outNodeIds = new ArrayList<>();
+        if (tunnel.getOutNodeIds() != null && !tunnel.getOutNodeIds().trim().isEmpty()) {
+            String[] parts = tunnel.getOutNodeIds().split(",");
+            for (String part : parts) {
+                String trimmed = part.trim();
+                if (!trimmed.isEmpty()) {
+                    try {
+                        outNodeIds.add(Long.parseLong(trimmed));
+                    } catch (NumberFormatException ignored) {
+                    }
+                }
+            }
+        }
+        if (outNodeIds.isEmpty() && tunnel.getOutNodeId() != null) {
+            outNodeIds.add(tunnel.getOutNodeId());
+        }
+        if (outNodeIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<Node> outNodes = new ArrayList<>();
+        for (Long nodeId : new LinkedHashSet<>(outNodeIds)) {
+            Node node = nodeService.getNodeById(nodeId);
+            if (node != null) {
+                outNodes.add(node);
+            }
+        }
+        return outNodes;
     }
 
     private void updateForwardFlow(String forwardId, FlowDto flowStats) {

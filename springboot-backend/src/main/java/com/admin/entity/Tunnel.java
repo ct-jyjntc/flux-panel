@@ -47,9 +47,19 @@ public class Tunnel extends BaseEntity {
     private Long outNodeId;
 
     /**
+     * 出口节点ID列表（逗号分隔）
+     */
+    private String outNodeIds;
+
+    /**
      * 出口IP (兼容字段)
      */
     private String outIp;
+
+    /**
+     * 出口负载策略（fifo/round/random/hash）
+     */
+    private String outStrategy;
 
     /**
      * 隧道类型（1-端口转发，2-隧道转发）
