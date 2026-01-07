@@ -17,6 +17,10 @@ public class UserUpdateDto {
 
     private String pwd; // 更新时密码可选
 
+    private Integer allowNodeCreate;
+
+    private Integer speedId;
+
     @NotNull(message = "流量不能为空")
     @Min(value = 0, message = "流量不能小于0")
     private Long flow;

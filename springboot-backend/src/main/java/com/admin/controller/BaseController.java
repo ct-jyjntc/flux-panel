@@ -12,7 +12,7 @@ public class BaseController {
     NodeService nodeService;
 
     @Autowired
-    UserTunnelService userTunnelService;
+    UserNodeService userNodeService;
 
     @Autowired
     TunnelService tunnelService;

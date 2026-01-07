@@ -7,7 +7,6 @@ import javax.servlet.http.HttpServletResponse;
 
 import com.admin.common.utils.Md5Util;
 import com.admin.entity.User;
-import com.admin.entity.UserTunnel;
 import com.alibaba.fastjson.JSONObject;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import org.springframework.web.bind.annotation.*;
@@ -50,26 +49,12 @@ public class OpenApiController extends BaseController {
         }
 
         final long GIGA = 1024L * 1024L * 1024L;
-        String headerValue;
-
-        if ("-1".equals(tunnel)) {
-            headerValue = buildSubscriptionHeader(
-                    userInfo.getOutFlow(),
-                    userInfo.getInFlow(),
-                    userInfo.getFlow() * GIGA,
-                    userInfo.getExpTime() / 1000
-            );
-        } else {
-            UserTunnel tunnelInfo = userTunnelService.getById(tunnel);
-            if (tunnelInfo == null) return R.err("隧道不存在");
-            if (!tunnelInfo.getUserId().toString().equals(userInfo.getId().toString())) return R.err("隧道不存在");
-            headerValue = buildSubscriptionHeader(
-                    tunnelInfo.getOutFlow(),
-                    tunnelInfo.getInFlow(),
-                    tunnelInfo.getFlow() * GIGA,
-                    tunnelInfo.getExpTime() / 1000
-            );
-        }
+        String headerValue = buildSubscriptionHeader(
+                userInfo.getOutFlow(),
+                userInfo.getInFlow(),
+                userInfo.getFlow() * GIGA,
+                userInfo.getExpTime() / 1000
+        );
 
         response.setHeader("subscription-userinfo", headerValue);
         return headerValue;

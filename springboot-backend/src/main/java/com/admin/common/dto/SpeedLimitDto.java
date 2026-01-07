@@ -15,9 +15,4 @@ public class SpeedLimitDto {
     @Min(value = 1, message = "速度限制必须大于0")
     private Integer speed;
 
-    @NotNull(message = "隧道ID不能为空")
-    private Long tunnelId;
-
-    @NotBlank(message = "隧道名称不能为空")
-    private String tunnelName;
 } 

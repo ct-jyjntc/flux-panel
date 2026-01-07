@@ -3,9 +3,6 @@ package com.admin.common.dto;
 import lombok.Data;
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
-import javax.validation.constraints.DecimalMin;
-import javax.validation.constraints.DecimalMax;
-import java.math.BigDecimal;
 import java.util.List;
 
 @Data
@@ -24,14 +21,6 @@ public class TunnelDto {
     @NotNull(message = "隧道类型不能为空")
     private Integer type;
     
-    @NotNull(message = "流量计算类型不能为空")
-    private Integer flow;
-    
-    // 流量倍率，默认为1.0
-    @DecimalMin(value = "0.0", inclusive = false, message = "流量倍率必须大于0.0")
-    @DecimalMax(value = "100.0", message = "流量倍率不能大于100.0")
-    private BigDecimal trafficRatio;
-
     private String interfaceName;
     
     // 协议类型，默认为tls
@@ -43,9 +32,4 @@ public class TunnelDto {
     // UDP监听地址，默认为0.0.0.0
     private String udpListenAddr = "0.0.0.0";
 
-    // 是否启用单端口多路复用（仅隧道转发）
-    private Boolean muxEnabled;
-
-    // 单端口多路复用绑定端口（可为空自动分配）
-    private Integer muxPort;
 } 

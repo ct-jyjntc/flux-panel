@@ -14,17 +14,12 @@ interface UserInfo {
   flowResetTime?: number;
 }
 
-interface UserTunnel {
+interface UserNode {
   id: number;
-  tunnelId: number;
-  tunnelName: string;
-  flow: number;
-  inFlow: number;
-  outFlow: number;
-  num: number;
-  expTime?: string;
-  flowResetTime?: number;
-  tunnelFlow: number;
+  nodeId: number;
+  nodeName: string;
+  ip: string;
+  serverIp: string;
 }
 
 interface Forward {
@@ -50,15 +45,14 @@ interface StatisticsFlow {
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [userInfo, setUserInfo] = useState<UserInfo>({} as UserInfo);
-  const [userTunnels, setUserTunnels] = useState<UserTunnel[]>([]);
+  const [userNodes, setUserNodes] = useState<UserNode[]>([]);
   const [forwardList, setForwardList] = useState<Forward[]>([]);
   const [statisticsFlows, setStatisticsFlows] = useState<StatisticsFlow[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
 
   // 检查有效期通知
-  const checkExpirationNotifications = (userInfo: UserInfo, tunnels: UserTunnel[]) => {
-    // 避免重复通知，检查是否已经显示过
-    const notificationKey = `expiration-${userInfo.expTime}-${tunnels.map(t => t.expTime).join(',')}`;
+  const checkExpirationNotifications = (userInfo: UserInfo) => {
+    const notificationKey = `expiration-${userInfo.expTime}`;
     const lastNotified = localStorage.getItem('lastNotified');
     
     if (lastNotified === notificationKey) {
@@ -102,43 +96,6 @@ export default function DashboardPage() {
       }
     }
     
-    // 检查隧道有效期
-    tunnels.forEach(tunnel => {
-      if (tunnel.expTime) {
-        const expDate = new Date(tunnel.expTime);
-        const now = new Date();
-        
-        if (!isNaN(expDate.getTime()) && expDate > now) {
-          const diffTime = expDate.getTime() - now.getTime();
-          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-          
-          if (diffDays <= 7 && diffDays > 0) {
-            hasNotification = true;
-            if (diffDays === 1) {
-              toast(`隧道"${tunnel.tunnelName}"将于明天过期`, { 
-                icon: '⚠️',
-                duration: 5000,
-                style: { background: '#f59e0b', color: '#fff' }
-              });
-            } else {
-              toast(`隧道"${tunnel.tunnelName}"将于${diffDays}天后过期`, { 
-                icon: '⚠️',
-                duration: 5000,
-                style: { background: '#f59e0b', color: '#fff' }
-              });
-            }
-          } else if (diffDays <= 0) {
-            hasNotification = true;
-            toast(`隧道"${tunnel.tunnelName}"已过期`, { 
-              icon: '⚠️',
-              duration: 6000,
-              style: { background: '#ef4444', color: '#fff' }
-            });
-          }
-        }
-      }
-    });
-    
     // 如果显示了通知，记录防止重复
     if (hasNotification) {
       localStorage.setItem('lastNotified', notificationKey);
@@ -149,7 +106,7 @@ export default function DashboardPage() {
     // 重置状态并加载数据，防止页面切换时显示旧数据
     setLoading(true);
     setUserInfo({} as UserInfo);
-    setUserTunnels([]);
+    setUserNodes([]);
     setForwardList([]);
     setStatisticsFlows([]);
     
@@ -168,12 +125,12 @@ export default function DashboardPage() {
       if (res.code === 0) {
         const data = res.data;
         setUserInfo(data.userInfo || {});
-        setUserTunnels(data.tunnelPermissions || []);
+        setUserNodes(data.nodePermissions || []);
         setForwardList(data.forwards || []);
         setStatisticsFlows(data.statisticsFlows || []);
         
         // 检查有效期并显示通知
-        checkExpirationNotifications(data.userInfo, data.tunnelPermissions || []);
+        checkExpirationNotifications(data.userInfo || {});
       } else {
         toast.error(res.msg || '获取套餐信息失败');
       }
@@ -237,56 +194,6 @@ export default function DashboardPage() {
   };
 
 
-  const getExpStatus = (expTime?: string) => {
-    if (!expTime) return { 
-      color: 'text-green-600 dark:text-green-400', 
-      bg: 'bg-green-50 dark:bg-green-500/10 border-green-200 dark:border-green-500/20',
-      text: '永久' 
-    };
-
-    const now = new Date();
-    const expDate = new Date(expTime);
-
-    if (isNaN(expDate.getTime())) {
-      return { 
-        color: 'text-gray-600 dark:text-gray-400', 
-        bg: 'bg-gray-50 dark:bg-black/10 border-gray-200 dark:border-gray-500/20',
-        text: '无效' 
-      };
-    }
-
-    if (expDate < now) {
-      return { 
-        color: 'text-red-600 dark:text-red-400', 
-        bg: 'bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/20',
-        text: '已过期' 
-      };
-    }
-
-    const diffTime = expDate.getTime() - now.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-    if (diffDays <= 7) {
-      return { 
-        color: 'text-red-600 dark:text-red-400', 
-        bg: 'bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/20',
-        text: `${diffDays}天后过期` 
-      };
-    } else if (diffDays <= 30) {
-      return { 
-        color: 'text-orange-600 dark:text-orange-400', 
-        bg: 'bg-orange-50 dark:bg-orange-500/10 border-orange-200 dark:border-orange-500/20',
-        text: `${diffDays}天后过期` 
-      };
-    } else {
-      return { 
-        color: 'text-green-600 dark:text-green-400', 
-        bg: 'bg-green-50 dark:bg-green-500/10 border-green-200 dark:border-green-500/20',
-        text: `${diffDays}天后过期` 
-      };
-    }
-  };
-
   const calculateUserTotalUsedFlow = (): number => {
     // 后端已按计费类型处理流量，前端直接使用入站+出站总和
     return (userInfo.inFlow || 0) + (userInfo.outFlow || 0);
@@ -338,34 +245,6 @@ export default function DashboardPage() {
         </div>
       </div>
     );
-  };
-
-  const calculateTunnelUsedFlow = (tunnel: UserTunnel): number => {
-    if (!tunnel) return 0;
-    const inFlow = tunnel.inFlow || 0;
-    const outFlow = tunnel.outFlow || 0;
-    // 后端已按计费类型处理流量，前端直接使用入站+出站总和
-    return inFlow + outFlow;
-  };
-
-  const calculateTunnelFlowPercentage = (tunnel: UserTunnel): number => {
-    const totalUsed = calculateTunnelUsedFlow(tunnel);
-    const totalLimit = (tunnel.flow || 0) * 1024 * 1024 * 1024;
-    // 无限制时返回0%
-    if (tunnel.flow === 99999) return 0;
-    return totalLimit > 0 ? Math.min((totalUsed / totalLimit) * 100, 100) : 0;
-  };
-
-  const getTunnelUsedForwards = (tunnelId: number): number => {
-    return forwardList.filter(forward => forward.tunnelId === tunnelId).length;
-  };
-
-  const calculateTunnelForwardPercentage = (tunnel: UserTunnel): number => {
-    const totalUsed = getTunnelUsedForwards(tunnel.tunnelId);
-    const totalLimit = tunnel.num || 0;
-    // 无限制时返回0%
-    if (tunnel.num === 99999) return 0;
-    return totalLimit > 0 ? Math.min((totalUsed / totalLimit) * 100, 100) : 0;
   };
 
   const formatResetTime = (resetDay?: number): string => {
@@ -571,7 +450,7 @@ export default function DashboardPage() {
            </div>
          </div>
 
-                 {/* 隧道权限 - 管理员不显示 */}
+                 {/* 节点权限 - 管理员不显示 */}
          {!isAdmin && (
           <div className="mb-6 lg:mb-8 border border-gray-200 dark:border-default-200 rounded-lg overflow-hidden">
            <div className="px-4 py-3 border-b border-gray-200 dark:border-default-200">
@@ -579,73 +458,32 @@ export default function DashboardPage() {
                <svg className="w-5 h-5 text-primary" fill="currentColor" viewBox="0 0 20 20">
                  <path fillRule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0 1 1 0 00-1.414 1.414 4 4 0 005.656 0l3-3a4 4 0 00-5.656-5.656l-1.5 1.5a1 1 0 101.414 1.414l1.5-1.5zm-5 5a2 2 0 012.828 0 1 1 0 101.414-1.414 4 4 0 00-5.656 0l-3 3a4 4 0 105.656 5.656l1.5-1.5a1 1 0 10-1.414-1.414l-1.5 1.5a2 2 0 11-2.828-2.828l3-3z" clipRule="evenodd" />
                </svg>
-               <h2 className="text-lg lg:text-xl font-semibold text-foreground">隧道权限</h2>
+               <h2 className="text-lg lg:text-xl font-semibold text-foreground">节点权限</h2>
                <span className="px-2 py-1 bg-default-100 dark:bg-default-50 text-default-600 rounded-full text-xs">
-                 {userTunnels.length}
+                 {userNodes.length}
                </span>
              </div>
            </div>
            <div className="pt-0 p-4">
-            {userTunnels.length === 0 ? (
+            {userNodes.length === 0 ? (
               <div className="text-center py-12">
                 <svg className="w-12 h-12 text-default-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
                 </svg>
-                <p className="text-default-500">暂无隧道权限</p>
+                <p className="text-default-500">暂无节点权限</p>
               </div>
             ) : (
-                             <div className="border border-divider rounded-lg overflow-hidden divide-y divide-divider">
-                 {userTunnels.map((tunnel) => {
-                   const tunnelExpStatus = getExpStatus(tunnel.expTime);
-                   return (
-                     <div key={tunnel.id} className="p-3 lg:p-4">
-                       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-3">
-                         <div>
-                           <h3 className="font-semibold text-foreground">{tunnel.tunnelName} ID: {tunnel.id}</h3>
-                           <div className="flex flex-wrap items-center gap-2 mt-1">
-                             <span className={`px-2 py-1 rounded-md text-xs font-medium ${tunnel.tunnelFlow === 1 ? 'bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300' : 'bg-orange-100 dark:bg-orange-500/20 text-orange-700 dark:text-orange-300'}`}>
-                               {tunnel.tunnelFlow === 1 ? '单向计费' : '双向计费'}
-                             </span>
-                             <span className={`px-2 py-1 rounded-md text-xs font-medium border ${tunnelExpStatus.bg} ${tunnelExpStatus.color}`}>
-                               {tunnelExpStatus.text}
-                             </span>
-                             {(tunnel.flowResetTime !== undefined && tunnel.flowResetTime !== null) && (
-                               <span className="text-xs text-default-500">
-                                 {formatResetTime(tunnel.flowResetTime)}
-                               </span>
-                             )}
-                           </div>
-                         </div>
-                       </div>
-                       
-                       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
-                         <div>
-                           <p className="text-sm text-default-600 mb-1">流量配额</p>
-                           <p className="font-semibold text-foreground">{formatFlow(tunnel.flow, 'gb')}</p>
-                         </div>
-                         <div>
-                           <p className="text-sm text-default-600 mb-1">已用流量</p>
-                           <p className="font-semibold text-foreground">{formatFlow(calculateTunnelUsedFlow(tunnel))}</p>
-                           <div className="mt-1">
-                             {renderProgressBar(calculateTunnelFlowPercentage(tunnel), 'sm', tunnel.flow === 99999)}
-                           </div>
-                         </div>
-                         <div>
-                           <p className="text-sm text-default-600 mb-1">转发配额</p>
-                           <p className="font-semibold text-foreground">{formatNumber(tunnel.num)}</p>
-                         </div>
-                         <div>
-                           <p className="text-sm text-default-600 mb-1">已用转发</p>
-                           <p className="font-semibold text-foreground">{getTunnelUsedForwards(tunnel.tunnelId)}</p>
-                           <div className="mt-1">
-                             {renderProgressBar(calculateTunnelForwardPercentage(tunnel), 'sm', tunnel.num === 99999)}
-                           </div>
-                         </div>
-                       </div>
-                     </div>
-                   );
-                 })}
-               </div>
+              <div className="border border-divider rounded-lg overflow-hidden divide-y divide-divider">
+                {userNodes.map((node) => (
+                  <div key={node.id} className="p-3 lg:p-4">
+                    <h3 className="font-semibold text-foreground">{node.nodeName}</h3>
+                    <div className="mt-2 text-xs text-default-500 space-y-1">
+                      <div>入口IP：{node.ip}</div>
+                      <div>服务器IP：{node.serverIp}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         </div>

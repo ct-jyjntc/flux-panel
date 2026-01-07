@@ -5,9 +5,6 @@ import com.baomidou.mybatisplus.annotation.TableField;
 import lombok.Data;
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
-import javax.validation.constraints.DecimalMin;
-import javax.validation.constraints.DecimalMax;
-import java.math.BigDecimal;
 import java.util.List;
 
 @Data
@@ -19,20 +16,12 @@ public class TunnelUpdateDto {
     @NotBlank(message = "隧道名称不能为空")
     private String name;
     
-    @NotNull(message = "流量计算类型不能为空")
-    private Integer flow;
-
     private Long inNodeId;
 
     private List<Long> inNodeIds;
 
     private Long outNodeId;
     
-    // 流量倍率
-    @DecimalMin(value = "0.0", inclusive = false, message = "流量倍率必须大于0.0")
-    @DecimalMax(value = "100.0", message = "流量倍率不能大于100.0")
-    private BigDecimal trafficRatio;
-
     @NotBlank
     private String protocol;
 
@@ -43,12 +32,6 @@ public class TunnelUpdateDto {
     // UDP监听地址
     @NotBlank
     private String udpListenAddr;
-
-    // 是否启用单端口多路复用（仅隧道转发）
-    private Boolean muxEnabled;
-
-    // 单端口多路复用绑定端口（可为空自动分配）
-    private Integer muxPort;
 
     @TableField(updateStrategy = FieldStrategy.IGNORED)
     private String interfaceName;

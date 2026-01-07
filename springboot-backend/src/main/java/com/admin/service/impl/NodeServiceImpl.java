@@ -8,7 +8,10 @@ import com.admin.common.dto.NodeUpdateDto;
 import com.admin.common.lang.R;
 import com.admin.common.utils.GostUtil;
 import com.admin.common.utils.WebSocketServer;
+import com.admin.common.utils.JwtUtil;
 import com.admin.entity.Node;
+import com.admin.entity.UserNode;
+import com.admin.entity.User;
 import com.admin.entity.Tunnel;
 import com.admin.entity.ViteConfig;
 import com.admin.mapper.NodeMapper;
@@ -16,6 +19,8 @@ import com.admin.mapper.TunnelMapper;
 import com.admin.service.ForwardService;
 import com.admin.service.NodeService;
 import com.admin.service.TunnelService;
+import com.admin.service.UserNodeService;
+import com.admin.service.UserService;
 import com.admin.service.ViteConfigService;
 import com.alibaba.fastjson.JSONObject;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
@@ -26,8 +31,10 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Value;
 
@@ -47,6 +54,7 @@ public class NodeServiceImpl extends ServiceImpl<NodeMapper, Node> implements No
     
     /** 节点默认状态：启用 */
     private static final int NODE_STATUS_ACTIVE = 0;
+    private static final int ADMIN_ROLE_ID = 0;
     
     /** 成功响应消息 */
     private static final String SUCCESS_CREATE_MSG = "节点创建成功";
@@ -58,6 +66,8 @@ public class NodeServiceImpl extends ServiceImpl<NodeMapper, Node> implements No
     private static final String ERROR_UPDATE_MSG = "节点更新失败";
     private static final String ERROR_DELETE_MSG = "节点删除失败";
     private static final String ERROR_NODE_NOT_FOUND = "节点不存在";
+    private static final String ERROR_NODE_CREATE_FORBIDDEN = "无权限创建节点";
+    private static final String ERROR_NODE_ACCESS_FORBIDDEN = "无权限操作该节点";
     
     /** 隧道使用检查相关消息 */
     private static final String ERROR_IN_NODE_IN_USE = "该节点还有 %d 个隧道作为入口节点在使用，请先删除相关隧道";
@@ -87,6 +97,12 @@ public class NodeServiceImpl extends ServiceImpl<NodeMapper, Node> implements No
     @Lazy
     private ForwardService forwardService;
 
+    @Resource
+    private UserService userService;
+
+    @Resource
+    private UserNodeService userNodeService;
+
 
     // ========== 公共接口实现 ==========
 
@@ -98,7 +114,16 @@ public class NodeServiceImpl extends ServiceImpl<NodeMapper, Node> implements No
      */
     @Override
     public R createNode(NodeDto nodeDto) {
+        UserInfo currentUser = getCurrentUserInfo();
+        if (currentUser.getRoleId() != ADMIN_ROLE_ID) {
+            User user = userService.getById(currentUser.getUserId());
+            if (user == null || user.getAllowNodeCreate() == null || user.getAllowNodeCreate() != 1) {
+                return R.err(ERROR_NODE_CREATE_FORBIDDEN);
+            }
+        }
+
         Node node = buildNewNode(nodeDto);
+        applyNodeOwnershipAndRatio(node, nodeDto, currentUser);
         boolean result = this.save(node);
         return result ? R.ok(SUCCESS_CREATE_MSG) : R.err(ERROR_CREATE_MSG);
     }
@@ -113,7 +138,13 @@ public class NodeServiceImpl extends ServiceImpl<NodeMapper, Node> implements No
      */
     @Override
     public R getAllNodes() {
-        List<Node> nodeList = this.list();
+        UserInfo currentUser = getCurrentUserInfo();
+        List<Node> nodeList;
+        if (currentUser.getRoleId() == ADMIN_ROLE_ID) {
+            nodeList = this.list();
+        } else {
+            nodeList = getAccessibleNodesForUser(currentUser.getUserId());
+        }
         hideNodeSecrets(nodeList);
         return R.ok(nodeList);
     }
@@ -130,6 +161,10 @@ public class NodeServiceImpl extends ServiceImpl<NodeMapper, Node> implements No
         Node node = this.getById(nodeUpdateDto.getId());
         if (node == null) {
             return R.err(ERROR_NODE_NOT_FOUND);
+        }
+        UserInfo currentUser = getCurrentUserInfo();
+        if (currentUser.getRoleId() != ADMIN_ROLE_ID && !Objects.equals(node.getOwnerId(), currentUser.getUserId().longValue())) {
+            return R.err(ERROR_NODE_ACCESS_FORBIDDEN);
         }
         if (nodeUpdateDto.getOutPort() == null) {
             return R.err(ERROR_OUT_PORT_REQUIRED);
@@ -161,6 +196,13 @@ public class NodeServiceImpl extends ServiceImpl<NodeMapper, Node> implements No
 
         // 2. 构建更新对象并执行更新
         Node updateNode = buildUpdateNode(nodeUpdateDto);
+        if (currentUser.getRoleId() == ADMIN_ROLE_ID) {
+            if (nodeUpdateDto.getTrafficRatio() != null) {
+                updateNode.setTrafficRatio(nodeUpdateDto.getTrafficRatio());
+            }
+        } else {
+            updateNode.setTrafficRatio(node.getTrafficRatio());
+        }
         boolean result = this.updateById(updateNode);
 
         // 更新隧道入口ip
@@ -202,6 +244,10 @@ public class NodeServiceImpl extends ServiceImpl<NodeMapper, Node> implements No
         if (node == null) {
             return R.err(ERROR_NODE_NOT_FOUND);
         }
+        UserInfo currentUser = getCurrentUserInfo();
+        if (currentUser.getRoleId() != ADMIN_ROLE_ID && !Objects.equals(node.getOwnerId(), currentUser.getUserId().longValue())) {
+            return R.err(ERROR_NODE_ACCESS_FORBIDDEN);
+        }
 
         // 2. 检查节点使用情况
         R usageCheckResult = checkNodeUsage(id);
@@ -228,6 +274,57 @@ public class NodeServiceImpl extends ServiceImpl<NodeMapper, Node> implements No
             throw new RuntimeException(ERROR_NODE_NOT_FOUND);
         }
         return node;
+    }
+
+    private UserInfo getCurrentUserInfo() {
+        Integer roleId = JwtUtil.getRoleIdFromToken();
+        Integer userId = JwtUtil.getUserIdFromToken();
+        return new UserInfo(userId, roleId);
+    }
+
+    private void applyNodeOwnershipAndRatio(Node node, NodeDto nodeDto, UserInfo currentUser) {
+        if (currentUser.getRoleId() == ADMIN_ROLE_ID) {
+            node.setOwnerId(null);
+            if (nodeDto.getTrafficRatio() != null) {
+                node.setTrafficRatio(nodeDto.getTrafficRatio());
+            } else {
+                node.setTrafficRatio(new BigDecimal("1.0"));
+            }
+        } else {
+            node.setOwnerId(currentUser.getUserId().longValue());
+            node.setTrafficRatio(BigDecimal.ZERO);
+        }
+    }
+
+    private List<Node> getAccessibleNodesForUser(Integer userId) {
+        QueryWrapper<Node> queryWrapper = new QueryWrapper<>();
+        queryWrapper.eq("owner_id", userId);
+
+        List<UserNode> userNodes = userNodeService.list(new QueryWrapper<UserNode>().eq("user_id", userId));
+        if (!userNodes.isEmpty()) {
+            List<Long> nodeIds = userNodes.stream().map(UserNode::getNodeId).distinct().collect(Collectors.toList());
+            queryWrapper.or().in("id", nodeIds);
+        }
+
+        return this.list(queryWrapper);
+    }
+
+    private static class UserInfo {
+        private final Integer userId;
+        private final Integer roleId;
+
+        private UserInfo(Integer userId, Integer roleId) {
+            this.userId = userId;
+            this.roleId = roleId;
+        }
+
+        public Integer getUserId() {
+            return userId;
+        }
+
+        public Integer getRoleId() {
+            return roleId;
+        }
     }
 
     // ========== 私有辅助方法 ==========
@@ -410,6 +507,10 @@ public class NodeServiceImpl extends ServiceImpl<NodeMapper, Node> implements No
         Node node = this.getById(id);
         if (node == null) {
             return R.err(ERROR_NODE_NOT_FOUND);
+        }
+        UserInfo currentUser = getCurrentUserInfo();
+        if (currentUser.getRoleId() != ADMIN_ROLE_ID && !Objects.equals(node.getOwnerId(), currentUser.getUserId().longValue())) {
+            return R.err(ERROR_NODE_ACCESS_FORBIDDEN);
         }
 
         // 2. 构建安装命令

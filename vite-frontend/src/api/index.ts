@@ -12,6 +12,8 @@ export interface LoginResponse {
   role_id: number;
   name: string;
   requirePasswordChange?: boolean;
+  allowNodeCreate?: number;
+  userId?: number;
 }
 
 export const login = (data: LoginData) => Network.post<LoginResponse>("/user/login", data);
@@ -42,11 +44,10 @@ export const updateTunnel = (data: any) => Network.post("/tunnel/update", data);
 export const deleteTunnel = (id: number) => Network.post("/tunnel/delete", { id });
 export const diagnoseTunnel = (tunnelId: number) => Network.post("/tunnel/diagnose", { tunnelId });
 
-// 用户隧道权限管理操作 - 全部使用POST请求
-export const assignUserTunnel = (data: any) => Network.post("/tunnel/user/assign", data);
-export const getUserTunnelList = (queryData: any = {}) => Network.post("/tunnel/user/list", queryData);
-export const removeUserTunnel = (params: any) => Network.post("/tunnel/user/remove", params);
-export const updateUserTunnel = (data: any) => Network.post("/tunnel/user/update", data);
+// 用户节点权限管理操作 - 全部使用POST请求
+export const assignUserNode = (data: any) => Network.post("/node/user/assign", data);
+export const getUserNodeList = (queryData: any = {}) => Network.post("/node/user/list", queryData);
+export const removeUserNode = (params: any) => Network.post("/node/user/remove", params);
 export const userTunnel = () => Network.post("/tunnel/user/tunnel");
 
 // 转发CRUD操作 - 全部使用POST请求

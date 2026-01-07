@@ -17,9 +17,9 @@ public class UserPackageDto {
     private UserInfoDto userInfo;
     
     /**
-     * 用户隧道权限列表
+     * 用户节点权限列表
      */
-    private List<UserTunnelDetailDto> tunnelPermissions;
+    private List<UserNodeDetailDto> nodePermissions;
     
     /**
      * 用户转发列表
@@ -51,24 +51,16 @@ public class UserPackageDto {
     }
     
     /**
-     * 用户隧道权限详情
+     * 用户节点权限详情
      */
     @Data
-    public static class UserTunnelDetailDto {
+    public static class UserNodeDetailDto {
         private Integer id;
         private Integer userId;
-        private Integer tunnelId;
-        private String tunnelName;
-        private Integer tunnelFlow;  // 隧道流量计算类型（1-单向，2-双向）
-        private Long flow;           // 隧道流量配额(GB)
-        private Long inFlow;         // 隧道已用入站流量(字节)
-        private Long outFlow;        // 隧道已用出站流量(字节)
-        private Integer num;         // 隧道转发数量配额
-        private Long flowResetTime;  // 流量重置时间
-        private Long expTime;        // 隧道权限过期时间
-        private Integer speedId;
-        private String speedLimitName;
-        private Integer speed;
+        private Long nodeId;
+        private String nodeName;
+        private String ip;
+        private String serverIp;
     }
     
     /**

@@ -60,6 +60,8 @@ CREATE TABLE `node` (
   `server_ip` varchar(100) NOT NULL,
   `port_sta` int(10) NOT NULL,
   `port_end` int(10) NOT NULL,
+  `owner_id` int(10) DEFAULT NULL,
+  `traffic_ratio` decimal(10,1) NOT NULL DEFAULT '1.0',
   `out_port` int(10) DEFAULT NULL,
   `version` varchar(100) DEFAULT NULL,
   `http` int(10) NOT NULL DEFAULT '0',
@@ -80,8 +82,6 @@ CREATE TABLE `speed_limit` (
   `id` int(10) NOT NULL,
   `name` varchar(100) NOT NULL,
   `speed` int(10) NOT NULL,
-  `tunnel_id` int(10) NOT NULL,
-  `tunnel_name` varchar(100) NOT NULL,
   `created_time` bigint(20) NOT NULL,
   `updated_time` bigint(20) DEFAULT NULL,
   `status` int(10) NOT NULL
@@ -111,6 +111,7 @@ CREATE TABLE `statistics_flow` (
 CREATE TABLE `tunnel` (
   `id` int(10) NOT NULL,
   `name` varchar(100) NOT NULL,
+  `owner_id` int(10) DEFAULT NULL,
   `traffic_ratio` decimal(10,1) NOT NULL DEFAULT '1.0',
   `in_node_id` int(10) NOT NULL,
   `in_node_ids` varchar(255) DEFAULT NULL,
@@ -141,6 +142,8 @@ CREATE TABLE `user` (
   `user` varchar(100) NOT NULL,
   `pwd` varchar(100) NOT NULL,
   `role_id` int(10) NOT NULL,
+  `allow_node_create` tinyint(1) NOT NULL DEFAULT '0',
+  `speed_id` int(10) DEFAULT NULL,
   `exp_time` bigint(20) NOT NULL,
   `flow` bigint(20) NOT NULL,
   `in_flow` bigint(20) NOT NULL DEFAULT '0',
@@ -156,27 +159,20 @@ CREATE TABLE `user` (
 -- 转存表中的数据 `user`
 --
 
-INSERT INTO `user` (`id`, `user`, `pwd`, `role_id`, `exp_time`, `flow`, `in_flow`, `out_flow`, `flow_reset_time`, `num`, `created_time`, `updated_time`, `status`) VALUES
-(1, 'admin_user', '3c85cdebade1c51cf64ca9f3c09d182d', 0, 2727251700000, 99999, 0, 0, 1, 99999, 1748914865000, 1754011744252, 1);
+INSERT INTO `user` (`id`, `user`, `pwd`, `role_id`, `allow_node_create`, `speed_id`, `exp_time`, `flow`, `in_flow`, `out_flow`, `flow_reset_time`, `num`, `created_time`, `updated_time`, `status`) VALUES
+(1, 'admin_user', '3c85cdebade1c51cf64ca9f3c09d182d', 0, 1, NULL, 2727251700000, 99999, 0, 0, 1, 99999, 1748914865000, 1754011744252, 1);
 
 -- --------------------------------------------------------
 
 --
--- 表的结构 `user_tunnel`
+-- 表的结构 `user_node`
 --
 
-CREATE TABLE `user_tunnel` (
+CREATE TABLE `user_node` (
   `id` int(10) NOT NULL,
   `user_id` int(10) NOT NULL,
-  `tunnel_id` int(10) NOT NULL,
-  `speed_id` int(10) DEFAULT NULL,
-  `num` int(10) NOT NULL,
-  `flow` bigint(20) NOT NULL,
-  `in_flow` bigint(20) NOT NULL DEFAULT '0',
-  `out_flow` bigint(20) NOT NULL DEFAULT '0',
-  `flow_reset_time` bigint(20) NOT NULL,
-  `exp_time` bigint(20) NOT NULL,
-  `status` int(10) NOT NULL
+  `node_id` int(10) NOT NULL,
+  `created_time` bigint(20) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- --------------------------------------------------------
@@ -240,10 +236,11 @@ ALTER TABLE `user`
   ADD PRIMARY KEY (`id`);
 
 --
--- 表的索引 `user_tunnel`
+-- 表的索引 `user_node`
 --
-ALTER TABLE `user_tunnel`
-  ADD PRIMARY KEY (`id`);
+ALTER TABLE `user_node`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uk_user_node` (`user_id`,`node_id`);
 
 --
 -- 表的索引 `vite_config`
@@ -293,9 +290,9 @@ ALTER TABLE `user`
   MODIFY `id` int(10) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=1;
 
 --
--- 使用表AUTO_INCREMENT `user_tunnel`
+-- 使用表AUTO_INCREMENT `user_node`
 --
-ALTER TABLE `user_tunnel`
+ALTER TABLE `user_node`
   MODIFY `id` int(10) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=1;
 
 --

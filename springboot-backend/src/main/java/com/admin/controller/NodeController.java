@@ -25,7 +25,6 @@ import java.util.Map;
 public class NodeController extends BaseController {
 
     @LogAnnotation
-    @RequireRole
     @PostMapping("/create")
     public R create(@Validated @RequestBody NodeDto nodeDto) {
         return nodeService.createNode(nodeDto);
@@ -33,21 +32,18 @@ public class NodeController extends BaseController {
 
 
     @LogAnnotation
-    @RequireRole
     @PostMapping("/list")
     public R list() {
         return nodeService.getAllNodes();
     }
 
     @LogAnnotation
-    @RequireRole
     @PostMapping("/update")
     public R update(@Validated @RequestBody NodeUpdateDto nodeUpdateDto) {
         return nodeService.updateNode(nodeUpdateDto);
     }
 
     @LogAnnotation
-    @RequireRole
     @PostMapping("/delete")
     public R delete(@RequestBody Map<String, Object> params) {
         Long id = Long.valueOf(params.get("id").toString());
@@ -55,11 +51,32 @@ public class NodeController extends BaseController {
     }
 
     @LogAnnotation
-    @RequireRole
     @PostMapping("/install")
     public R getInstallCommand(@RequestBody Map<String, Object> params) {
         Long id = Long.valueOf(params.get("id").toString());
         return nodeService.getInstallCommand(id);
+    }
+
+    @LogAnnotation
+    @RequireRole
+    @PostMapping("/user/assign")
+    public R assignUserNode(@Validated @RequestBody com.admin.common.dto.UserNodeDto userNodeDto) {
+        return userNodeService.assignUserNode(userNodeDto);
+    }
+
+    @LogAnnotation
+    @RequireRole
+    @PostMapping("/user/list")
+    public R getUserNodeList(@Validated @RequestBody com.admin.common.dto.UserNodeQueryDto queryDto) {
+        return userNodeService.getUserNodeList(queryDto);
+    }
+
+    @LogAnnotation
+    @RequireRole
+    @PostMapping("/user/remove")
+    public R removeUserNode(@RequestBody Map<String, Object> params) {
+        Integer id = Integer.valueOf(params.get("id").toString());
+        return userNodeService.removeUserNode(id);
     }
 
 }

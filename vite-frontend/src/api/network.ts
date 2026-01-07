@@ -48,6 +48,8 @@ function handleTokenExpired() {
   window.localStorage.removeItem('token');
   window.localStorage.removeItem('role_id');
   window.localStorage.removeItem('name');
+  window.localStorage.removeItem('allow_node_create');
+  window.localStorage.removeItem('user_id');
   
   // 跳转到登录页面
   if (window.location.pathname !== '/') {

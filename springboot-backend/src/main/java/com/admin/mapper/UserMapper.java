@@ -18,11 +18,11 @@ import java.util.List;
 public interface UserMapper extends BaseMapper<User> {
     
     /**
-     * 查询用户隧道权限详情
+     * 查询用户节点权限详情
      * @param userId 用户ID
-     * @return 隧道权限列表
+     * @return 节点权限列表
      */
-    List<UserPackageDto.UserTunnelDetailDto> getUserTunnelDetails(@Param("userId") Integer userId);
+    List<UserPackageDto.UserNodeDetailDto> getUserNodeDetails(@Param("userId") Integer userId);
     
     /**
      * 查询用户转发详情
@@ -30,10 +30,4 @@ public interface UserMapper extends BaseMapper<User> {
      * @return 转发列表
      */
     List<UserPackageDto.UserForwardDetailDto> getUserForwardDetails(@Param("userId") Integer userId);
-    
-    /**
-     * 管理员查询所有隧道（流量和转发设置为99999）
-     * @return 隧道列表
-     */
-    List<UserPackageDto.UserTunnelDetailDto> getAllTunnelsForAdmin();
 }

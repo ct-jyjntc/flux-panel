@@ -41,8 +41,6 @@ interface Tunnel {
   interfaceName?: string;
   muxEnabled?: boolean;
   muxPort?: number;
-  flow: number; // 1: 单向, 2: 双向
-  trafficRatio: number;
   status: number;
   createdTime: string;
 }
@@ -66,8 +64,6 @@ interface TunnelForm {
   interfaceName?: string;
   muxEnabled: boolean;
   muxPort?: number | null;
-  flow: number;
-  trafficRatio: number;
   status: number;
 }
 
@@ -117,8 +113,6 @@ export default function TunnelPage() {
     interfaceName: '',
     muxEnabled: false,
     muxPort: null,
-    flow: 1,
-    trafficRatio: 1.0,
     status: 1
   });
   
@@ -190,10 +184,6 @@ export default function TunnelPage() {
       newErrors.udpListenAddr = '请输入UDP监听地址';
     }
     
-    if (form.trafficRatio < 0.0 || form.trafficRatio > 100.0) {
-      newErrors.trafficRatio = '流量倍率必须在0.0-100.0之间';
-    }
-    
     // 隧道转发时的验证
     if (form.type === 2) {
       if (!form.outNodeId) {
@@ -225,8 +215,6 @@ export default function TunnelPage() {
       interfaceName: '',
       muxEnabled: false,
       muxPort: null,
-      flow: 1,
-      trafficRatio: 1.0,
       status: 1
     });
     setErrors({});
@@ -248,8 +236,6 @@ export default function TunnelPage() {
       interfaceName: tunnel.interfaceName || '',
       muxEnabled: tunnel.muxEnabled ?? false,
       muxPort: tunnel.muxPort ?? null,
-      flow: tunnel.flow,
-      trafficRatio: tunnel.trafficRatio,
       status: tunnel.status
     });
     setErrors({});
@@ -424,19 +410,6 @@ export default function TunnelPage() {
     }
   };
 
-  // 获取流量计算显示
-  const getFlowDisplay = (flow: number) => {
-    switch (flow) {
-      case 1:
-        return '单向计算';
-      case 2:
-        return '双向计算';
-      default:
-        return '未知';
-    }
-  };
-
-
   // 获取连接质量
   const getQualityDisplay = (averageTime?: number, packetLoss?: number) => {
     if (averageTime === undefined || packetLoss === undefined) return null;
@@ -492,8 +465,6 @@ export default function TunnelPage() {
               <TableColumn>状态</TableColumn>
               <TableColumn>入口节点</TableColumn>
               <TableColumn>出口节点</TableColumn>
-              <TableColumn>计费</TableColumn>
-              <TableColumn>倍率</TableColumn>
               <TableColumn className="text-right">操作</TableColumn>
             </TableHeader>
             <TableBody
@@ -536,14 +507,6 @@ export default function TunnelPage() {
                         <div className="font-medium">{outNodeName}</div>
                         <div className="text-default-500">{outIp}</div>
                       </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="text-xs font-medium text-foreground">
-                        {getFlowDisplay(tunnel.flow)}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="text-xs font-medium text-foreground">{tunnel.trafficRatio}x</div>
                     </TableCell>
                     <TableCell>
                       <div className="flex justify-end gap-2">
@@ -630,45 +593,6 @@ export default function TunnelPage() {
                       <SelectItem key="1">端口转发</SelectItem>
                       <SelectItem key="2">隧道转发</SelectItem>
                     </Select>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <Select
-                        label="流量计算"
-                        placeholder="请选择流量计算方式"
-                        selectedKeys={[form.flow.toString()]}
-                        onSelectionChange={(keys) => {
-                          const selectedKey = Array.from(keys)[0] as string;
-                          if (selectedKey) {
-                            setForm(prev => ({ ...prev, flow: parseInt(selectedKey) }));
-                          }
-                        }}
-                        isInvalid={!!errors.flow}
-                        errorMessage={errors.flow}
-                        variant="bordered"
-                      >
-                        <SelectItem key="1">单向计算（仅上传）</SelectItem>
-                        <SelectItem key="2">双向计算（上传+下载）</SelectItem>
-                      </Select>
-
-                      <Input
-                        label="流量倍率"
-                        placeholder="请输入流量倍率"
-                        type="number"
-                        value={form.trafficRatio.toString()}
-                        onChange={(e) => setForm(prev => ({ 
-                          ...prev, 
-                          trafficRatio: parseFloat(e.target.value) || 0
-                        }))}
-                        isInvalid={!!errors.trafficRatio}
-                        errorMessage={errors.trafficRatio}
-                        variant="bordered"
-                        endContent={
-                          <div className="pointer-events-none flex items-center">
-                            <span className="text-default-400 text-small">x</span>
-                          </div>
-                        }
-                      />
-                    </div>
 
                     <Divider />
                     <h3 className="text-lg font-semibold">入口配置</h3>

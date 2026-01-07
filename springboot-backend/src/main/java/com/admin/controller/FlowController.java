@@ -10,6 +10,7 @@ import com.admin.common.utils.GostUtil;
 import com.admin.entity.*;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
+import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import org.springframework.web.bind.annotation.*;
@@ -51,12 +52,10 @@ public class FlowController extends BaseController {
 
     // 常量定义
     private static final String SUCCESS_RESPONSE = "ok";
-    private static final String DEFAULT_USER_TUNNEL_ID = "0";
     private static final long BYTES_TO_GB = 1024L * 1024L * 1024L;
 
     // 用于同步相同用户和隧道的流量更新操作
     private static final ConcurrentHashMap<String, Object> USER_LOCKS = new ConcurrentHashMap<>();
-    private static final ConcurrentHashMap<String, Object> TUNNEL_LOCKS = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, Object> FORWARD_LOCKS = new ConcurrentHashMap<>();
 
     // 缓存加密器实例，避免重复创建
@@ -139,7 +138,8 @@ public class FlowController extends BaseController {
     @LogAnnotation
     public String uploadFlowData(@RequestBody String rawData, String secret) {
         // 1. 验证节点权限
-        if (!isValidNode(secret)) {
+        Node node = nodeService.getOne(new QueryWrapper<Node>().eq("secret", secret));
+        if (node == null) {
             return SUCCESS_RESPONSE;
         }
 
@@ -155,7 +155,7 @@ public class FlowController extends BaseController {
         // 记录日志
         log.info("节点上报流量数据{}", flowDataList);
         // 4. 处理流量数据
-        return processFlowData(flowDataList);
+        return processFlowData(flowDataList, node);
     }
 
     /**
@@ -212,31 +212,27 @@ public class FlowController extends BaseController {
     /**
      * 处理流量数据的核心逻辑
      */
-    private String processFlowData(FlowDto flowDataList) {
+    private String processFlowData(FlowDto flowDataList, Node reportingNode) {
         String[] serviceIds = parseServiceName(flowDataList.getN());
         String forwardId = serviceIds[0];
         String userId = serviceIds[1];
         String userTunnelId = serviceIds[2];
 
+        if (StrUtil.isBlank(forwardId) || StrUtil.isBlank(userId) || !isNumeric(forwardId) || !isNumeric(userId)) {
+            return SUCCESS_RESPONSE;
+        }
+
         Forward forward = forwardService.getById(forwardId);
 
-        // 获取流量计费类型
-        int flowType = getFlowType(forward);
-
         //  处理流量倍率及单双向计算
-        FlowDto flowStats = filterFlowData(flowDataList, forward, flowType);
+        FlowDto flowStats = filterFlowData(flowDataList, forward, reportingNode);
 
         // 先更新所有流量统计 - 确保流量数据的一致性
         updateForwardFlow(forwardId, flowStats);
         updateUserFlow(userId, flowStats);
-        updateUserTunnelFlow(userTunnelId, flowStats);
-
         // 7. 检查和服务暂停操作
         String name = buildServiceName(forwardId, userId, userTunnelId);
-        if (!Objects.equals(userTunnelId, DEFAULT_USER_TUNNEL_ID)) { // 非管理员的转发需要检测流量限制
-            checkUserRelatedLimits(userId, name);
-            checkUserTunnelRelatedLimits(userTunnelId, name, userId);
-        }
+        checkUserRelatedLimits(userId, name);
 
         return SUCCESS_RESPONSE;
     }
@@ -272,33 +268,6 @@ public class FlowController extends BaseController {
         pauseService(forwardList, name);
     }
 
-    public void checkUserTunnelRelatedLimits(String userTunnelId, String name, String userId) {
-
-        UserTunnel userTunnel = userTunnelService.getById(userTunnelId);
-        if (userTunnel == null) return;
-        long flow = userTunnel.getInFlow() + userTunnel.getOutFlow();
-        if (flow >= userTunnel.getFlow() *  BYTES_TO_GB) {
-            pauseSpecificForward(userTunnel.getTunnelId(), name, userId);
-            return;
-        }
-
-        if (userTunnel.getExpTime() != null && userTunnel.getExpTime() <= System.currentTimeMillis()) {
-            pauseSpecificForward(userTunnel.getTunnelId(), name, userId);
-            return;
-        }
-
-        if (userTunnel.getStatus() != 1) {
-            pauseSpecificForward(userTunnel.getTunnelId(), name, userId);
-        }
-
-
-    }
-
-    private void pauseSpecificForward(Integer tunnelId, String name, String userId) {
-        List<Forward> forwardList = forwardService.list(new QueryWrapper<Forward>().eq("tunnel_id", tunnelId).eq("user_id", userId));
-        pauseService(forwardList, name);
-    }
-
     public void pauseService(List<Forward> forwardList, String name) {
         for (Forward forward : forwardList) {
             Tunnel tunnel = tunnelService.getById(forward.getTunnelId());
@@ -313,31 +282,42 @@ public class FlowController extends BaseController {
         }
     }
 
-    private FlowDto filterFlowData(FlowDto flowDto, Forward forward, int flowType) {
-        if (forward != null) {
-            Tunnel tunnel = tunnelService.getById(forward.getTunnelId());
-            if (tunnel != null) {
-                BigDecimal trafficRatio = tunnel.getTrafficRatio();
-
-                BigDecimal originalD = BigDecimal.valueOf(flowDto.getD());
-                BigDecimal originalU = BigDecimal.valueOf(flowDto.getU());
-
-                BigDecimal newD = originalD.multiply(trafficRatio);
-                BigDecimal newU = originalU.multiply(trafficRatio);
-
-                flowDto.setD(newD.longValue() * flowType);
-                flowDto.setU(newU.longValue() * flowType);
-            }
+    private FlowDto filterFlowData(FlowDto flowDto, Forward forward, Node reportingNode) {
+        if (forward == null) {
+            return flowDto;
         }
+        Tunnel tunnel = tunnelService.getById(forward.getTunnelId());
+        if (tunnel == null) {
+            return flowDto;
+        }
+
+        BigDecimal trafficRatio = calculateNodeTrafficRatio(tunnel, reportingNode);
+        BigDecimal originalD = BigDecimal.valueOf(flowDto.getD());
+        BigDecimal originalU = BigDecimal.valueOf(flowDto.getU());
+
+        BigDecimal newD = originalD.multiply(trafficRatio);
+        BigDecimal newU = originalU.multiply(trafficRatio);
+
+        flowDto.setD(newD.longValue());
+        flowDto.setU(newU.longValue());
         return flowDto;
     }
 
-    private int getFlowType(Forward forward) {
-        int defaultFlowType = 2;
-        if (forward == null) return defaultFlowType;
-        Tunnel tunnel = tunnelService.getById(forward.getTunnelId());
-        if (tunnel == null) return defaultFlowType;
-        return tunnel.getFlow();
+    private BigDecimal calculateNodeTrafficRatio(Tunnel tunnel, Node reportingNode) {
+        BigDecimal inRatio = getNodeTrafficRatio(reportingNode);
+        if (tunnel.getType() != null && tunnel.getType() == 2) {
+            Node outNode = nodeService.getNodeById(tunnel.getOutNodeId());
+            BigDecimal outRatio = getNodeTrafficRatio(outNode);
+            return inRatio.add(outRatio);
+        }
+        return inRatio;
+    }
+
+    private BigDecimal getNodeTrafficRatio(Node node) {
+        if (node == null || node.getTrafficRatio() == null) {
+            return BigDecimal.ONE;
+        }
+        return node.getTrafficRatio();
     }
 
     private void updateForwardFlow(String forwardId, FlowDto flowStats) {
@@ -365,43 +345,43 @@ public class FlowController extends BaseController {
         }
     }
 
-    private void updateUserTunnelFlow(String userTunnelId, FlowDto flowStats) {
-        if (Objects.equals(userTunnelId, DEFAULT_USER_TUNNEL_ID)) {
-            return; // 默认隧道不需要更新，返回成功
-        }
-
-        // 对相同用户隧道的流量更新进行同步，避免并发覆盖
-        synchronized (getTunnelLock(userTunnelId)) {
-            UpdateWrapper<UserTunnel> updateWrapper = new UpdateWrapper<>();
-            updateWrapper.eq("id", userTunnelId);
-            updateWrapper.setSql("in_flow = in_flow + " + flowStats.getD());
-            updateWrapper.setSql("out_flow = out_flow + " + flowStats.getU());
-            userTunnelService.update(null, updateWrapper);
-        }
-    }
-
     private Object getUserLock(String userId) {
         return USER_LOCKS.computeIfAbsent(userId, k -> new Object());
-    }
-
-    private Object getTunnelLock(String userTunnelId) {
-        return TUNNEL_LOCKS.computeIfAbsent(userTunnelId, k -> new Object());
     }
 
     private Object getForwardLock(String forwardId) {
         return FORWARD_LOCKS.computeIfAbsent(forwardId, k -> new Object());
     }
 
-    private boolean isValidNode(String secret) {
-        int nodeCount = nodeService.count(new QueryWrapper<Node>().eq("secret", secret));
-        return nodeCount > 0;
+    private String[] parseServiceName(String serviceName) {
+        if (StrUtil.isBlank(serviceName)) {
+            return new String[]{"", "", "0"};
+        }
+        String[] parts = serviceName.split("_");
+        if (parts.length >= 4) {
+            String last = parts[parts.length - 1];
+            if (isServiceSuffix(last)) {
+                parts = java.util.Arrays.copyOf(parts, parts.length - 1);
+            }
+        }
+        if (parts.length == 2) {
+            return new String[]{parts[0], parts[1], "0"};
+        }
+        if (parts.length >= 3) {
+            return new String[]{parts[0], parts[1], parts[2]};
+        }
+        return new String[]{"", "", "0"};
     }
 
-    private String[] parseServiceName(String serviceName) {
-        return serviceName.split("_");
+    private boolean isServiceSuffix(String suffix) {
+        return "tcp".equals(suffix) || "udp".equals(suffix) || "tls".equals(suffix) || "chains".equals(suffix);
     }
 
     private String buildServiceName(String forwardId, String userId, String userTunnelId) {
         return forwardId + "_" + userId + "_" + userTunnelId;
+    }
+
+    private boolean isNumeric(String value) {
+        return value != null && value.matches("\\d+");
     }
 }

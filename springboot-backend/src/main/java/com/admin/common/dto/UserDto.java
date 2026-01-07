@@ -15,6 +15,10 @@ public class UserDto {
     @NotBlank(message = "密码不能为空")
     private String pwd;
 
+    private Integer allowNodeCreate;
+
+    private Integer speedId;
+
     @NotNull(message = "流量不能为空")
     @Min(value = 0, message = "流量不能小于0")
     private Long flow;

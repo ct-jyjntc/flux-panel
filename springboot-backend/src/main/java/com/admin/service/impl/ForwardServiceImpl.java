@@ -22,6 +22,8 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -55,13 +57,13 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
     private TunnelService tunnelService;
 
     @Resource
-    UserTunnelService userTunnelService;
-
-    @Resource
     UserService userService;
 
     @Resource
     NodeService nodeService;
+
+    @Resource
+    SpeedLimitService speedLimitService;
 
 
     @Override
@@ -104,7 +106,12 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
         }
 
         // 7. 调用Gost服务创建转发
-        R gostResult = createGostServices(forward, tunnel, permissionResult.getLimiter(), nodeInfo, permissionResult.getUserTunnel());
+        R limiterResult = ensureLimiterOnNodes(nodeInfo.getInNodes(), permissionResult.getLimiter());
+        if (limiterResult.getCode() != 0) {
+            this.removeById(forward.getId());
+            return limiterResult;
+        }
+        R gostResult = createGostServices(forward, tunnel, permissionResult.getLimiter(), nodeInfo);
 
         if (gostResult.getCode() != 0) {
             this.removeById(forward.getId());
@@ -153,6 +160,9 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
         if (tunnel.getStatus() != TUNNEL_STATUS_ACTIVE) {
             return R.err("隧道已禁用，无法更新转发");
         }
+        if (currentUser.getRoleId() != ADMIN_ROLE_ID && !Objects.equals(tunnel.getOwnerId(), currentUser.getUserId().longValue())) {
+            return R.err("你只能使用自己创建的隧道");
+        }
         boolean tunnelChanged = isTunnelChanged(existForward, forwardUpdateDto);
         // 4. 检查权限和限制
         UserPermissionResult permissionResult = null;
@@ -160,37 +170,24 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
             if (currentUser.getRoleId() == ADMIN_ROLE_ID) {
                 // 管理员操作自己的转发时，不需要检查权限限制
                 if (Objects.equals(currentUser.getUserId(), existForward.getUserId())) {
-                    permissionResult = UserPermissionResult.success(null, null);
+                    permissionResult = UserPermissionResult.success(getUserLimiter(currentUser.getUserId()));
                 } else {
-                    // 管理员操作用户转发时，需要检查原用户是否有新隧道权限
-                    // 获取原转发用户的信息
                     User originalUser = userService.getById(existForward.getUserId());
                     if (originalUser == null) {
                         return R.err("用户不存在");
                     }
 
-                    // 检查原用户是否有新隧道权限
-                    UserTunnel userTunnel = getUserTunnel(existForward.getUserId(), tunnel.getId().intValue());
-                    if (userTunnel == null) {
-                        return R.err("用户没有该隧道权限");
-                    }
-
-                    if (userTunnel.getStatus() != 1) {
-                        return R.err("隧道被禁用");
-                    }
-
-                    // 检查隧道权限到期时间
-                    if (userTunnel.getExpTime() != null && userTunnel.getExpTime() <= System.currentTimeMillis()) {
-                        return R.err("用户的该隧道权限已到期");
+                    if (tunnel.getOwnerId() != null && !Objects.equals(tunnel.getOwnerId(), existForward.getUserId().longValue())) {
+                        return R.err("用户只能使用自己创建的隧道");
                     }
 
                     // 检查原用户的流量和转发数量限制
-                    R quotaCheckResult = checkForwardQuota(existForward.getUserId(), tunnel.getId().intValue(), userTunnel, originalUser, forwardUpdateDto.getId());
+                    R quotaCheckResult = checkForwardQuota(existForward.getUserId(), originalUser, forwardUpdateDto.getId());
                     if (quotaCheckResult.getCode() != 0) {
                         return R.err("用户" + quotaCheckResult.getMsg());
                     }
 
-                    permissionResult = UserPermissionResult.success(userTunnel.getSpeedId(), userTunnel);
+                    permissionResult = UserPermissionResult.success(originalUser.getSpeedId());
                 }
             } else {
                 // 普通用户检查自己的权限
@@ -200,19 +197,7 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
                 }
             }
         }
-
-        // 5. 获取UserTunnel（即使隧道未变化也需要获取，用于构建服务名称）
-        UserTunnel userTunnel = null;
-        if (currentUser.getRoleId() != ADMIN_ROLE_ID) {
-            userTunnel = getUserTunnel(currentUser.getUserId(), tunnel.getId().intValue());
-            if (userTunnel == null) {
-                return R.err("你没有该隧道权限");
-            }
-        } else {
-            // 管理员用户也需要获取UserTunnel（如果存在的话），用于构建正确的服务名称
-            // 通过forward记录获取原始的用户ID
-            userTunnel = getUserTunnel(existForward.getUserId(), tunnel.getId().intValue());
-        }
+        Integer limiter = permissionResult != null ? permissionResult.getLimiter() : getUserLimiter(existForward.getUserId());
 
         // 6. 更新Forward对象
         Forward updatedForward = updateForwardEntity(forwardUpdateDto, existForward, tunnel);
@@ -222,15 +207,19 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
         if (nodeInfo.isHasError()) {
             return R.err(nodeInfo.getErrorMessage());
         }
+        R limiterResult = ensureLimiterOnNodes(nodeInfo.getInNodes(), limiter);
+        if (limiterResult.getCode() != 0) {
+            return limiterResult;
+        }
 
         // 8. 调用Gost服务更新转发
         R gostResult;
         if (tunnelChanged) {
             // 隧道变化时：先删除原配置，再创建新配置
-            gostResult = updateGostServicesWithTunnelChange(existForward, updatedForward, tunnel, permissionResult != null ? permissionResult.getLimiter() : null, nodeInfo, userTunnel);
+            gostResult = updateGostServicesWithTunnelChange(existForward, updatedForward, tunnel, limiter, nodeInfo);
         } else {
             // 隧道未变化时：直接更新配置
-            gostResult = updateGostServices(updatedForward, tunnel, permissionResult != null ? permissionResult.getLimiter() : null, nodeInfo, userTunnel);
+            gostResult = updateGostServices(updatedForward, tunnel, limiter, nodeInfo);
         }
 
         if (gostResult.getCode() != 0) {
@@ -259,16 +248,8 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
             return R.err("隧道不存在");
         }
 
-        // 4. 权限检查（仅普通用户需要）
-        UserTunnel userTunnel = null;
-        if (currentUser.getRoleId() != ADMIN_ROLE_ID) {
-            userTunnel = getUserTunnel(currentUser.getUserId(), tunnel.getId().intValue());
-            if (userTunnel == null) {
-                return R.err("你没有该隧道权限");
-            }
-        } else {
-            // 管理员删除用户记录时，需要获取对应的UserTunnel用于构建正确的服务名称
-            userTunnel = getUserTunnel(forward.getUserId(), tunnel.getId().intValue());
+        if (currentUser.getRoleId() != ADMIN_ROLE_ID && !Objects.equals(tunnel.getOwnerId(), currentUser.getUserId().longValue())) {
+            return R.err("你只能删除自己创建的隧道转发");
         }
 
         // 5. 获取所需的节点信息
@@ -278,7 +259,7 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
         }
 
         // 6. 调用Gost服务删除转发
-        R gostResult = deleteGostServices(forward, tunnel, nodeInfo, userTunnel);
+        R gostResult = deleteGostServices(forward, tunnel, nodeInfo);
         if (gostResult.getCode() != 0) {
             return gostResult;
         }
@@ -348,8 +329,11 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
             return R.err("隧道不存在");
         }
 
+        if (currentUser.getRoleId() != ADMIN_ROLE_ID && !Objects.equals(tunnel.getOwnerId(), currentUser.getUserId().longValue())) {
+            return R.err("你只能操作自己创建的隧道转发");
+        }
+
         // 4. 恢复服务时需要额外检查
-        UserTunnel userTunnel = null;
         if (targetStatus == FORWARD_STATUS_ACTIVE) {
             if (tunnel.getStatus() != TUNNEL_STATUS_ACTIVE) {
                 return R.err("隧道已禁用，无法恢复服务");
@@ -361,30 +345,7 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
                 if (flowCheckResult.getCode() != 0) {
                     return flowCheckResult;
                 }
-
-                userTunnel = getUserTunnel(currentUser.getUserId(), tunnel.getId().intValue());
-                if (userTunnel == null) {
-                    return R.err("你没有该隧道权限");
-                }
-
-                if (userTunnel.getStatus() != 1) {
-                    return R.err("隧道被禁用");
-                }
             }
-        }
-
-        // 5. 权限检查（仅普通用户需要）
-        if (currentUser.getRoleId() != ADMIN_ROLE_ID && userTunnel == null) {
-            userTunnel = getUserTunnel(currentUser.getUserId(), tunnel.getId().intValue());
-            if (userTunnel == null) {
-                return R.err("你没有该隧道权限");
-            }
-        }
-
-        // 6. 确保获取UserTunnel用于构建服务名称（包括管理员用户）
-        if (userTunnel == null) {
-            // 通过forward记录获取原始的用户ID来查找UserTunnel
-            userTunnel = getUserTunnel(forward.getUserId(), tunnel.getId().intValue());
         }
 
         // 7. 获取所需的节点信息
@@ -394,7 +355,7 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
         }
 
         // 8. 调用Gost服务
-        String serviceName = buildServiceName(forward.getId(), forward.getUserId(), userTunnel);
+        String serviceName = buildServiceName(forward.getId(), forward.getUserId());
         GostDto gostResult;
 
         boolean muxEnabled = Boolean.TRUE.equals(tunnel.getMuxEnabled());
@@ -906,69 +867,51 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
      */
     private UserPermissionResult checkUserPermissions(UserInfo currentUser, Tunnel tunnel, Long excludeForwardId) {
         if (currentUser.getRoleId() == ADMIN_ROLE_ID) {
-            return UserPermissionResult.success(null, null);
+            return UserPermissionResult.success(null);
         }
 
         // 获取用户信息
         User userInfo = userService.getById(currentUser.getUserId());
+        if (userInfo == null) {
+            return UserPermissionResult.error("用户不存在");
+        }
         if (userInfo.getExpTime() != null && userInfo.getExpTime() <= System.currentTimeMillis()) {
             return UserPermissionResult.error("当前账号已到期");
         }
-
-        // 检查用户隧道权限
-        UserTunnel userTunnel = getUserTunnel(currentUser.getUserId(), tunnel.getId().intValue());
-        if (userTunnel == null) {
-            return UserPermissionResult.error("你没有该隧道权限");
+        if (userInfo.getStatus() != null && userInfo.getStatus() != 1) {
+            return UserPermissionResult.error("当前账号已禁用");
         }
 
-        if (userTunnel.getStatus() != 1) {
-            return UserPermissionResult.error("隧道被禁用");
-        }
-
-        // 检查隧道权限到期时间
-        if (userTunnel.getExpTime() != null && userTunnel.getExpTime() <= System.currentTimeMillis()) {
-            return UserPermissionResult.error("该隧道权限已到期");
+        if (!Objects.equals(tunnel.getOwnerId(), currentUser.getUserId().longValue())) {
+            return UserPermissionResult.error("你只能使用自己创建的隧道");
         }
 
         // 流量限制检查
         if (userInfo.getFlow() <= 0) {
             return UserPermissionResult.error("用户总流量已用完");
         }
-        if (userTunnel.getFlow() <= 0) {
-            return UserPermissionResult.error("该隧道流量已用完");
-        }
 
         // 转发数量限制检查
-        R quotaCheckResult = checkForwardQuota(currentUser.getUserId(), tunnel.getId().intValue(), userTunnel, userInfo, excludeForwardId);
+        R quotaCheckResult = checkForwardQuota(currentUser.getUserId(), userInfo, excludeForwardId);
         if (quotaCheckResult.getCode() != 0) {
             return UserPermissionResult.error(quotaCheckResult.getMsg());
         }
 
-        return UserPermissionResult.success(userTunnel.getSpeedId(), userTunnel);
+        return UserPermissionResult.success(userInfo.getSpeedId());
     }
 
     /**
      * 检查用户转发数量限制
      */
-    private R checkForwardQuota(Integer userId, Integer tunnelId, UserTunnel userTunnel, User userInfo, Long excludeForwardId) {
+    private R checkForwardQuota(Integer userId, User userInfo, Long excludeForwardId) {
         // 检查用户总转发数量限制
-        long userForwardCount = this.count(new QueryWrapper<Forward>().eq("user_id", userId));
+        QueryWrapper<Forward> userForwardQuery = new QueryWrapper<Forward>().eq("user_id", userId);
+        if (excludeForwardId != null) {
+            userForwardQuery.ne("id", excludeForwardId);
+        }
+        long userForwardCount = this.count(userForwardQuery);
         if (userForwardCount >= userInfo.getNum()) {
             return R.err("用户总转发数量已达上限，当前限制：" + userInfo.getNum() + "个");
-        }
-
-        // 检查用户在该隧道的转发数量限制
-        QueryWrapper<Forward> tunnelQuery = new QueryWrapper<Forward>()
-                .eq("user_id", userId)
-                .eq("tunnel_id", tunnelId);
-
-        if (excludeForwardId != null) {
-            tunnelQuery.ne("id", excludeForwardId);
-        }
-
-        long tunnelForwardCount = this.count(tunnelQuery);
-        if (tunnelForwardCount >= userTunnel.getNum()) {
-            return R.err("该隧道转发数量已达上限，当前限制：" + userTunnel.getNum() + "个");
         }
 
         return R.ok();
@@ -982,28 +925,17 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
         if (userInfo.getExpTime() != null && userInfo.getExpTime() <= System.currentTimeMillis()) {
             return R.err("当前账号已到期");
         }
-
-        UserTunnel userTunnel = getUserTunnel(userId, tunnel.getId().intValue());
-        if (userTunnel == null) {
-            return R.err("你没有该隧道权限");
+        if (userInfo.getStatus() != null && userInfo.getStatus() != 1) {
+            return R.err("当前账号已禁用");
         }
 
-        // 检查隧道权限到期时间
-        if (userTunnel.getExpTime() != null && userTunnel.getExpTime() <= System.currentTimeMillis()) {
-            return R.err("该隧道权限已到期，无法恢复服务");
+        if (!Objects.equals(tunnel.getOwnerId(), userId.longValue())) {
+            return R.err("你只能使用自己创建的隧道");
         }
 
         // 检查用户总流量限制
         if (userInfo.getFlow() * BYTES_TO_GB <= userInfo.getInFlow() + userInfo.getOutFlow()) {
             return R.err("用户总流量已用完，无法恢复服务");
-        }
-
-        // 检查隧道流量限制
-        // 数据库中的流量已按计费类型处理，直接使用总和
-        long tunnelFlow = userTunnel.getInFlow() + userTunnel.getOutFlow();
-
-        if (userTunnel.getFlow() * BYTES_TO_GB <= tunnelFlow) {
-            return R.err("该隧道流量已用完，无法恢复服务");
         }
 
         return R.ok();
@@ -1116,8 +1048,8 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
     /**
      * 创建Gost服务
      */
-    private R createGostServices(Forward forward, Tunnel tunnel, Integer limiter, NodeInfo nodeInfo, UserTunnel userTunnel) {
-        String serviceName = buildServiceName(forward.getId(), forward.getUserId(), userTunnel);
+    private R createGostServices(Forward forward, Tunnel tunnel, Integer limiter, NodeInfo nodeInfo) {
+        String serviceName = buildServiceName(forward.getId(), forward.getUserId());
         List<Node> inNodes = nodeInfo.getInNodes() != null && !nodeInfo.getInNodes().isEmpty()
                 ? nodeInfo.getInNodes()
                 : (nodeInfo.getInNode() != null ? Collections.singletonList(nodeInfo.getInNode()) : Collections.emptyList());
@@ -1184,8 +1116,8 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
     /**
      * 更新Gost服务
      */
-    private R updateGostServices(Forward forward, Tunnel tunnel, Integer limiter, NodeInfo nodeInfo, UserTunnel userTunnel) {
-        String serviceName = buildServiceName(forward.getId(), forward.getUserId(), userTunnel);
+    private R updateGostServices(Forward forward, Tunnel tunnel, Integer limiter, NodeInfo nodeInfo) {
+        String serviceName = buildServiceName(forward.getId(), forward.getUserId());
         List<Node> inNodes = nodeInfo.getInNodes() != null && !nodeInfo.getInNodes().isEmpty()
                 ? nodeInfo.getInNodes()
                 : (nodeInfo.getInNode() != null ? Collections.singletonList(nodeInfo.getInNode()) : Collections.emptyList());
@@ -1241,7 +1173,7 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
     /**
      * 隧道变化时更新Gost服务：先删除原配置，再创建新配置
      */
-    private R updateGostServicesWithTunnelChange(Forward existForward, Forward updatedForward, Tunnel newTunnel, Integer limiter, NodeInfo nodeInfo, UserTunnel userTunnel) {
+    private R updateGostServicesWithTunnelChange(Forward existForward, Forward updatedForward, Tunnel newTunnel, Integer limiter, NodeInfo nodeInfo) {
         // 1. 获取原隧道信息
         Tunnel oldTunnel = tunnelService.getById(existForward.getTunnelId());
         if (oldTunnel == null) {
@@ -1256,7 +1188,7 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
         }
 
         // 3. 创建新的Gost服务配置
-        R createResult = createGostServices(updatedForward, newTunnel, limiter, nodeInfo, userTunnel);
+        R createResult = createGostServices(updatedForward, newTunnel, limiter, nodeInfo);
         if (createResult.getCode() != 0) {
             updateForwardStatusToError(updatedForward);
             return R.err("创建新隧道配置失败: " + createResult.getMsg());
@@ -1270,8 +1202,7 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
      */
     private R deleteOldGostServices(Forward forward, Tunnel oldTunnel) {
         // 获取原隧道的用户隧道关系
-        UserTunnel oldUserTunnel = getUserTunnel(forward.getUserId(), oldTunnel.getId().intValue());
-        String serviceName = buildServiceName(forward.getId(), forward.getUserId(), oldUserTunnel);
+        String serviceName = buildServiceName(forward.getId(), forward.getUserId());
 
         // 获取原隧道的节点信息
         NodeInfo oldNodeInfo = getRequiredNodes(oldTunnel);
@@ -1326,8 +1257,8 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
     /**
      * 删除Gost服务
      */
-    private R deleteGostServices(Forward forward, Tunnel tunnel, NodeInfo nodeInfo, UserTunnel userTunnel) {
-        String serviceName = buildServiceName(forward.getId(), forward.getUserId(), userTunnel);
+    private R deleteGostServices(Forward forward, Tunnel tunnel, NodeInfo nodeInfo) {
+        String serviceName = buildServiceName(forward.getId(), forward.getUserId());
         List<Node> inNodes = nodeInfo.getInNodes() != null && !nodeInfo.getInNodes().isEmpty()
                 ? nodeInfo.getInNodes()
                 : (nodeInfo.getInNode() != null ? Collections.singletonList(nodeInfo.getInNode()) : Collections.emptyList());
@@ -1460,13 +1391,50 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
         this.updateById(forward);
     }
 
-    /**
-     * 获取用户隧道关系
-     */
-    private UserTunnel getUserTunnel(Integer userId, Integer tunnelId) {
-        return userTunnelService.getOne(new QueryWrapper<UserTunnel>()
-                .eq("user_id", userId)
-                .eq("tunnel_id", tunnelId));
+    private Integer getUserLimiter(Integer userId) {
+        if (userId == null) {
+            return null;
+        }
+        User user = userService.getById(userId);
+        if (user == null) {
+            return null;
+        }
+        return user.getSpeedId();
+    }
+
+    private R ensureLimiterOnNodes(List<Node> inNodes, Integer limiterId) {
+        if (limiterId == null) {
+            return R.ok();
+        }
+        if (inNodes == null || inNodes.isEmpty()) {
+            return R.ok();
+        }
+        SpeedLimit speedLimit = speedLimitService.getById(limiterId);
+        if (speedLimit == null) {
+            return R.err("限速规则不存在");
+        }
+        String speedInMBps = convertBitsToMBps(speedLimit.getSpeed());
+        for (Node inNode : inNodes) {
+            GostDto updateResult = GostUtil.UpdateLimiters(inNode.getId(), speedLimit.getId(), speedInMBps);
+            if (updateResult != null && updateResult.getMsg() != null && updateResult.getMsg().contains(GOST_NOT_FOUND_MSG)) {
+                GostDto addResult = GostUtil.AddLimiters(inNode.getId(), speedLimit.getId(), speedInMBps);
+                if (!isGostOperationSuccess(addResult)) {
+                    return R.err("创建限速器失败：" + addResult.getMsg());
+                }
+            } else if (!isGostOperationSuccess(updateResult)) {
+                return R.err("更新限速器失败：" + (updateResult != null ? updateResult.getMsg() : "未知错误"));
+            }
+        }
+        return R.ok();
+    }
+
+    private String convertBitsToMBps(Integer speedInBits) {
+        if (speedInBits == null) {
+            return "0";
+        }
+        double mbs = speedInBits / 8.0;
+        BigDecimal bd = new BigDecimal(mbs).setScale(1, RoundingMode.HALF_UP);
+        return bd.doubleValue() + "";
     }
 
     /**
@@ -1608,9 +1576,8 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
     /**
      * 构建服务名称，优化后减少重复查询
      */
-    private String buildServiceName(Long forwardId, Integer userId, UserTunnel userTunnel) {
-        int userTunnelId = (userTunnel != null) ? userTunnel.getId() : 0;
-        return forwardId + "_" + userId + "_" + userTunnelId;
+    private String buildServiceName(Long forwardId, Integer userId) {
+        return forwardId + "_" + userId + "_0";
     }
 
 
@@ -1619,18 +1586,13 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
         if (tunnel == null) {
             return;
         }
-        UserTunnel userTunnel = getUserTunnel(forward.getUserId(), tunnel.getId().intValue());
         NodeInfo nodeInfo = getRequiredNodes(tunnel);
         if (nodeInfo.isHasError()) {
             return;
         }
-        Integer limiter;
-        if (userTunnel == null) {
-            limiter = null;
-        } else {
-            limiter = userTunnel.getSpeedId();
-        }
-        updateGostServices(forward, tunnel, limiter, nodeInfo, userTunnel);
+        Integer limiter = getUserLimiter(forward.getUserId());
+        ensureLimiterOnNodes(nodeInfo.getInNodes(), limiter);
+        updateGostServices(forward, tunnel, limiter, nodeInfo);
     }
 
     @Override
@@ -1651,8 +1613,7 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
 
         int err = 0;
         for (Forward forward : forwards) {
-            UserTunnel userTunnel = getUserTunnel(forward.getUserId(), newTunnel.getId().intValue());
-            Integer limiter = userTunnel != null ? userTunnel.getSpeedId() : null;
+            Integer limiter = getUserLimiter(forward.getUserId());
 
             R deleteResult = deleteOldGostServices(forward, oldTunnel);
             if (deleteResult.getCode() != 0) {
@@ -1662,7 +1623,13 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
             if (newTunnel.getType() == TUNNEL_TYPE_TUNNEL_FORWARD && Boolean.TRUE.equals(newTunnel.getMuxEnabled())) {
                 forward.setOutPort(newTunnel.getMuxPort());
             }
-            R createResult = createGostServices(forward, newTunnel, limiter, nodeInfo, userTunnel);
+            R limiterResult = ensureLimiterOnNodes(nodeInfo.getInNodes(), limiter);
+            if (limiterResult.getCode() != 0) {
+                updateForwardStatusToError(forward);
+                err++;
+                continue;
+            }
+            R createResult = createGostServices(forward, newTunnel, limiter, nodeInfo);
             if (createResult.getCode() != 0) {
                 updateForwardStatusToError(forward);
                 err++;
@@ -1701,21 +1668,19 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
         private final boolean hasError;
         private final String errorMessage;
         private final Integer limiter;
-        private final UserTunnel userTunnel;
 
-        private UserPermissionResult(boolean hasError, String errorMessage, Integer limiter, UserTunnel userTunnel) {
+        private UserPermissionResult(boolean hasError, String errorMessage, Integer limiter) {
             this.hasError = hasError;
             this.errorMessage = errorMessage;
             this.limiter = limiter;
-            this.userTunnel = userTunnel;
         }
 
-        public static UserPermissionResult success(Integer limiter, UserTunnel userTunnel) {
-            return new UserPermissionResult(false, null, limiter, userTunnel);
+        public static UserPermissionResult success(Integer limiter) {
+            return new UserPermissionResult(false, null, limiter);
         }
 
         public static UserPermissionResult error(String errorMessage) {
-            return new UserPermissionResult(true, errorMessage, null, null);
+            return new UserPermissionResult(true, errorMessage, null);
         }
     }
 

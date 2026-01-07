@@ -12,7 +12,6 @@ import com.admin.common.utils.Md5Util;
 import com.admin.entity.*;
 import com.admin.mapper.ForwardMapper;
 import com.admin.mapper.UserMapper;
-import com.admin.mapper.UserTunnelMapper;
 import com.admin.service.*;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -24,6 +23,8 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -95,8 +96,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     @Lazy
     private ForwardMapper forwardMapper;
     
-    @Resource
-    private UserTunnelMapper userTunnelMapper;
     
     @Resource
     @Lazy
@@ -107,7 +106,10 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     private NodeService nodeService;
 
     @Resource
-    UserTunnelService userTunnelService;
+    UserNodeService userNodeService;
+
+    @Resource
+    private SpeedLimitService speedLimitService;
 
     @Resource
     ViteConfigService viteConfigService;
@@ -157,6 +159,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                 .put(LOGIN_TOKEN_FIELD, token)
                 .put(LOGIN_NAME_FIELD, user.getUser())
                 .put(LOGIN_ROLE_ID_FIELD, user.getRoleId())
+                .put("userId", user.getId())
+                .put("allowNodeCreate", user.getAllowNodeCreate())
                 .put(LOGIN_REQUIRE_PASSWORD_CHANGE_FIELD, requirePasswordChange)
                 .build());
     }
@@ -209,7 +213,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     @Override
     public R updateUser(UserUpdateDto userUpdateDto) {
         // 1. 验证用户是否存在
-        if (!isUserExists(userUpdateDto.getId())) {
+        User existingUser = this.getById(userUpdateDto.getId());
+        if (existingUser == null) {
             return R.err(ERROR_USER_NOT_FOUND);
         }
 
@@ -225,16 +230,20 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             return updateValidationResult;
         }
 
+        Integer oldSpeedId = existingUser.getSpeedId();
+
         // 4. 构建更新实体并保存
         User updateUser = buildUpdateUserEntity(userUpdateDto);
         boolean result = this.updateById(updateUser);
-        
+
         if (result) {
+            if (!Objects.equals(oldSpeedId, userUpdateDto.getSpeedId())) {
+                updateUserForwardsSpeed(existingUser.getId(), userUpdateDto.getSpeedId());
+            }
             // 5. 处理到期时间延时任务
             return R.ok(SUCCESS_UPDATE_MSG);
-        } else {
-            return R.err(ERROR_UPDATE_FAILED);
         }
+        return R.err(ERROR_UPDATE_FAILED);
     }
 
     /**
@@ -351,12 +360,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             user.setInFlow(0L);
             user.setOutFlow(0L);
             this.updateById(user);
-        }else { // 清零隧道流量
-            UserTunnel tunnel = userTunnelService.getById(resetFlowDto.getId());
-            if (tunnel == null) return R.err("隧道不存在");
-            tunnel.setInFlow(0L);
-            tunnel.setOutFlow(0L);
-            userTunnelService.updateById(tunnel);
         }
         return R.ok();
     }
@@ -436,6 +439,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         // 设置默认属性
         user.setStatus(userDto.getStatus() != null ? userDto.getStatus() : USER_STATUS_ACTIVE);
         user.setRoleId(USER_ROLE_ID);
+        user.setAllowNodeCreate(userDto.getAllowNodeCreate() != null ? userDto.getAllowNodeCreate() : 0);
+        user.setSpeedId(userDto.getSpeedId());
         
         // 设置时间戳
         long currentTime = System.currentTimeMillis();
@@ -476,6 +481,11 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         
         // 设置更新时间
         user.setUpdatedTime(System.currentTimeMillis());
+
+        if (userUpdateDto.getAllowNodeCreate() == null) {
+            user.setAllowNodeCreate(null);
+        }
+        user.setSpeedId(userUpdateDto.getSpeedId());
         
         return user;
     }
@@ -526,9 +536,12 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     private void deleteUserRelatedData(Long userId) {
         // 1. 删除用户的所有转发和对应的Gost服务
         deleteUserForwardsAndGostServices(userId);
-        
-        // 2. 删除用户隧道权限
-        deleteUserTunnelPermissions(userId);
+
+        // 2. 删除用户创建的隧道
+        deleteUserOwnedTunnels(userId);
+
+        // 3. 删除用户节点权限
+        deleteUserNodePermissions(userId);
     }
 
     /**
@@ -568,11 +581,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         Node inNode = nodeService.getNodeById(tunnel.getInNodeId());
         if (inNode == null) return;
 
-        // 获取用户隧道关系
-        UserTunnel userTunnel = getUserTunnelRelation(userId, tunnel.getId());
-        if (userTunnel == null) return;
-
-        String serviceName = buildServiceName(forward.getId(), userId, userTunnel.getId());
+        String serviceName = buildServiceName(forward.getId(), userId);
 
         // 删除主服务
         GostUtil.DeleteService(inNode.getId(), serviceName);
@@ -599,28 +608,14 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     }
 
     /**
-     * 获取用户隧道关系
-     * 
-     * @param userId 用户ID
-     * @param tunnelId 隧道ID
-     * @return 用户隧道关系对象
-     */
-    private UserTunnel getUserTunnelRelation(Long userId, Long tunnelId) {
-        return userTunnelService.getOne(new QueryWrapper<UserTunnel>()
-                .eq("user_id", userId)
-                .eq("tunnel_id", tunnelId));
-    }
-
-    /**
      * 构建服务名称
      * 
      * @param forwardId 转发ID
      * @param userId 用户ID
-     * @param userTunnelId 用户隧道ID
      * @return 服务名称
      */
-    private String buildServiceName(Long forwardId, Long userId, Integer userTunnelId) {
-        return forwardId + "_" + userId + "_" + userTunnelId;
+    private String buildServiceName(Long forwardId, Long userId) {
+        return forwardId + "_" + userId + "_0";
     }
 
 
@@ -629,10 +624,107 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
      * 
      * @param userId 用户ID
      */
-    private void deleteUserTunnelPermissions(Long userId) {
-        QueryWrapper<UserTunnel> userTunnelQuery = new QueryWrapper<>();
-        userTunnelQuery.eq("user_id", userId);
-        userTunnelMapper.delete(userTunnelQuery);
+    private void deleteUserNodePermissions(Long userId) {
+        userNodeService.remove(new QueryWrapper<UserNode>().eq("user_id", userId));
+    }
+
+    private void deleteUserOwnedTunnels(Long userId) {
+        List<Tunnel> tunnels = tunnelService.list(new QueryWrapper<Tunnel>().eq("owner_id", userId));
+        for (Tunnel tunnel : tunnels) {
+            try {
+                tunnelService.deleteTunnel(tunnel.getId());
+            } catch (Exception e) {
+                log.info("删除用户隧道失败: {}", tunnel.getId(), e);
+            }
+        }
+    }
+
+    private void updateUserForwardsSpeed(Long userId, Integer speedId) {
+        QueryWrapper<Forward> queryWrapper = new QueryWrapper<>();
+        queryWrapper.eq("user_id", userId);
+        List<Forward> forwards = forwardMapper.selectList(queryWrapper);
+        if (forwards.isEmpty()) {
+            return;
+        }
+
+        SpeedLimit speedLimit = null;
+        String speedInMBps = null;
+        if (speedId != null) {
+            speedLimit = speedLimitService.getById(speedId.longValue());
+            if (speedLimit == null) {
+                return;
+            }
+            speedInMBps = convertBitsToMBps(speedLimit.getSpeed());
+        }
+
+        for (Forward forward : forwards) {
+            Tunnel tunnel = tunnelService.getById(forward.getTunnelId());
+            if (tunnel == null) {
+                continue;
+            }
+            List<Node> inNodes = resolveInNodes(tunnel);
+            if (inNodes.isEmpty()) {
+                continue;
+            }
+
+            if (speedLimit != null) {
+                for (Node inNode : inNodes) {
+                    ensureLimiterOnNode(inNode, speedLimit, speedInMBps);
+                }
+            }
+
+            String interfaceName = tunnel.getType() != TUNNEL_TYPE_TUNNEL_FORWARD ? forward.getInterfaceName() : null;
+            String serviceName = buildServiceName(forward.getId(), userId);
+            for (Node inNode : inNodes) {
+                GostUtil.UpdateService(inNode.getId(), serviceName, forward.getInPort(), speedId, forward.getRemoteAddr(), tunnel.getType(), tunnel, forward.getStrategy(), interfaceName);
+            }
+        }
+    }
+
+    private void ensureLimiterOnNode(Node node, SpeedLimit speedLimit, String speedInMBps) {
+        if (node == null || speedLimit == null) {
+            return;
+        }
+        GostDto updateResult = GostUtil.UpdateLimiters(node.getId(), speedLimit.getId(), speedInMBps);
+        if (updateResult != null && updateResult.getMsg() != null && updateResult.getMsg().contains("not found")) {
+            GostUtil.AddLimiters(node.getId(), speedLimit.getId(), speedInMBps);
+        }
+    }
+
+    private List<Node> resolveInNodes(Tunnel tunnel) {
+        List<Long> inNodeIds = new ArrayList<>();
+        if (tunnel.getInNodeIds() != null && !tunnel.getInNodeIds().trim().isEmpty()) {
+            for (String part : tunnel.getInNodeIds().split(",")) {
+                String trimmed = part.trim();
+                if (!trimmed.isEmpty()) {
+                    try {
+                        inNodeIds.add(Long.parseLong(trimmed));
+                    } catch (NumberFormatException ignored) {
+                    }
+                }
+            }
+        }
+        if (inNodeIds.isEmpty() && tunnel.getInNodeId() != null) {
+            inNodeIds.add(tunnel.getInNodeId());
+        }
+
+        List<Node> nodes = new ArrayList<>();
+        for (Long nodeId : inNodeIds) {
+            Node node = nodeService.getNodeById(nodeId);
+            if (node != null) {
+                nodes.add(node);
+            }
+        }
+        return nodes;
+    }
+
+    private String convertBitsToMBps(Integer speedInBits) {
+        if (speedInBits == null) {
+            return "0";
+        }
+        double mbs = speedInBits / 8.0;
+        BigDecimal bd = new BigDecimal(mbs).setScale(1, RoundingMode.HALF_UP);
+        return bd.doubleValue() + "";
     }
 
     /**
@@ -669,8 +761,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         // 1. 构造用户基本信息
         UserPackageDto.UserInfoDto userInfo = buildUserInfoDto(user);
         
-        // 2. 获取隧道权限详情
-        List<UserPackageDto.UserTunnelDetailDto> tunnelPermissions = getTunnelPermissions(user.getId());
+        // 2. 获取节点权限详情
+        List<UserPackageDto.UserNodeDetailDto> nodePermissions = getNodePermissions(user.getId());
         
         // 3. 获取转发详情
         List<UserPackageDto.UserForwardDetailDto> forwards = userMapper.getUserForwardDetails(user.getId().intValue());
@@ -681,7 +773,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         // 5. 构造返回结果
         UserPackageDto packageDto = new UserPackageDto();
         packageDto.setUserInfo(userInfo);
-        packageDto.setTunnelPermissions(tunnelPermissions);
+        packageDto.setNodePermissions(nodePermissions);
         packageDto.setForwards(forwards);
         packageDto.setStatisticsFlows(statisticsFlows);
         
@@ -711,13 +803,13 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     }
 
     /**
-     * 获取隧道权限详情
+     * 获取节点权限详情
      * 
      * @param userId 用户ID
-     * @return 隧道权限详情列表
+     * @return 节点权限详情列表
      */
-    private List<UserPackageDto.UserTunnelDetailDto> getTunnelPermissions(Long userId) {
-        return userMapper.getUserTunnelDetails(userId.intValue());
+    private List<UserPackageDto.UserNodeDetailDto> getNodePermissions(Long userId) {
+        return userMapper.getUserNodeDetails(userId.intValue());
     }
 
     /**

@@ -35,6 +35,8 @@ interface Node {
   portEnd: number;
   outPort?: number | null;
   version?: string;
+  ownerId?: number | null;
+  trafficRatio?: number;
   http?: number; // 0 关 1 开
   tls?: number;  // 0 关 1 开
   socks?: number; // 0 关 1 开
@@ -60,6 +62,7 @@ interface NodeForm {
   portSta: number;
   portEnd: number;
   outPort: number;
+  trafficRatio: number;
   http: number; // 0 关 1 开
   tls: number;  // 0 关 1 开
   socks: number; // 0 关 1 开
@@ -68,6 +71,9 @@ interface NodeForm {
 export default function NodePage() {
   const [nodeList, setNodeList] = useState<Node[]>([]);
   const [loading, setLoading] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [canCreateNode, setCanCreateNode] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [dialogVisible, setDialogVisible] = useState(false);
   const [dialogTitle, setDialogTitle] = useState('');
   const [isEdit, setIsEdit] = useState(false);
@@ -85,6 +91,7 @@ export default function NodePage() {
     portSta: 1000,
     portEnd: 65535,
     outPort: 1000,
+    trafficRatio: 1,
     http: 0,
     tls: 0,
     socks: 0
@@ -102,6 +109,12 @@ export default function NodePage() {
   const maxReconnectAttempts = 5;
 
   useEffect(() => {
+    const adminFlag = localStorage.getItem('admin') === 'true';
+    setIsAdmin(adminFlag);
+    const allowNodeCreate = localStorage.getItem('allow_node_create') === '1';
+    setCanCreateNode(adminFlag || allowNodeCreate);
+    const storedUserId = localStorage.getItem('user_id');
+    setCurrentUserId(storedUserId ? Number(storedUserId) : null);
     loadNodes();
     initWebSocket();
     
@@ -409,6 +422,12 @@ export default function NodePage() {
     if (!form.outPort || form.outPort < 1 || form.outPort > 65535) {
       newErrors.outPort = '出口共享端口必须在1-65535之间';
     }
+
+    if (isAdmin) {
+      if (form.trafficRatio < 0 || form.trafficRatio > 100) {
+        newErrors.trafficRatio = '流量倍率必须在0-100之间';
+      }
+    }
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -416,6 +435,10 @@ export default function NodePage() {
 
   // 新增节点
   const handleAdd = () => {
+    if (!canCreateNode) {
+      toast.error('当前账号无权创建节点');
+      return;
+    }
     setDialogTitle('新增节点');
     setIsEdit(false);
     setDialogVisible(true);
@@ -436,6 +459,7 @@ export default function NodePage() {
       portSta: node.portSta,
       portEnd: node.portEnd,
       outPort: typeof node.outPort === 'number' ? node.outPort : 1000,
+      trafficRatio: typeof node.trafficRatio === 'number' ? node.trafficRatio : 1,
       http: typeof node.http === 'number' ? node.http : 1,
       tls: typeof node.tls === 'number' ? node.tls : 1,
       socks: typeof node.socks === 'number' ? node.socks : 1
@@ -541,6 +565,7 @@ export default function NodePage() {
         portSta: form.portSta,
         portEnd: form.portEnd,
         outPort: form.outPort,
+        trafficRatio: form.trafficRatio,
         http: form.http,
         tls: form.tls,
         socks: form.socks
@@ -561,6 +586,7 @@ export default function NodePage() {
               portSta: form.portSta,
               portEnd: form.portEnd,
               outPort: form.outPort,
+              trafficRatio: form.trafficRatio,
               http: form.http,
               tls: form.tls,
               socks: form.socks
@@ -589,6 +615,7 @@ export default function NodePage() {
       portSta: 1000,
       portEnd: 65535,
       outPort: 1000,
+      trafficRatio: 1,
       http: 0,
       tls: 0,
       socks: 0
@@ -601,14 +628,16 @@ export default function NodePage() {
       <div className="px-4 lg:px-6 py-6">
         {/* 页面头部 */}
         <div className="flex items-center justify-end mb-6">
-          <Button
-            size="sm"
-            variant="flat"
-            color="primary"
-            onPress={handleAdd}
-          >
-            新增
-          </Button>
+          {canCreateNode && (
+            <Button
+              size="sm"
+              variant="flat"
+              color="primary"
+              onPress={handleAdd}
+            >
+              新增
+            </Button>
+          )}
         </div>
 
         {/* 节点列表 */}
@@ -633,6 +662,7 @@ export default function NodePage() {
                 <TableColumn>节点</TableColumn>
                 <TableColumn>入口IP</TableColumn>
                 <TableColumn>端口</TableColumn>
+                <TableColumn>倍率</TableColumn>
                 <TableColumn>版本</TableColumn>
                 <TableColumn>状态</TableColumn>
                 <TableColumn>开机时间</TableColumn>
@@ -645,7 +675,7 @@ export default function NodePage() {
               <TableBody
                 emptyContent={
                   <div className="text-default-500 text-sm py-8">
-                    暂无节点配置，点击上方按钮开始创建
+                    {canCreateNode ? '暂无节点配置，点击上方按钮开始创建' : '暂无节点权限，请联系管理员分配'}
                   </div>
                 }
               >
@@ -674,6 +704,11 @@ export default function NodePage() {
                       <div className="text-xs space-y-1">
                         <div>{node.portSta}-{node.portEnd}</div>
                         <div>出口端口: {node.outPort ?? '-'}</div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-xs">
+                        {typeof node.trafficRatio === 'number' ? `${node.trafficRatio}x` : '-'}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -719,41 +754,47 @@ export default function NodePage() {
                         <div>↓ {node.connectionStatus === 'online' && node.systemInfo ? formatSpeed(node.systemInfo.downloadSpeed) : '-'}</div>
                       </div>
                     </TableCell>
-                    <TableCell>
-                      <div className="text-xs space-y-1">
-                        <div>↑ {node.connectionStatus === 'online' && node.systemInfo ? formatTraffic(node.systemInfo.uploadTraffic) : '-'}</div>
-                        <div>↓ {node.connectionStatus === 'online' && node.systemInfo ? formatTraffic(node.systemInfo.downloadTraffic) : '-'}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex justify-end gap-1.5">
-                        <Button
-                          size="sm"
-                          variant="flat"
-                          color="success"
-                          onPress={() => handleCopyInstallCommand(node)}
-                          isLoading={node.copyLoading}
-                        >
-                          安装
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="flat"
-                          color="primary"
-                          onPress={() => handleEdit(node)}
-                        >
-                          编辑
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="flat"
-                          color="danger"
-                          onPress={() => handleDelete(node)}
-                        >
-                          删除
-                        </Button>
-                      </div>
-                    </TableCell>
+                  <TableCell>
+                    <div className="text-xs space-y-1">
+                      <div>↑ {node.connectionStatus === 'online' && node.systemInfo ? formatTraffic(node.systemInfo.uploadTraffic) : '-'}</div>
+                      <div>↓ {node.connectionStatus === 'online' && node.systemInfo ? formatTraffic(node.systemInfo.downloadTraffic) : '-'}</div>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex justify-end gap-1.5">
+                      {isAdmin || (currentUserId !== null && node.ownerId === currentUserId) ? (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="flat"
+                            color="success"
+                            onPress={() => handleCopyInstallCommand(node)}
+                            isLoading={node.copyLoading}
+                          >
+                            安装
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="flat"
+                            color="primary"
+                            onPress={() => handleEdit(node)}
+                          >
+                            编辑
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="flat"
+                            color="danger"
+                            onPress={() => handleDelete(node)}
+                          >
+                            删除
+                          </Button>
+                        </>
+                      ) : (
+                        <span className="text-xs text-default-400">-</span>
+                      )}
+                    </div>
+                  </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -857,7 +898,7 @@ export default function NodePage() {
                 </div>
 
                 <Input
-                  label="出口共享端口"
+                  label="出口共享端口（所有隧道共用）"
                   type="number"
                   placeholder="请输入出口共享端口"
                   value={form.outPort.toString()}
@@ -875,6 +916,29 @@ export default function NodePage() {
                     label: "text-default-600",
                   }}
                 />
+
+                {isAdmin && (
+                  <Input
+                    label="流量倍率"
+                    type="number"
+                    placeholder="1.0"
+                    value={form.trafficRatio.toString()}
+                    onChange={(e) => setForm(prev => ({ 
+                      ...prev, 
+                      trafficRatio: Number(e.target.value) || 0 
+                    }))}
+                    isInvalid={!!errors.trafficRatio}
+                    errorMessage={errors.trafficRatio}
+                    variant="bordered"
+                    min={0}
+                    max={100}
+                    step="0.1"
+                    classNames={{
+                      inputWrapper: "rounded-lg border border-default-200 dark:border-default-200/40 bg-transparent shadow-none",
+                      label: "text-default-600",
+                    }}
+                  />
+                )}
 
                 {/* 屏蔽协议 */}
                 <div className="mt-1">

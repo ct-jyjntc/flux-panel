@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { Button } from "@heroui/button";
 import { Input } from "@heroui/input";
-import { Select, SelectItem } from "@heroui/select";
 import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from "@heroui/modal";
 import { Chip } from "@heroui/chip";
 import { Spinner } from "@heroui/spinner";
@@ -20,8 +19,7 @@ import {
   createSpeedLimit, 
   getSpeedLimitList, 
   updateSpeedLimit, 
-  deleteSpeedLimit, 
-  getTunnelList 
+  deleteSpeedLimit
 } from "@/api";
 
 interface SpeedLimitRule {
@@ -29,30 +27,20 @@ interface SpeedLimitRule {
   name: string;
   speed: number;
   status: number;
-  tunnelId: number;
-  tunnelName: string;
   createdTime: string;
   updatedTime: string;
-}
-
-interface Tunnel {
-  id: number;
-  name: string;
 }
 
 interface SpeedLimitForm {
   id?: number;
   name: string;
   speed: number;
-  tunnelId: number | null;
-  tunnelName: string;
   status: number;
 }
 
 export default function LimitPage() {
   const [loading, setLoading] = useState(true);
   const [rules, setRules] = useState<SpeedLimitRule[]>([]);
-  const [tunnels, setTunnels] = useState<Tunnel[]>([]);
   
   // 模态框状态
   const [modalOpen, setModalOpen] = useState(false);
@@ -66,8 +54,6 @@ export default function LimitPage() {
   const [form, setForm] = useState<SpeedLimitForm>({
     name: '',
     speed: 100,
-    tunnelId: null,
-    tunnelName: '',
     status: 1
   });
   
@@ -82,21 +68,12 @@ export default function LimitPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [rulesRes, tunnelsRes] = await Promise.all([
-        getSpeedLimitList(),
-        getTunnelList()
-      ]);
+      const rulesRes = await getSpeedLimitList();
       
       if (rulesRes.code === 0) {
         setRules(rulesRes.data || []);
       } else {
         toast.error(rulesRes.msg || '获取限速规则失败');
-      }
-      
-      if (tunnelsRes.code === 0) {
-        setTunnels(tunnelsRes.data || []);
-      } else {
-        console.warn('获取隧道列表失败:', tunnelsRes.msg);
       }
     } catch (error) {
       console.error('加载数据失败:', error);
@@ -120,10 +97,6 @@ export default function LimitPage() {
       newErrors.speed = '请输入有效的速度限制（≥1 Mbps）';
     }
     
-    if (!form.tunnelId) {
-      newErrors.tunnelId = '请选择要绑定的隧道';
-    }
-    
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -134,8 +107,6 @@ export default function LimitPage() {
     setForm({
       name: '',
       speed: 100,
-      tunnelId: null,
-      tunnelName: '',
       status: 1
     });
     setErrors({});
@@ -149,8 +120,6 @@ export default function LimitPage() {
       id: rule.id,
       name: rule.name,
       speed: rule.speed,
-      tunnelId: rule.tunnelId,
-      tunnelName: rule.tunnelName,
       status: rule.status
     });
     setErrors({});
@@ -255,7 +224,6 @@ export default function LimitPage() {
               <TableColumn>规则名称</TableColumn>
               <TableColumn>状态</TableColumn>
               <TableColumn>速度限制</TableColumn>
-              <TableColumn>绑定隧道</TableColumn>
               <TableColumn className="text-right">操作</TableColumn>
             </TableHeader>
             <TableBody
@@ -283,15 +251,6 @@ export default function LimitPage() {
                     <Chip color="secondary" variant="flat" size="sm">
                       {rule.speed} Mbps
                     </Chip>
-                  </TableCell>
-                  <TableCell>
-                    {rule.tunnelName ? (
-                      <Chip color="primary" variant="flat" size="sm">
-                        {rule.tunnelName}
-                      </Chip>
-                    ) : (
-                      <span className="text-default-400 text-sm">未绑定</span>
-                    )}
                   </TableCell>
                   <TableCell>
                     <div className="flex justify-end gap-2">
@@ -336,7 +295,7 @@ export default function LimitPage() {
                     {isEdit ? '编辑限速规则' : '新增限速规则'}
                   </h2>
                   <p className="text-small text-default-500">
-                    {isEdit ? '修改现有限速规则的配置信息' : '创建新的限速规则并绑定到隧道'}
+                    {isEdit ? '修改现有限速规则的配置信息' : '创建新的限速规则'}
                   </p>
                 </ModalHeader>
                 <ModalBody>
@@ -367,37 +326,6 @@ export default function LimitPage() {
                       }
                     />
                     
-                    <Select
-                      label="绑定隧道"
-                      placeholder="请选择要绑定的隧道"
-                      selectedKeys={form.tunnelId ? [form.tunnelId.toString()] : []}
-                      onSelectionChange={(keys) => {
-                        const selectedKey = Array.from(keys)[0] as string;
-                        if (selectedKey) {
-                          const selectedTunnel = tunnels.find(tunnel => tunnel.id === parseInt(selectedKey));
-                          setForm(prev => ({ 
-                            ...prev, 
-                            tunnelId: parseInt(selectedKey),
-                            tunnelName: selectedTunnel?.name || ''
-                          }));
-                        } else {
-                          setForm(prev => ({ 
-                            ...prev, 
-                            tunnelId: null,
-                            tunnelName: ''
-                          }));
-                        }
-                      }}
-                      isInvalid={!!errors.tunnelId}
-                      errorMessage={errors.tunnelId}
-                      variant="bordered"
-                    >
-                      {tunnels.map((tunnel) => (
-                        <SelectItem key={tunnel.id}>
-                          {tunnel.name}
-                        </SelectItem>
-                      ))}
-                    </Select>
                   </div>
                 </ModalBody>
                 <ModalFooter>

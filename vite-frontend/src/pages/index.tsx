@@ -186,6 +186,11 @@ export default function IndexPage() {
         localStorage.setItem("role_id", response.data.role_id.toString());
         localStorage.setItem("name", response.data.name);
         localStorage.setItem("admin", (response.data.role_id === 0).toString());
+        if (response.data.userId !== undefined && response.data.userId !== null) {
+          localStorage.setItem("user_id", response.data.userId.toString());
+        }
+        const allowNodeCreate = response.data.allowNodeCreate ?? 0;
+        localStorage.setItem("allow_node_create", allowNodeCreate.toString());
         toast.success('检测到默认密码，即将跳转到修改密码页面');
         navigate("/change-password");
         return;
@@ -196,6 +201,11 @@ export default function IndexPage() {
       localStorage.setItem("role_id", response.data.role_id.toString());
       localStorage.setItem("name", response.data.name);
       localStorage.setItem("admin", (response.data.role_id === 0).toString());
+      if (response.data.userId !== undefined && response.data.userId !== null) {
+        localStorage.setItem("user_id", response.data.userId.toString());
+      }
+      const allowNodeCreate = response.data.allowNodeCreate ?? 0;
+      localStorage.setItem("allow_node_create", allowNodeCreate.toString());
 
       // 登录成功
       toast.success('登录成功');

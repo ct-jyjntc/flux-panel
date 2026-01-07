@@ -47,6 +47,10 @@ public class User extends BaseEntity {
 
     private Integer roleId;
 
+    private Integer allowNodeCreate;
+
+    private Integer speedId;
+
     private Long expTime;
 
     private Long flow;

@@ -1,6 +1,7 @@
 package com.admin.entity;
 
 import java.io.Serializable;
+import java.math.BigDecimal;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
@@ -33,6 +34,10 @@ public class Node extends BaseEntity {
     private Integer portEnd;
 
     private Integer outPort;
+
+    private Long ownerId;
+
+    private BigDecimal trafficRatio;
 
     private Integer http;
 

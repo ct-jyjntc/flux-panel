@@ -24,6 +24,8 @@ public class Tunnel extends BaseEntity {
      */
     private String name;
 
+    private Long ownerId;
+
     /**
      * 入口节点ID
      */

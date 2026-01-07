@@ -10,14 +10,16 @@ export interface User {
   name?: string;
   user: string;
   pwd?: string;
-  status: number; // 1-正常, 0-禁用
-  flow: number; // 流量限制(GB)
-  num: number; // 转发数量
-  expTime?: number; // 过期时间戳
-  flowResetTime?: number; // 流量重置日期(1-31号)
-  createdTime?: number; // 创建时间戳
-  inFlow?: number; // 下载流量(字节)
-  outFlow?: number; // 上传流量(字节)
+  status: number;
+  flow: number;
+  num: number;
+  expTime?: number;
+  flowResetTime?: number;
+  createdTime?: number;
+  inFlow?: number;
+  outFlow?: number;
+  allowNodeCreate?: number;
+  speedId?: number | null;
 }
 
 export interface UserForm {
@@ -30,51 +32,52 @@ export interface UserForm {
   num: number;
   expTime: Date | null;
   flowResetTime: number;
+  allowNodeCreate: number;
+  speedId: number | null;
 }
 
-export interface UserTunnel {
+export interface UserNode {
   id: number;
   userId: number;
-  tunnelId: number;
-  tunnelName: string;
-  status: number; // 1-正常, 0-禁用
-  flow: number; // 流量限制(GB)
-  num: number; // 转发数量
-  expTime: number; // 过期时间戳
-  flowResetTime: number; // 流量重置日期
-  speedId?: number | null; // 限速规则ID
-  speedLimitName?: string; // 限速规则名称
-  inFlow?: number; // 下载流量(字节)
-  outFlow?: number; // 上传流量(字节)
-  tunnelFlow?: number; // 隧道流量计算类型(1-单向, 2-双向)
+  nodeId: number;
+  nodeName: string;
+  ip: string;
+  serverIp: string;
 }
 
-export interface UserTunnelForm {
-  tunnelId: number | null;
-  flow: number;
-  num: number;
-  expTime: Date | null;
-  flowResetTime: number;
-  speedId: number | null;
+export interface UserNodeForm {
+  nodeId: number | null;
+}
+
+export interface Node {
+  id: number;
+  name: string;
+  ip: string;
+  serverIp: string;
+  portSta?: number;
+  portEnd?: number;
+  outPort?: number;
+  status?: number;
+  trafficRatio?: number;
 }
 
 export interface Tunnel {
   id: number;
   name: string;
-  entryNodeId: number;
-  exitNodeId: number;
-  entryNodeName?: string;
-  exitNodeName?: string;
+  inNodeId?: number;
+  inNodeIds?: string;
+  outNodeId?: number;
+  inIp?: string;
+  outIp?: string;
   status?: number;
-  flow?: number; // 流量计算类型
+  type?: number;
+  muxEnabled?: boolean;
 }
 
 export interface SpeedLimit {
   id: number;
   name: string;
-  tunnelId: number;
-  uploadSpeed: number;
-  downloadSpeed: number;
+  speed: number;
 }
 
 export interface Pagination {

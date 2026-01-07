@@ -4,11 +4,9 @@ import com.admin.common.utils.GostUtil;
 import com.admin.entity.Forward;
 import com.admin.entity.Tunnel;
 import com.admin.entity.User;
-import com.admin.entity.UserTunnel;
 import com.admin.service.ForwardService;
 import com.admin.service.TunnelService;
 import com.admin.service.UserService;
-import com.admin.service.UserTunnelService;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import lombok.extern.slf4j.Slf4j;
@@ -28,9 +26,6 @@ public class ResetFlowAsync {
 
     @Resource
     UserService userService;
-
-    @Resource
-    UserTunnelService userTunnelService;
 
     @Resource
     ForwardService forwardService;
@@ -63,17 +58,11 @@ public class ResetFlowAsync {
             // 重置用户流量
             resetUserFlow(currentDay, lastDayOfMonth);
             
-            // 重置用户隧道流量
-            resetUserTunnelFlow(currentDay, lastDayOfMonth);
-            
             log.info("流量重置任务执行完成");
 
 
             // 处理过期账号
             user();
-
-            // 处理过期隧道
-            userTunnel();
 
             log.info("到期任务执行完成");
             
@@ -135,61 +124,6 @@ public class ResetFlowAsync {
         }
     }
     
-    /**
-     * 重置用户隧道流量
-     * @param currentDay 当前日期（几号）
-     * @param lastDayOfMonth 当月最后一天
-     */
-    private void resetUserTunnelFlow(int currentDay, int lastDayOfMonth) {
-        try {
-            // flowResetTime字段存储的是0-31的数字，0表示不重置，1-31表示每月第几号重置
-            // 构建查询条件：重置日期等于今天，或者重置日期大于当月最大天数且今天是月末
-            // 排除flowResetTime为0的记录（不重置）
-            QueryWrapper<UserTunnel> queryWrapper = new QueryWrapper<>();
-            queryWrapper.ne("flow_reset_time", 0); // 排除不重置的用户隧道
-            
-            if (currentDay == lastDayOfMonth) {
-                // 如果今天是月末，查询重置日期等于今天或者大于当月最大天数的记录
-                // 例如：当月30天，但用户设置31号重置，则在30号执行重置
-                queryWrapper.and(wrapper -> wrapper.eq("flow_reset_time", currentDay)
-                                                  .or().gt("flow_reset_time", lastDayOfMonth));
-            } else {
-                // 否则只查询重置日期等于今天的记录
-                queryWrapper.eq("flow_reset_time", currentDay);
-            }
-            
-            // 查询需要重置的用户隧道
-            List<UserTunnel> userTunnelsToReset = userTunnelService.list(queryWrapper);
-            
-            if (userTunnelsToReset.isEmpty()) {
-                log.info("没有需要重置流量的用户隧道");
-                return;
-            }
-            
-            log.info("找到{}个需要重置流量的用户隧道", userTunnelsToReset.size());
-            
-            // 批量重置用户隧道流量 - 使用SQL原子操作避免与到期任务的并发冲突
-            for (UserTunnel userTunnel : userTunnelsToReset) {
-                UpdateWrapper<UserTunnel> updateWrapper = new UpdateWrapper<>();
-                updateWrapper.eq("id", userTunnel.getId())
-                           .setSql("in_flow = 0, out_flow = 0"); // 使用SQL原子操作，只更新流量字段
-                
-                boolean success = userTunnelService.update(null, updateWrapper);
-                if (success) {
-                    log.info("用户隧道[ID: {}, 用户ID: {}, 隧道ID: {}]流量重置成功，重置日期: 每月{}号", 
-                           userTunnel.getId(), userTunnel.getUserId(), userTunnel.getTunnelId(), userTunnel.getFlowResetTime());
-                } else {
-                    log.info("用户隧道[ID: {}, 用户ID: {}, 隧道ID: {}]流量重置失败",
-                            userTunnel.getId(), userTunnel.getUserId(), userTunnel.getTunnelId());
-                }
-            }
-            
-        } catch (Exception e) {
-            log.info("重置用户隧道流量失败", e);
-        }
-    }
-
-
     public void user(){
         // 查询过期用户
         List<User> user_list = userService.list(new QueryWrapper<User>().ne("role_id", 0).eq("status", 1).isNotNull("exp_time").lt("exp_time", new Date().getTime()));
@@ -197,12 +131,9 @@ public class ResetFlowAsync {
             // 查询对应转发
             List<Forward> forwardList = forwardService.list(new QueryWrapper<Forward>().eq("user_id", user.getId()).eq("status", 1));
             for (Forward forward : forwardList) {
-                UserTunnel userTunnel = userTunnelService.getOne(new QueryWrapper<UserTunnel>().eq("user_id", forward.getUserId()).eq("tunnel_id", forward.getTunnelId()));
-                if (userTunnel != null) {
-                    pauseForwardService(forward, userTunnel.getId());
-                    forward.setStatus(0);
-                    forwardService.updateById(forward);
-                }
+                pauseForwardService(forward);
+                forward.setStatus(0);
+                forwardService.updateById(forward);
             }
             user.setStatus(0);
             userService.updateById(user);
@@ -210,37 +141,20 @@ public class ResetFlowAsync {
     }
 
 
-    public void userTunnel(){
-        // 查询过期隧道
-        List<UserTunnel> user_tunnel_list = userTunnelService.list(new QueryWrapper<UserTunnel>().eq("status", 1).isNotNull("exp_time").lt("exp_time", new Date().getTime()));
-        // 查询对应转发
-        for (UserTunnel userTunnel : user_tunnel_list) {
-            List<Forward> forwardList = forwardService.list(new QueryWrapper<Forward>().eq("tunnel_id", userTunnel.getTunnelId()).eq("user_id", userTunnel.getUserId()).eq("status", 1));
-            for (Forward forward : forwardList) {
-                pauseForwardService(forward, userTunnel.getId());
-                forward.setStatus(0);
-                forwardService.updateById(forward);
-            }
-            userTunnel.setStatus(0);
-            userTunnelService.updateById(userTunnel);
-        }
-    }
-
-
-    private void pauseForwardService(Forward forward, Integer userTunnelId) {
+    private void pauseForwardService(Forward forward) {
         Tunnel tunnel = tunnelService.getById(forward.getTunnelId());
         if (tunnel == null) return;
 
-        GostUtil.PauseService(tunnel.getInNodeId(), buildServiceName(forward.getId(), forward.getUserId(), userTunnelId));
+        GostUtil.PauseService(tunnel.getInNodeId(), buildServiceName(forward.getId(), forward.getUserId()));
         if (tunnel.getType() == 2){
             if (!Boolean.TRUE.equals(tunnel.getMuxEnabled())) {
-                GostUtil.PauseRemoteService(tunnel.getOutNodeId(), buildServiceName(forward.getId(), forward.getUserId(), userTunnelId));
+                GostUtil.PauseRemoteService(tunnel.getOutNodeId(), buildServiceName(forward.getId(), forward.getUserId()));
             }
         }
     }
 
 
-    private String buildServiceName(Long forwardId, Integer userId, Integer userTunnelId) {
-        return forwardId + "_" + userId + "_" + userTunnelId;
+    private String buildServiceName(Long forwardId, Integer userId) {
+        return forwardId + "_" + userId + "_0";
     }
 }

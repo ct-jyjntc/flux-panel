@@ -1,16 +1,11 @@
 package com.admin.controller;
 
 import com.admin.common.aop.LogAnnotation;
-import com.admin.common.annotation.RequireRole;
 import com.admin.common.dto.TunnelDto;
 import com.admin.common.dto.TunnelUpdateDto;
 
-import com.admin.common.dto.UserTunnelDto;
-import com.admin.common.dto.UserTunnelQueryDto;
-import com.admin.common.dto.UserTunnelUpdateDto;
 import com.admin.common.lang.R;
 import com.admin.service.TunnelService;
-import com.admin.service.UserTunnelService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -33,88 +28,29 @@ public class TunnelController extends BaseController {
     @Autowired
     private TunnelService tunnelService;
     
-    @Autowired
-    private UserTunnelService userTunnelService;
-
     @LogAnnotation
-    @RequireRole
     @PostMapping("/create")
     public R create(@Validated @RequestBody TunnelDto tunnelDto) {
         return tunnelService.createTunnel(tunnelDto);
     }
 
     @LogAnnotation
-    @RequireRole
     @PostMapping("/list")
     public R readAll() {
         return tunnelService.getAllTunnels();
     }
 
     @LogAnnotation
-    @RequireRole
     @PostMapping("/update")
     public R update(@Validated @RequestBody TunnelUpdateDto tunnelUpdateDto) {
         return tunnelService.updateTunnel(tunnelUpdateDto);
     }
 
     @LogAnnotation
-    @RequireRole
     @PostMapping("/delete")
     public R delete(@RequestBody Map<String, Object> params) {
         Long id = Long.valueOf(params.get("id").toString());
         return tunnelService.deleteTunnel(id);
-    }
-
-    // ============ 用户隧道权限管理相关方法 ============
-    
-    /**
-     * 分配用户隧道权限
-     * @param userTunnelDto 用户隧道权限数据
-     * @return 操作结果
-     */
-    @LogAnnotation
-    @RequireRole
-    @PostMapping("/user/assign")
-    public R assignUserTunnel(@Validated @RequestBody UserTunnelDto userTunnelDto) {
-        return userTunnelService.assignUserTunnel(userTunnelDto);
-    }
-    
-    /**
-     * 查询用户隧道权限列表
-     * @param queryDto 查询条件
-     * @return 用户隧道权限列表
-     */
-    @LogAnnotation
-    @RequireRole
-    @PostMapping("/user/list")
-    public R getUserTunnelList(@RequestBody @Validated UserTunnelQueryDto queryDto) {
-        return userTunnelService.getUserTunnelList(queryDto);
-    }
-    
-    /**
-     * 删除用户隧道权限
-     * @param params 包含userId和tunnelId的参数
-     * @return 操作结果
-     */
-    @LogAnnotation
-    @RequireRole
-    @PostMapping("/user/remove")
-    public R removeUserTunnel(@RequestBody Map<String, Object> params) {
-        Integer id = Integer.valueOf(params.get("id").toString());
-        return userTunnelService.removeUserTunnel(id);
-    }
-
-    
-    /**
-     * 更新用户隧道权限（包含流量、流量重置时间、到期时间）
-     * @param updateDto 更新数据
-     * @return 操作结果
-     */
-    @LogAnnotation
-    @RequireRole
-    @PostMapping("/user/update")
-    public R updateUserTunnel(@Validated @RequestBody UserTunnelUpdateDto updateDto) {
-        return userTunnelService.updateUserTunnel(updateDto);
     }
 
 
@@ -130,7 +66,6 @@ public class TunnelController extends BaseController {
      * @return 诊断结果
      */
     @LogAnnotation
-    @RequireRole
     @PostMapping("/diagnose")
     public R diagnoseTunnel(@RequestBody Map<String, Object> params) {
         Long tunnelId = Long.valueOf(params.get("tunnelId").toString());

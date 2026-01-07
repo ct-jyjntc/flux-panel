@@ -1,21 +1,19 @@
 package com.admin.common.task;
 
 import com.admin.common.dto.*;
-import com.admin.common.lang.R;
 import com.admin.common.utils.GostUtil;
 import com.admin.entity.*;
 import com.admin.service.*;
 import com.alibaba.fastjson.JSONObject;
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 @Slf4j
 @Service
@@ -31,10 +29,6 @@ public class CheckGostConfigAsync {
     @Resource
     @Lazy
     private SpeedLimitService speedLimitService;
-
-    @Resource
-    @Lazy
-    private TunnelService tunnelService;
 
 
 
@@ -62,37 +56,29 @@ public class CheckGostConfigAsync {
 
         for (ConfigItem service : gostConfig.getServices()) {
             safeExecute(() -> {
-
-                if (!Objects.equals(service.getName(), "web_api")){
-                    String[] serviceIds = parseServiceName(service.getName());
-                    if (serviceIds.length == 4) {
-                        String forwardId = serviceIds[0];
-                        String userId = serviceIds[1];
-                        String userTunnelId = serviceIds[2];
-                        String type = serviceIds[3];
-
-                        if (Objects.equals(type, "tcp")) { // 只处理TCP，避免重复处理
-                            Forward forward = forwardService.getById(forwardId);
-                            if (forward == null) {
-                                log.info("删除孤立的服务: {} (节点: {})", service.getName(), node.getId());
-                                GostDto gostDto = GostUtil.DeleteService(node.getId(), forwardId + "_" + userId + "_" + userTunnelId);
-                                System.out.println(gostDto);
-                            }
-                        }
-
-
-                        if (Objects.equals(type, "tls")) {
-                            Forward forward = forwardService.getById(forwardId);
-                            if (forward == null) {
-                                log.info("删除孤立的服务: {} (节点: {})", service.getName(), node.getId());
-                                GostUtil.DeleteRemoteService(node.getId(), forwardId+"_"+userId+"_"+userTunnelId);
-                            }
-                        }
-
-                    }
+                if (Objects.equals(service.getName(), "web_api")) {
+                    return;
                 }
-
-
+                Optional<ServiceIdentity> identityOpt = parseServiceIdentity(service.getName());
+                if (identityOpt.isEmpty()) {
+                    return;
+                }
+                ServiceIdentity identity = identityOpt.get();
+                if (!identity.shouldCleanService()) {
+                    return;
+                }
+                Forward forward = forwardService.getById(identity.getForwardId());
+                if (forward != null) {
+                    return;
+                }
+                if ("tcp".equals(identity.getType())) {
+                    log.info("删除孤立的服务: {} (节点: {})", service.getName(), node.getId());
+                    GostDto gostDto = GostUtil.DeleteService(node.getId(), identity.getBaseName());
+                    System.out.println(gostDto);
+                } else if ("tls".equals(identity.getType())) {
+                    log.info("删除孤立的服务: {} (节点: {})", service.getName(), node.getId());
+                    GostUtil.DeleteRemoteService(node.getId(), identity.getBaseName());
+                }
             }, "清理服务 " + service.getName());
         }
 
@@ -109,20 +95,18 @@ public class CheckGostConfigAsync {
 
         for (ConfigItem chain : gostConfig.getChains()) {
             safeExecute(() -> {
-                String[] serviceIds = parseServiceName(chain.getName());
-                if (serviceIds.length == 4) {
-                    String forwardId = serviceIds[0];
-                    String userId = serviceIds[1];
-                    String userTunnelId = serviceIds[2];
-                    String type = serviceIds[3];
-                    
-                    if (Objects.equals(type, "chains")) {
-                        Forward forward = forwardService.getById(forwardId);
-                        if (forward == null) {
-                            log.info("删除孤立的链: {} (节点: {})", chain.getName(), node.getId());
-                            GostUtil.DeleteChains(node.getId(), forwardId+"_"+userId+"_"+userTunnelId);
-                        }
-                    }
+                Optional<ServiceIdentity> identityOpt = parseServiceIdentity(chain.getName());
+                if (identityOpt.isEmpty()) {
+                    return;
+                }
+                ServiceIdentity identity = identityOpt.get();
+                if (!"chains".equals(identity.getType())) {
+                    return;
+                }
+                Forward forward = forwardService.getById(identity.getForwardId());
+                if (forward == null) {
+                    log.info("删除孤立的链: {} (节点: {})", chain.getName(), node.getId());
+                    GostUtil.DeleteChains(node.getId(), identity.getBaseName());
                 }
             }, "清理链 " + chain.getName());
         }
@@ -149,53 +133,6 @@ public class CheckGostConfigAsync {
     }
 
     /**
-     * 同步限流器
-     */
-    private void syncLimiters(GostConfigDto gostConfig, Node node) {
-        List<Tunnel> tunnelList = tunnelService.list(new QueryWrapper<Tunnel>().eq("in_node_id", node.getId()));
-        if (tunnelList == null || tunnelList.isEmpty()) return;
-        safeExecute(() -> {
-            StringBuilder tunnelIds = new StringBuilder();
-            for (Tunnel tunnel : tunnelList) {
-                tunnelIds.append(tunnel.getId()).append(",");
-            }
-            String ids = tunnelIds.deleteCharAt(tunnelIds.length() - 1).toString();
-            List<SpeedLimit> speedLimits = speedLimitService.list(new QueryWrapper<SpeedLimit>().in("tunnel_id", ids));
-            if (speedLimits != null && !speedLimits.isEmpty()) {
-                List<ConfigItem> limiters = gostConfig.getLimiters();
-                List<Long> limiters_ids = new ArrayList<>();
-                List<Long>  speedLimits_ids = new ArrayList<>();
-                if (limiters != null){
-                    for (ConfigItem limiter : limiters) {
-                        limiters_ids.add(Long.valueOf(limiter.getName()));
-                    }
-                }
-                for (SpeedLimit speedLimit : speedLimits) {
-                    speedLimits_ids.add(speedLimit.getId());
-                }
-                List<Long> diff = new ArrayList<>(speedLimits_ids);
-                diff.removeAll(limiters_ids);
-                System.out.println(diff);
-                if (!diff.isEmpty()) {
-
-                    for (Long speed_id : diff) {
-                        SpeedLimit speedLimit = speedLimitService.getById(speed_id);
-                        if (speedLimit != null) {
-                            SpeedLimitUpdateDto speedLimitUpdateDto = new SpeedLimitUpdateDto();
-                            speedLimitUpdateDto.setId(speed_id);
-                            speedLimitUpdateDto.setName(speedLimit.getName());
-                            speedLimitUpdateDto.setSpeed(speedLimit.getSpeed());
-                            speedLimitUpdateDto.setTunnelId(speedLimit.getTunnelId());
-                            speedLimitUpdateDto.setTunnelName(speedLimit.getTunnelName());
-                            speedLimitService.updateSpeedLimit(speedLimitUpdateDto);
-                        }
-                    }
-                }
-            }
-        }, "同步限流器 ");
-    }
-
-    /**
      * 安全执行操作，捕获异常
      */
     private void safeExecute(Runnable operation, String operationDesc) {
@@ -210,7 +147,64 @@ public class CheckGostConfigAsync {
     /**
      * 解析服务名称
      */
-    private String[] parseServiceName(String serviceName) {
-        return serviceName.split("_");
+    private Optional<ServiceIdentity> parseServiceIdentity(String serviceName) {
+        if (serviceName == null || serviceName.isEmpty()) {
+            return Optional.empty();
+        }
+        String[] parts = serviceName.split("_");
+        if (parts.length < 2) {
+            return Optional.empty();
+        }
+        String type = parts[parts.length - 1];
+        boolean hasSuffix = isServiceSuffix(type);
+        String baseName = hasSuffix ? String.join("_", java.util.Arrays.copyOf(parts, parts.length - 1)) : serviceName;
+        String[] baseParts = baseName.split("_");
+        if (baseParts.length < 2) {
+            return Optional.empty();
+        }
+        String forwardId = baseParts[0];
+        String userId = baseParts[1];
+        return Optional.of(new ServiceIdentity(baseName, forwardId, userId, hasSuffix ? type : ""));
+    }
+
+    private boolean isServiceSuffix(String suffix) {
+        return Objects.equals(suffix, "tcp")
+                || Objects.equals(suffix, "udp")
+                || Objects.equals(suffix, "tls")
+                || Objects.equals(suffix, "chains");
+    }
+
+    private static class ServiceIdentity {
+        private final String baseName;
+        private final String forwardId;
+        private final String userId;
+        private final String type;
+
+        private ServiceIdentity(String baseName, String forwardId, String userId, String type) {
+            this.baseName = baseName;
+            this.forwardId = forwardId;
+            this.userId = userId;
+            this.type = type;
+        }
+
+        public String getBaseName() {
+            return baseName;
+        }
+
+        public String getForwardId() {
+            return forwardId;
+        }
+
+        public String getUserId() {
+            return userId;
+        }
+
+        public String getType() {
+            return type;
+        }
+
+        public boolean shouldCleanService() {
+            return "tcp".equals(type) || "tls".equals(type);
+        }
     }
 }

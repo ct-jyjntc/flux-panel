@@ -46,8 +46,4 @@ public class SpeedLimit implements Serializable {
 
     private Integer speed;
 
-    private Long tunnelId;
-
-    private String tunnelName;
-
 }
