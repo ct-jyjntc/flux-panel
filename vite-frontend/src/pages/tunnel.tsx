@@ -51,6 +51,7 @@ interface Node {
   id: number;
   name: string;
   status: number; // 1: 在线, 0: 离线
+  outPort?: number | null;
 }
 
 interface TunnelForm {
@@ -291,7 +292,7 @@ export default function TunnelPage() {
       outNodeId: type === 1 ? null : prev.outNodeId,
       protocol: type === 1 ? 'tls' : prev.protocol,
       muxEnabled: type === 1 ? false : true,
-      muxPort: type === 1 ? null : prev.muxPort
+      muxPort: type === 1 ? null : (nodes.find((node) => node.id === prev.outNodeId)?.outPort ?? prev.muxPort)
     }));
   };
 
@@ -786,7 +787,13 @@ export default function TunnelPage() {
                           onSelectionChange={(keys) => {
                             const selectedKey = Array.from(keys)[0] as string;
                             if (selectedKey) {
-                              setForm(prev => ({ ...prev, outNodeId: parseInt(selectedKey) }));
+                              const selectedId = parseInt(selectedKey);
+                              const selectedNode = nodes.find((node) => node.id === selectedId);
+                              setForm(prev => ({ 
+                                ...prev, 
+                                outNodeId: selectedId,
+                                muxPort: selectedNode?.outPort ?? null
+                              }));
                             }
                           }}
                           isInvalid={!!errors.outNodeId}
@@ -821,18 +828,10 @@ export default function TunnelPage() {
 
                         <Input
                           label="绑定端口"
-                          value={form.muxPort !== null && form.muxPort !== undefined ? form.muxPort.toString() : ''}
+                          value={form.muxPort !== null && form.muxPort !== undefined ? form.muxPort.toString() : '未配置'}
                           variant="bordered"
-                          placeholder="自动分配"
-                          description="留空则自动分配一个未使用端口"
-                          onValueChange={(value) => {
-                            const trimmed = value.trim();
-                            const parsed = trimmed === '' ? null : Number(trimmed);
-                            setForm(prev => ({
-                              ...prev,
-                              muxPort: Number.isNaN(parsed) ? prev.muxPort : parsed
-                            }));
-                          }}
+                          isReadOnly
+                          description="端口来自出口节点设置"
                         />
                       </>
                     )}

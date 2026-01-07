@@ -60,6 +60,7 @@ CREATE TABLE `node` (
   `server_ip` varchar(100) NOT NULL,
   `port_sta` int(10) NOT NULL,
   `port_end` int(10) NOT NULL,
+  `out_port` int(10) DEFAULT NULL,
   `version` varchar(100) DEFAULT NULL,
   `http` int(10) NOT NULL DEFAULT '0',
   `tls` int(10) NOT NULL DEFAULT '0',

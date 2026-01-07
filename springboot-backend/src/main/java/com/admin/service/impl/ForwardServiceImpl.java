@@ -1040,8 +1040,14 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
         if (tunnel.getType() == TUNNEL_TYPE_TUNNEL_FORWARD) {
             if (Boolean.TRUE.equals(tunnel.getMuxEnabled())) {
                 outPort = tunnel.getMuxPort();
+                if (outPort == null && tunnel.getOutNodeId() != null) {
+                    Node outNode = nodeService.getNodeById(tunnel.getOutNodeId());
+                    if (outNode != null) {
+                        outPort = outNode.getOutPort();
+                    }
+                }
                 if (outPort == null) {
-                    return PortAllocation.error("隧道多路复用端口未分配");
+                    return PortAllocation.error("出口共享端口未配置");
                 }
             } else {
                 outPort = allocateOutPort(tunnel, excludeForwardId);
@@ -1385,7 +1391,7 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
         if (tunnel.getMuxPort() == null) {
             return R.err("多路复用端口未分配");
         }
-        String muxServiceName = buildMuxServiceName(tunnel.getId());
+        String muxServiceName = buildMuxServiceName(outNode.getId());
         GostDto updateResult = GostUtil.UpdateMuxService(outNode.getId(), muxServiceName, tunnel.getMuxPort(), tunnel.getProtocol(), interfaceName);
         if (updateResult.getMsg().contains(GOST_NOT_FOUND_MSG)) {
             updateResult = GostUtil.AddMuxService(outNode.getId(), muxServiceName, tunnel.getMuxPort(), tunnel.getProtocol(), interfaceName);
@@ -1442,8 +1448,8 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
         return isGostOperationSuccess(result) ? R.ok() : R.err(result.getMsg());
     }
 
-    private String buildMuxServiceName(Long tunnelId) {
-        return "tunnel_mux_" + tunnelId;
+    private String buildMuxServiceName(Long nodeId) {
+        return "node_mux_" + nodeId;
     }
 
     /**

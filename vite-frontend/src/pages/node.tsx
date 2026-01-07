@@ -33,6 +33,7 @@ interface Node {
   serverIp: string;
   portSta: number;
   portEnd: number;
+  outPort?: number | null;
   version?: string;
   http?: number; // 0 关 1 开
   tls?: number;  // 0 关 1 开
@@ -58,6 +59,7 @@ interface NodeForm {
   serverIp: string;
   portSta: number;
   portEnd: number;
+  outPort: number;
   http: number; // 0 关 1 开
   tls: number;  // 0 关 1 开
   socks: number; // 0 关 1 开
@@ -82,6 +84,7 @@ export default function NodePage() {
     serverIp: '',
     portSta: 1000,
     portEnd: 65535,
+    outPort: 1000,
     http: 0,
     tls: 0,
     socks: 0
@@ -402,6 +405,10 @@ export default function NodePage() {
     } else if (form.portEnd < form.portSta) {
       newErrors.portEnd = '结束端口不能小于起始端口';
     }
+
+    if (!form.outPort || form.outPort < 1 || form.outPort > 65535) {
+      newErrors.outPort = '出口共享端口必须在1-65535之间';
+    }
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -428,6 +435,7 @@ export default function NodePage() {
       serverIp: node.serverIp || '',
       portSta: node.portSta,
       portEnd: node.portEnd,
+      outPort: typeof node.outPort === 'number' ? node.outPort : 1000,
       http: typeof node.http === 'number' ? node.http : 1,
       tls: typeof node.tls === 'number' ? node.tls : 1,
       socks: typeof node.socks === 'number' ? node.socks : 1
@@ -532,6 +540,7 @@ export default function NodePage() {
         serverIp: form.serverIp,
         portSta: form.portSta,
         portEnd: form.portEnd,
+        outPort: form.outPort,
         http: form.http,
         tls: form.tls,
         socks: form.socks
@@ -551,6 +560,7 @@ export default function NodePage() {
               serverIp: form.serverIp,
               portSta: form.portSta,
               portEnd: form.portEnd,
+              outPort: form.outPort,
               http: form.http,
               tls: form.tls,
               socks: form.socks
@@ -578,6 +588,7 @@ export default function NodePage() {
       serverIp: '',
       portSta: 1000,
       portEnd: 65535,
+      outPort: 1000,
       http: 0,
       tls: 0,
       socks: 0
@@ -660,7 +671,10 @@ export default function NodePage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="text-xs">{node.portSta}-{node.portEnd}</div>
+                      <div className="text-xs space-y-1">
+                        <div>{node.portSta}-{node.portEnd}</div>
+                        <div>出口端口: {node.outPort ?? '-'}</div>
+                      </div>
                     </TableCell>
                     <TableCell>
                       <div className="text-xs">{node.version || '未知'}</div>
@@ -841,6 +855,26 @@ export default function NodePage() {
                     }}
                   />
                 </div>
+
+                <Input
+                  label="出口共享端口"
+                  type="number"
+                  placeholder="请输入出口共享端口"
+                  value={form.outPort.toString()}
+                  onChange={(e) => setForm(prev => ({ 
+                    ...prev, 
+                    outPort: parseInt(e.target.value) || 0 
+                  }))}
+                  isInvalid={!!errors.outPort}
+                  errorMessage={errors.outPort}
+                  variant="bordered"
+                  min={1}
+                  max={65535}
+                  classNames={{
+                    inputWrapper: "rounded-lg border border-default-200 dark:border-default-200/40 bg-transparent shadow-none",
+                    label: "text-default-600",
+                  }}
+                />
 
                 {/* 屏蔽协议 */}
                 <div className="mt-1">

@@ -6,12 +6,14 @@ import com.admin.common.dto.GostDto;
 import com.admin.common.dto.NodeDto;
 import com.admin.common.dto.NodeUpdateDto;
 import com.admin.common.lang.R;
+import com.admin.common.utils.GostUtil;
 import com.admin.common.utils.WebSocketServer;
 import com.admin.entity.Node;
 import com.admin.entity.Tunnel;
 import com.admin.entity.ViteConfig;
 import com.admin.mapper.NodeMapper;
 import com.admin.mapper.TunnelMapper;
+import com.admin.service.ForwardService;
 import com.admin.service.NodeService;
 import com.admin.service.TunnelService;
 import com.admin.service.ViteConfigService;
@@ -66,6 +68,8 @@ public class NodeServiceImpl extends ServiceImpl<NodeMapper, Node> implements No
     private static final String ERROR_PORT_END_REQUIRED = "结束端口不能为空";
     private static final String ERROR_PORT_RANGE_INVALID = "端口必须在1-65535范围内";
     private static final String ERROR_PORT_ORDER_INVALID = "结束端口不能小于起始端口";
+    private static final String ERROR_OUT_PORT_REQUIRED = "出口共享端口不能为空";
+    private static final String GOST_NOT_FOUND_MSG = "not found";
 
     // ========== 依赖注入 ==========
     
@@ -78,6 +82,10 @@ public class NodeServiceImpl extends ServiceImpl<NodeMapper, Node> implements No
 
     @Resource
     ViteConfigService viteConfigService;
+
+    @Resource
+    @Lazy
+    private ForwardService forwardService;
 
 
     // ========== 公共接口实现 ==========
@@ -123,6 +131,10 @@ public class NodeServiceImpl extends ServiceImpl<NodeMapper, Node> implements No
         if (node == null) {
             return R.err(ERROR_NODE_NOT_FOUND);
         }
+        if (nodeUpdateDto.getOutPort() == null) {
+            return R.err(ERROR_OUT_PORT_REQUIRED);
+        }
+        Integer oldOutPort = node.getOutPort();
 
         //1.1 如果节点在线 且传入更新的 http/tls/socks 任意一项与数据库不一致，则通过 WS 通知节点更新设置
         boolean online = node.getStatus() != null && node.getStatus() == 1;
@@ -167,6 +179,10 @@ public class NodeServiceImpl extends ServiceImpl<NodeMapper, Node> implements No
                 tunnel.setOutIp(updateNode.getServerIp());
             }
             tunnelService.updateBatchById(outNodeId);
+        }
+
+        if (result && !Objects.equals(oldOutPort, updateNode.getOutPort())) {
+            syncOutPortForTunnels(updateNode.getId(), updateNode.getOutPort());
         }
 
         return result ? R.ok(SUCCESS_UPDATE_MSG) : R.err(ERROR_UPDATE_MSG);
@@ -228,6 +244,7 @@ public class NodeServiceImpl extends ServiceImpl<NodeMapper, Node> implements No
         
         // 验证端口范围
         validatePortRange(node.getPortSta(), node.getPortEnd());
+        validateOutPort(node.getOutPort());
         
         // 设置默认属性
         node.setSecret(IdUtil.simpleUUID());
@@ -255,11 +272,13 @@ public class NodeServiceImpl extends ServiceImpl<NodeMapper, Node> implements No
         node.setServerIp(nodeUpdateDto.getServerIp());
         node.setPortSta(nodeUpdateDto.getPortSta());
         node.setPortEnd(nodeUpdateDto.getPortEnd());
+        node.setOutPort(nodeUpdateDto.getOutPort());
         node.setHttp(nodeUpdateDto.getHttp());
         node.setTls(nodeUpdateDto.getTls());
         node.setSocks(nodeUpdateDto.getSocks());
         // 验证端口范围
         validatePortRange(node.getPortSta(), node.getPortEnd());
+        validateOutPort(node.getOutPort());
         
         node.setUpdatedTime(System.currentTimeMillis());
         return node;
@@ -272,6 +291,53 @@ public class NodeServiceImpl extends ServiceImpl<NodeMapper, Node> implements No
      */
     private void hideNodeSecrets(List<Node> nodeList) {
         nodeList.forEach(node -> node.setSecret(null));
+    }
+
+    private void syncOutPortForTunnels(Long nodeId, Integer outPort) {
+        if (nodeId == null || outPort == null) {
+            return;
+        }
+        List<Tunnel> outTunnels = tunnelService.list(new QueryWrapper<Tunnel>()
+                .eq("out_node_id", nodeId)
+                .eq("type", 2));
+        if (outTunnels.isEmpty()) {
+            return;
+        }
+        for (Tunnel tunnel : outTunnels) {
+            Tunnel oldTunnel = new Tunnel();
+            BeanUtils.copyProperties(tunnel, oldTunnel);
+            tunnel.setMuxEnabled(true);
+            tunnel.setMuxPort(outPort);
+            tunnel.setUpdatedTime(System.currentTimeMillis());
+            tunnelService.updateById(tunnel);
+
+            ensureMuxService(tunnel);
+            forwardService.rebuildForwardsForTunnelUpdate(oldTunnel, tunnel);
+        }
+    }
+
+    private void ensureMuxService(Tunnel tunnel) {
+        if (tunnel.getOutNodeId() == null || tunnel.getMuxPort() == null) {
+            return;
+        }
+        Node outNode = this.getById(tunnel.getOutNodeId());
+        if (outNode == null) {
+            return;
+        }
+        String muxServiceName = "node_mux_" + outNode.getId();
+        GostDto updateResult = GostUtil.UpdateMuxService(outNode.getId(), muxServiceName, tunnel.getMuxPort(), tunnel.getProtocol(), tunnel.getInterfaceName());
+        if (updateResult != null && updateResult.getMsg() != null && updateResult.getMsg().contains(GOST_NOT_FOUND_MSG)) {
+            GostUtil.AddMuxService(outNode.getId(), muxServiceName, tunnel.getMuxPort(), tunnel.getProtocol(), tunnel.getInterfaceName());
+        }
+    }
+
+    private void validateOutPort(Integer outPort) {
+        if (outPort == null) {
+            throw new RuntimeException(ERROR_OUT_PORT_REQUIRED);
+        }
+        if (outPort < 1 || outPort > 65535) {
+            throw new RuntimeException(ERROR_PORT_RANGE_INVALID);
+        }
     }
 
 
