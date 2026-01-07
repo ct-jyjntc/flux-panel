@@ -6,6 +6,8 @@
 
 - 服务器已安装 Docker Engine（含 docker compose 插件）
 - 服务器可访问 Docker Hub
+- 镜像为 **linux/amd64**（ARM 需使用对应架构镜像或自行构建）
+- 如镜像为私有，请先 `docker login`
 
 ## 2. 准备目录与数据库初始化脚本
 
@@ -14,6 +16,10 @@ mkdir -p /opt/flux-panel/mysql
 mkdir -p /opt/flux-panel/backend-logs
 # 把 gost.sql 放到 /opt/flux-panel/gost.sql
 ```
+
+建议先规划并替换以下示例密码：
+- 数据库账号/密码（示例中为 `gost`）
+- `JWT_SECRET`（示例中为 `change-me`）
 
 ## 3. docker run 方式
 
@@ -79,6 +85,7 @@ docker run -d --name vite-frontend \
 默认管理员账号：
 - 账号：`admin_user`
 - 密码：`admin_user`
+（首次登录后建议尽快修改）
 
 ## 4. docker compose 方式
 
@@ -151,7 +158,17 @@ networks:
 docker compose up -d
 ```
 
-## 5. 更新镜像
+## 5. 重置数据库（可选）
+
+如果数据结构不兼容或需要全量重建：
+
+```bash
+docker compose down -v
+```
+
+> 注意：该操作会删除数据库持久化数据。
+
+## 6. 更新镜像
 
 docker run 方式：
 
@@ -169,7 +186,7 @@ docker compose pull
 docker compose up -d
 ```
 
-## 6. 常见问题
+## 7. 常见问题
 
 - **前端无法访问**
   - 检查服务器安全组/防火墙放通 `3000`/`6365` 端口。
