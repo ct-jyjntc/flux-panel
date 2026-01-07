@@ -55,6 +55,7 @@ docker run -d --name gost-mysql \
 ```bash
 docker run -d --name springboot-backend \
   --network gost-network \
+  --network-alias backend \
   -e DB_HOST=gost-mysql \
   -e DB_NAME=gost \
   -e DB_USER=gost \
@@ -190,6 +191,8 @@ docker compose up -d
 
 - **前端无法访问**
   - 检查服务器安全组/防火墙放通 `3000`/`6365` 端口。
+- **前端容器日志提示 `host not found in upstream "backend"`**
+  - `vite-frontend` 内置反向代理指向 `backend:6365`，需确保后端容器在同一网络并带 `backend` 别名（`--network-alias backend`），或将后端容器名改为 `backend`。
 - **后端启动失败**
   - 先看 `docker logs springboot-backend`，确认数据库是否可用。
 - **端口冲突**
