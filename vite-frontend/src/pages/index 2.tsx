@@ -260,16 +260,12 @@ export default function IndexPage() {
     }
   };
 
-  const inputClassNames = {
-    inputWrapper: "bg-white dark:bg-zinc-900 border-gray-300 dark:border-gray-700 shadow-none hover:border-gray-400 focus-within:!border-blue-500 rounded-lg",
-  };
-
   return (
     <DefaultLayout>
       <section className="flex flex-col items-center justify-center gap-4 py-4 sm:py-8 md:py-10 pb-20 min-h-[calc(100dvh-120px)] sm:min-h-[calc(100dvh-200px)]">
         <div className="w-full max-w-md px-4 sm:px-0">
-          <div className="w-full bg-white dark:bg-zinc-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden">
-            <div className="pb-0 pt-6 px-6 flex-col items-center border-b border-gray-100 dark:border-zinc-800">
+          <div className="w-full border border-gray-200 dark:border-default-200 rounded-lg overflow-hidden bg-background">
+            <div className="pb-0 pt-6 px-6 flex-col items-center border-b border-gray-200 dark:border-default-200">
               <h1 className={title({ size: "sm" })}>登陆</h1>
               <p className="text-small text-default-500 mt-2">请输入您的账号信息</p>
             </div>
@@ -282,7 +278,6 @@ export default function IndexPage() {
                   onChange={(e) => handleInputChange('username', e.target.value)}
                   onKeyDown={handleKeyPress}
                   variant="bordered"
-                  classNames={inputClassNames}
                   isDisabled={loading}
                   isInvalid={!!errors.username}
                   errorMessage={errors.username}
@@ -296,7 +291,6 @@ export default function IndexPage() {
                   onChange={(e) => handleInputChange('password', e.target.value)}
                   onKeyDown={handleKeyPress}
                   variant="bordered"
-                  classNames={inputClassNames}
                   isDisabled={loading}
                   isInvalid={!!errors.password}
                 />

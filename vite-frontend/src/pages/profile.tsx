@@ -159,104 +159,99 @@ export default function ProfilePage() {
   };
 
   return (
-    <div className="px-4 lg:px-6 py-6 flex flex-col h-full">
-
-      <div className="space-y-6 flex-1">
-        <div className="border border-gray-200 dark:border-default-200 rounded-lg overflow-hidden divide-y divide-gray-200 dark:divide-default-200">
-          {/* 用户信息卡片 */}
-          <div className="p-4">
-            <div className="flex items-center space-x-4">
-              <div className="w-12 h-12 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center">
-                <svg className="w-6 h-6 text-primary" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div className="flex-1">
-                <h3 className="text-base font-medium text-foreground">{username}</h3>
-                <div className="flex items-center space-x-2 mt-1">
-                  <span className={`px-2 py-1 rounded-md text-xs font-medium ${
-                    isAdmin 
-                      ? 'bg-primary-100 dark:bg-primary-500/20 text-primary-700 dark:text-primary-300' 
-                      : 'bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300'
-                  }`}>
-                    {isAdmin ? '管理员' : '普通用户'}
-                  </span>
-                  <span className="text-xs text-default-500">
-                    {new Date().toLocaleDateString('zh-CN')}
-                  </span>
-                </div>
-              </div>
-            </div>
+    <div className="flex flex-col gap-6">
+      
+      {/* 用户信息卡片 */}
+      <div className="bg-white dark:bg-zinc-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6">
+        <div className="flex items-center gap-4">
+          <div className="w-16 h-16 bg-blue-50 dark:bg-blue-900/20 rounded-full flex items-center justify-center text-blue-500">
+             <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 20 20">
+               <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+             </svg>
           </div>
-
-          {/* 功能网格 */}
-          <div className="p-4">
-            <div className="grid grid-cols-3 gap-3">
-              {/* 管理员功能 */}
-              {isAdmin && adminMenuItems.map((item) => (
-                <button
-                  key={item.path}
-                  onClick={() => navigate(item.path)}
-                  className="flex flex-col items-center p-3 rounded-2xl bg-gray-50 dark:bg-default-100 hover:bg-gray-100 dark:hover:bg-default-200 transition-colors duration-200"
-                >
-                  <div className={`w-10 h-10 ${item.color} rounded-full flex items-center justify-center mb-2`}>
-                    {item.icon}
-                  </div>
-                  <span className="text-xs text-foreground text-center">{item.label}</span>
-                </button>
-              ))}
-              
-              {/* 修改密码 */}
-              <button
-                onClick={onOpen}
-                className="flex flex-col items-center p-3 rounded-2xl bg-gray-50 dark:bg-default-100 hover:bg-gray-100 dark:hover:bg-default-200 transition-colors duration-200"
-              >
-                <div className="w-10 h-10 bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 rounded-full flex items-center justify-center mb-2">
-                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M18 8a6 6 0 01-7.743 5.743L10 14l-1 1-1 1H6v2H2v-4l4.257-4.257A6 6 0 1118 8zm-6-4a1 1 0 100 2 2 2 0 012 2 1 1 0 102 0 4 4 0 00-4-4z" clipRule="evenodd" />
-                  </svg>
-                </div>
-                <span className="text-xs text-foreground text-center">修改密码</span>
-              </button>
-              
-              {/* 退出登录 */}
-              <button
-                onClick={handleLogout}
-                className="flex flex-col items-center p-3 rounded-2xl bg-gray-50 dark:bg-default-100 hover:bg-gray-100 dark:hover:bg-default-200 transition-colors duration-200"
-              >
-                <div className="w-10 h-10 bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 rounded-full flex items-center justify-center mb-2">
-                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" />
-                  </svg>
-                </div>
-                <span className="text-xs text-foreground text-center">退出登录</span>
-              </button>
+          <div>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">{username}</h2>
+            <div className="flex items-center gap-2 mt-1">
+              <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${
+                isAdmin 
+                  ? 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/20 dark:text-purple-400 dark:border-purple-900/50' 
+                  : 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-900/50'
+              }`}>
+                {isAdmin ? '管理员' : '普通用户'}
+              </span>
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                登录于 {new Date().toLocaleDateString('zh-CN')}
+              </span>
             </div>
           </div>
         </div>
-
-        <div className="fixed inset-x-0 bottom-20 text-center py-4">
-               <p className="text-xs text-gray-400 dark:text-gray-500">
-                 Powered by{' '}
-                 <a 
-                   href="https://github.com/bqlpfy/flux-panel" 
-                   target="_blank" 
-                   rel="noopener noreferrer"
-                   className="text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                 >
-                   flux-panel
-                 </a>
-               </p>
-               <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                 v{ isWebViewFunc() ? siteConfig.app_version : siteConfig.version}
-               </p>
-             </div>
-
       </div>
 
+      {/* 功能菜单 */}
+      <div className="bg-white dark:bg-zinc-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6">
+        <h3 className="text-sm font-semibold text-gray-500 mb-4 px-1">快捷菜单</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {/* 管理员功能 */}
+          {isAdmin && adminMenuItems.map((item) => (
+            <button
+              key={item.path}
+              onClick={() => navigate(item.path)}
+              className="flex flex-col items-center justify-center p-4 rounded-xl border border-gray-100 dark:border-zinc-800 bg-gray-50 dark:bg-zinc-800/30 hover:bg-white hover:border-gray-200 hover:shadow-sm dark:hover:bg-zinc-800 transition-all duration-200 group"
+            >
+              <div className={`w-10 h-10 ${item.color} rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform`}>
+                {item.icon}
+              </div>
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-200">{item.label}</span>
+              <span className="text-xs text-gray-400 mt-1">{item.description}</span>
+            </button>
+          ))}
+          
+          {/* 修改密码 */}
+          <button
+            onClick={onOpen}
+            className="flex flex-col items-center justify-center p-4 rounded-xl border border-gray-100 dark:border-zinc-800 bg-gray-50 dark:bg-zinc-800/30 hover:bg-white hover:border-gray-200 hover:shadow-sm dark:hover:bg-zinc-800 transition-all duration-200 group"
+          >
+            <div className="w-10 h-10 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-500 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M18 8a6 6 0 01-7.743 5.743L10 14l-1 1-1 1H6v2H2v-4l4.257-4.257A6 6 0 1118 8zm-6-4a1 1 0 100 2 2 2 0 012 2 1 1 0 102 0 4 4 0 00-4-4z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-200">修改密码</span>
+            <span className="text-xs text-gray-400 mt-1">更新账户安全设置</span>
+          </button>
+          
+          {/* 退出登录 */}
+          <button
+            onClick={handleLogout}
+            className="flex flex-col items-center justify-center p-4 rounded-xl border border-gray-100 dark:border-zinc-800 bg-gray-50 dark:bg-zinc-800/30 hover:bg-white hover:border-red-100 hover:shadow-sm dark:hover:bg-red-900/10 transition-all duration-200 group"
+          >
+            <div className="w-10 h-10 bg-red-50 dark:bg-red-900/20 text-red-500 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-200">退出登录</span>
+            <span className="text-xs text-gray-400 mt-1">安全退出系统</span>
+          </button>
+        </div>
+      </div>
 
-      
-
+       <div className="mt-auto pt-8 pb-4 text-center">
+         <p className="text-xs text-gray-400 dark:text-gray-600">
+           Powered by{' '}
+           <a 
+             href="https://github.com/bqlpfy/flux-panel" 
+             target="_blank" 
+             rel="noopener noreferrer"
+             className="text-gray-500 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-400 transition-colors"
+           >
+             flux-panel
+           </a>
+         </p>
+         <p className="text-xs text-gray-400 dark:text-gray-600 mt-1">
+           v{ isWebViewFunc() ? siteConfig.app_version : siteConfig.version}
+         </p>
+       </div>
 
       {/* 修改密码弹窗 */}
       <Modal 
@@ -265,52 +260,78 @@ export default function ProfilePage() {
           onOpenChange();
           resetPasswordForm();
         }}
-        size="2xl"
-      scrollBehavior="outside"
-      backdrop="blur"
-      placement="center"
+        size="md"
+        backdrop="blur"
+        placement="center"
+        scrollBehavior="outside"
+        classNames={{
+            base: "bg-white dark:bg-[#18181b] border border-gray-100 dark:border-gray-800 shadow-xl rounded-xl",
+            header: "border-b border-gray-100 dark:border-gray-800 pb-4",
+            body: "py-6",
+            footer: "border-t border-gray-100 dark:border-gray-800 pt-4"
+        }}
       >
         <ModalContent>
           {(onClose: () => void) => (
             <>
-              <ModalHeader className="flex flex-col gap-1">修改密码</ModalHeader>
+              <ModalHeader className="text-lg font-bold text-gray-900 dark:text-gray-100">修改密码</ModalHeader>
               <ModalBody>
-                <div className="space-y-4">
+                <div className="flex flex-col gap-4">
                   <Input
                     label="新用户名"
-                    placeholder="请输入新用户名（至少3位）"
+                    labelPlacement="outside"
+                    placeholder="请输入新用户名"
                     value={passwordForm.newUsername}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPasswordForm(prev => ({ ...prev, newUsername: e.target.value }))}
                     variant="bordered"
+                    classNames={{
+                        inputWrapper: "bg-white dark:bg-zinc-900 border-gray-300 dark:border-gray-700 shadow-none hover:border-gray-400 focus-within:!border-blue-500 rounded-lg",
+                        input: "text-sm"
+                     }}
                   />
                   <Input
                     label="当前密码"
+                    labelPlacement="outside"
                     type="password"
                     placeholder="请输入当前密码"
                     value={passwordForm.currentPassword}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPasswordForm(prev => ({ ...prev, currentPassword: e.target.value }))}
                     variant="bordered"
+                    classNames={{
+                        inputWrapper: "bg-white dark:bg-zinc-900 border-gray-300 dark:border-gray-700 shadow-none hover:border-gray-400 focus-within:!border-blue-500 rounded-lg",
+                        input: "text-sm"
+                     }}
                   />
                   <Input
                     label="新密码"
+                    labelPlacement="outside"
                     type="password"
                     placeholder="请输入新密码（至少6位）"
                     value={passwordForm.newPassword}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPasswordForm(prev => ({ ...prev, newPassword: e.target.value }))}
                     variant="bordered"
+                    classNames={{
+                        inputWrapper: "bg-white dark:bg-zinc-900 border-gray-300 dark:border-gray-700 shadow-none hover:border-gray-400 focus-within:!border-blue-500 rounded-lg",
+                        input: "text-sm"
+                     }}
                   />
                   <Input
                     label="确认密码"
+                    labelPlacement="outside"
                     type="password"
                     placeholder="请再次输入新密码"
                     value={passwordForm.confirmPassword}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPasswordForm(prev => ({ ...prev, confirmPassword: e.target.value }))}
                     variant="bordered"
+                    classNames={{
+                        inputWrapper: "bg-white dark:bg-zinc-900 border-gray-300 dark:border-gray-700 shadow-none hover:border-gray-400 focus-within:!border-blue-500 rounded-lg",
+                        input: "text-sm"
+                     }}
                   />
                 </div>
               </ModalBody>
               <ModalFooter>
-                <Button size="sm" color="default" variant="light" onPress={onClose}>
+                <Button size="sm" variant="light" onPress={onClose}>
                   取消
                 </Button>
                 <Button 

@@ -1,14 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Button } from "@heroui/button";
 import { Input } from "@heroui/input";
-import { 
-  Table, 
-  TableHeader, 
-  TableColumn, 
-  TableBody, 
-  TableRow, 
-  TableCell 
-} from "@heroui/table";
+import { Select, SelectItem } from "@heroui/select";
+import { RadioGroup, Radio } from "@heroui/radio";
+import { DatePicker } from "@heroui/date-picker";
 import { 
   Modal, 
   ModalContent, 
@@ -17,12 +12,7 @@ import {
   ModalFooter,
   useDisclosure 
 } from "@heroui/modal";
-import { Chip } from "@heroui/chip";
-import { Select, SelectItem } from "@heroui/select";
-import { RadioGroup, Radio } from "@heroui/radio";
-import { DatePicker } from "@heroui/date-picker";
 import { Spinner } from "@heroui/spinner";
-import { Progress } from "@heroui/progress";
 
 import toast from 'react-hot-toast';
 import {
@@ -134,8 +124,7 @@ export default function UserPage() {
   const { isOpen: isNodeModalOpen, onOpen: onNodeModalOpen, onClose: onNodeModalClose } = useDisclosure();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userNodes, setUserNodes] = useState<UserNode[]>([]);
-  const [nodeListLoading, setNodeListLoading] = useState(false);
-
+  
   // 分配新节点权限相关状态
   const [nodeForm, setNodeForm] = useState<UserNodeForm>({
     nodeId: null,
@@ -213,7 +202,6 @@ export default function UserPage() {
   };
 
   const loadUserNodes = async (userId: number) => {
-    setNodeListLoading(true);
     try {
       const response = await getUserNodeList({ userId });
       if (response.code === 0) {
@@ -223,8 +211,6 @@ export default function UserPage() {
       }
     } catch (error) {
       toast.error('获取节点权限列表失败');
-    } finally {
-      setNodeListLoading(false);
     }
   };
 
@@ -422,198 +408,196 @@ export default function UserPage() {
   );
 
   return (
-    
-      <div className="px-4 lg:px-6 py-6">
+    <div className="flex flex-col gap-6">
       {/* 页面头部 */}
-      <div className="mb-6">
-        <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
-          <div className="flex items-center gap-3 flex-1 max-w-md">
-            <Input
-              value={searchKeyword}
-              onChange={(e) => setSearchKeyword(e.target.value)}
-              placeholder="搜索用户名"
-              startContent={<SearchIcon className="w-4 h-4 text-default-400" />}
-              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-              size="sm"
-              className="flex-1"
-              classNames={{
-                base: "bg-default-100",
-                input: "bg-transparent",
-                inputWrapper: "bg-default-100 border border-default-200 hover:border-default-300 focus-within:border-primary data-[hover=true]:border-default-300"
-              }}
-            />
+      <div className="bg-white dark:bg-zinc-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+        <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
+          <div className="flex items-center gap-2 flex-1 max-w-md w-full">
+            <div className="relative flex-1">
+                 <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 z-10" />
+                 <Input
+                    value={searchKeyword}
+                    onChange={(e) => setSearchKeyword(e.target.value)}
+                    placeholder="搜索用户名"
+                    onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                    size="sm"
+                    variant="bordered"
+                    classNames={{
+                        inputWrapper: "bg-white dark:bg-zinc-900 border-gray-200 dark:border-gray-700 pl-9 hover:border-gray-400 focus-within:!border-blue-500 rounded-lg h-9 shadow-sm",
+                        input: "text-sm",
+                        innerWrapper: "bg-transparent",
+                    }}
+                />
+            </div>
             <Button
-              onClick={handleSearch}
-              variant="solid"
+              onPress={handleSearch}
               color="primary"
-              isIconOnly
               size="sm"
+              className="min-w-0 px-4 font-medium"
             >
-              <SearchIcon className="w-4 h-4" />
+              搜索
             </Button>
           </div>
           
-            <Button
-              size="sm"
-              variant="flat"
-              color="primary"
-              onPress={handleAdd}
-            >
-              新增
-            </Button>
+          <Button
+            size="sm"
+            color="primary"
+            onPress={handleAdd}
+            startContent={<span className="text-lg">+</span>}
+            className="font-medium"
+          >
+            新增用户
+          </Button>
         </div>
       </div>
 
       {/* 用户列表 */}
+      <div className="bg-white dark:bg-zinc-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden min-h-[400px]">
       {loading ? (
         <div className="flex items-center justify-center h-64">
-          <div className="flex items-center gap-3">
-            <Spinner size="sm" />
-            <span className="text-default-600">正在加载...</span>
+          <div className="flex flex-col items-center gap-3">
+            <Spinner size="lg" color="primary" />
+            <span className="text-gray-500 text-sm">正在加载用户数据...</span>
           </div>
         </div>
-      ) : (
-        <div className="border border-divider rounded-lg overflow-hidden">
-          <Table
-            removeWrapper
-            aria-label="用户列表"
-            classNames={{
-              th: "bg-default-50 text-default-600 text-xs",
-              td: "py-3 align-top",
-            }}
-          >
-            <TableHeader>
-              <TableColumn>用户</TableColumn>
-              <TableColumn>状态</TableColumn>
-              <TableColumn>流量</TableColumn>
-              <TableColumn>转发数量</TableColumn>
-              <TableColumn>重置时间</TableColumn>
-              <TableColumn>到期时间</TableColumn>
-              <TableColumn className="text-right">操作</TableColumn>
-            </TableHeader>
-            <TableBody
-              emptyContent={
-                <div className="text-default-500 text-sm py-8">
-                  暂无用户数据，点击上方按钮开始创建
-                </div>
-              }
-            >
+      ) : users.length > 0 ? (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-gray-50 dark:bg-zinc-800/50 text-gray-500 font-medium border-b border-gray-100 dark:border-gray-800">
+                <tr>
+                   <th className="px-6 py-3">用户</th>
+                   <th className="px-6 py-3">状态</th>
+                   <th className="px-6 py-3">流量</th>
+                   <th className="px-6 py-3">转发数量</th>
+                   <th className="px-6 py-3">重置时间</th>
+                   <th className="px-6 py-3">到期时间</th>
+                   <th className="px-6 py-3 text-right">操作</th>
+                </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 dark:divide-zinc-800">
               {users.map((user) => {
                 const userStatus = getUserStatus(user);
                 const expStatus = user.expTime ? getExpireStatus(user.expTime) : null;
                 const usedFlow = calculateUserTotalUsedFlow(user);
                 const flowPercent = user.flow > 0 ? Math.min((usedFlow / (user.flow * 1024 * 1024 * 1024)) * 100, 100) : 0;
-
+                
                 return (
-                  <TableRow key={user.id}>
-                    <TableCell>
-                      <div className="min-w-0">
-                        <div className="text-sm font-medium text-foreground truncate">
+                  <tr key={user.id} className="group hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors">
+                    <td className="px-6 py-4 align-top">
+                      <div className="flex flex-col">
+                        <div className="font-medium text-gray-900 dark:text-gray-100">
                           {user.name || user.user}
                         </div>
-                        <div className="text-xs text-default-500 truncate">@{user.user}</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">@{user.user}</div>
                       </div>
-                    </TableCell>
-                    <TableCell>
-                      <Chip color={userStatus.color} variant="flat" size="sm" className="text-xs">
-                        {userStatus.text}
-                      </Chip>
-                    </TableCell>
-                    <TableCell>
-                      <div className="space-y-1 min-w-[180px]">
-                        <div className="flex items-center justify-between text-xs text-default-500">
-                          <span>限制</span>
-                          <span className="text-foreground">{formatFlow(user.flow, 'gb')}</span>
+                    </td>
+                    <td className="px-6 py-4 align-top">
+                         <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${
+                            userStatus.color === 'success'
+                              ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-900/50' 
+                              : 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-900/50'
+                         }`}>
+                           <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${
+                              userStatus.color === 'success' ? 'bg-green-500' : 'bg-red-500'
+                           }`}></span>
+                           {userStatus.text}
+                         </span>
+                    </td>
+                    <td className="px-6 py-4 align-top">
+                      <div className="space-y-2 min-w-[160px]">
+                        <div className="flex items-center justify-between text-xs mb-1">
+                             <div className="text-gray-500 flex items-center gap-1">
+                                已用 <span className="text-gray-900 dark:text-gray-200 font-mono">{formatFlow(usedFlow)}</span>
+                             </div>
+                             <div className="text-gray-400 font-mono text-[10px]">
+                                / {formatFlow(user.flow, 'gb')}
+                             </div>
                         </div>
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-default-500">已用</span>
-                          <span className="text-danger">{formatFlow(usedFlow)}</span>
+                        <div className="h-1.5 w-full bg-gray-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                           <div 
+                              className={`h-full rounded-full transition-all duration-500 ${
+                                  flowPercent > 90 ? 'bg-red-500' : flowPercent > 75 ? 'bg-orange-500' : 'bg-blue-500'
+                              }`} 
+                              style={{ width: `${flowPercent}%` }}
+                           ></div>
                         </div>
-                        <Progress
-                          size="sm"
-                          value={flowPercent}
-                          color={flowPercent > 90 ? 'danger' : flowPercent > 70 ? 'warning' : 'success'}
-                          aria-label={`流量使用 ${flowPercent.toFixed(1)}%`}
-                        />
                       </div>
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-sm font-medium text-foreground">{user.num}</span>
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-xs text-default-600">
+                    </td>
+                    <td className="px-6 py-4 align-top">
+                      <span className="inline-block px-2 py-0.5 bg-gray-100 dark:bg-zinc-800 rounded text-xs font-mono text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700">
+                        {user.num}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 align-top">
+                      <span className="text-sm text-gray-600 dark:text-gray-400">
                         {user.flowResetTime === 0 ? '不重置' : `每月${user.flowResetTime}号`}
                       </span>
-                    </TableCell>
-                    <TableCell>
+                    </td>
+                    <td className="px-6 py-4 align-top">
                       {user.expTime ? (
-                        expStatus && expStatus.color === 'success' ? (
-                          <span className="text-xs text-default-600">{formatDate(user.expTime)}</span>
+                         expStatus && expStatus.color === 'success' ? (
+                          <span className="text-sm text-gray-600 dark:text-gray-400">{formatDate(user.expTime)}</span>
                         ) : (
-                          <Chip
-                            color={expStatus?.color || 'default'}
-                            variant="flat"
-                            size="sm"
-                            className="text-xs"
-                          >
+                          <span className={`inline-flex px-2 py-0.5 rounded text-xs border ${
+                             expStatus?.color === 'danger' ? 'bg-red-50 text-red-600 border-red-200' : 'bg-orange-50 text-orange-600 border-orange-200'
+                          }`}>
                             {expStatus?.text || '未知状态'}
-                          </Chip>
+                          </span>
                         )
                       ) : (
-                        <span className="text-xs text-default-400">不限制</span>
+                        <span className="text-sm text-gray-400">不限制</span>
                       )}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap justify-end gap-2">
-                        <Button
-                          size="sm"
-                          variant="flat"
-                          color="primary"
-                          onPress={() => handleEdit(user)}
-                          startContent={<EditIcon className="w-3 h-3" />}
-                        >
-                          编辑
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="flat"
-                          color="warning"
-                          onPress={() => handleResetFlow(user)}
-                          startContent={
-                            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
-                            </svg>
-                          }
-                        >
-                          重置
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="flat"
-                          color="success"
-                          onPress={() => handleManageNodes(user)}
-                          startContent={<SettingsIcon className="w-3 h-3" />}
-                        >
-                          节点权限
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="flat"
-                          color="danger"
-                          onPress={() => handleDelete(user)}
-                          startContent={<DeleteIcon className="w-3 h-3" />}
-                        >
-                          删除
-                        </Button>
+                    </td>
+                    <td className="px-6 py-4 align-top text-right">
+                      <div className="flex flex-wrap justify-end gap-1 w-[160px]">
+                        <button 
+                             className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 flex items-center justify-center transition-colors"
+                             onClick={() => handleEdit(user)}
+                             title="编辑"
+                          >
+                             <EditIcon className="w-3.5 h-3.5" />
+                        </button>
+                        <button 
+                             className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-orange-50 text-gray-600 hover:text-orange-500 flex items-center justify-center transition-colors"
+                             onClick={() => handleResetFlow(user)}
+                             title="重置流量"
+                          >
+                             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                             </svg>
+                        </button>
+                         <button 
+                             className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-blue-50 text-gray-600 hover:text-blue-500 flex items-center justify-center transition-colors"
+                             onClick={() => handleManageNodes(user)}
+                             title="节点权限"
+                          >
+                             <SettingsIcon className="w-3.5 h-3.5" />
+                        </button>
+                        <button 
+                             className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-red-50 text-gray-600 hover:text-red-500 flex items-center justify-center transition-colors"
+                             onClick={() => handleDelete(user)}
+                             title="删除"
+                          >
+                             <DeleteIcon className="w-3.5 h-3.5" />
+                        </button>
                       </div>
-                    </TableCell>
-                  </TableRow>
+                    </td>
+                  </tr>
                 );
               })}
-            </TableBody>
-          </Table>
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="flex flex-col items-center justify-center py-24 text-gray-400">
+           <svg className="w-12 h-12 mb-4 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+           </svg>
+           <p className="text-gray-500">暂无用户数据</p>
+           <Button size="sm" variant="light" color="primary" className="mt-2" onPress={handleAdd}>立即创建</Button>
         </div>
       )}
+      </div>
 
 
       {/* 用户表单模态框 */}
@@ -621,32 +605,52 @@ export default function UserPage() {
         isOpen={isUserModalOpen}
         onClose={onUserModalClose}
         size="2xl"
-      scrollBehavior="outside"
-      backdrop="blur"
-      placement="center"
+        scrollBehavior="outside"
+        backdrop="blur"
+        placement="center"
+        classNames={{
+            base: "bg-white dark:bg-[#18181b] border border-gray-100 dark:border-gray-800 shadow-xl rounded-xl",
+            header: "border-b border-gray-100 dark:border-gray-800 pb-4",
+            body: "py-6",
+            footer: "border-t border-gray-100 dark:border-gray-800 pt-4"
+        }}
       >
         <ModalContent>
-          <ModalHeader>
+          <ModalHeader className="text-lg font-bold">
             {isEdit ? '编辑用户' : '新增用户'}
           </ModalHeader>
           <ModalBody>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Input
                 label="用户名"
+                labelPlacement="outside"
+                placeholder="请输入用户名"
                 value={userForm.user}
                 onChange={(e) => setUserForm(prev => ({ ...prev, user: e.target.value }))}
                 isRequired
+                variant="bordered"
+                classNames={{
+                    inputWrapper: "bg-white dark:bg-zinc-900 border-gray-300 dark:border-gray-700 shadow-none hover:border-gray-400 focus-within:!border-blue-500 rounded-lg",
+                    input: "text-sm"
+                 }}
               />
               <Input
                 label="密码"
+                labelPlacement="outside"
                 type="password"
                 value={userForm.pwd}
                 onChange={(e) => setUserForm(prev => ({ ...prev, pwd: e.target.value }))}
                 placeholder={isEdit ? '留空则不修改密码' : '请输入密码'}
                 isRequired={!isEdit}
+                variant="bordered"
+                classNames={{
+                    inputWrapper: "bg-white dark:bg-zinc-900 border-gray-300 dark:border-gray-700 shadow-none hover:border-gray-400 focus-within:!border-blue-500 rounded-lg",
+                    input: "text-sm"
+                 }}
               />
               <Input
                 label="流量限制(GB)"
+                labelPlacement="outside"
                 type="number"
                 value={userForm.flow.toString()}
                 onChange={(e) => {
@@ -656,9 +660,15 @@ export default function UserPage() {
                 min="1"
                 max="99999"
                 isRequired
+                variant="bordered"
+                classNames={{
+                    inputWrapper: "bg-white dark:bg-zinc-900 border-gray-300 dark:border-gray-700 shadow-none hover:border-gray-400 focus-within:!border-blue-500 rounded-lg",
+                    input: "text-sm"
+                 }}
               />
               <Input
                 label="转发数量"
+                labelPlacement="outside"
                 type="number"
                 value={userForm.num.toString()}
                 onChange={(e) => {
@@ -668,14 +678,24 @@ export default function UserPage() {
                 min="1"
                 max="99999"
                 isRequired
+                variant="bordered"
+                classNames={{
+                    inputWrapper: "bg-white dark:bg-zinc-900 border-gray-300 dark:border-gray-700 shadow-none hover:border-gray-400 focus-within:!border-blue-500 rounded-lg",
+                    input: "text-sm"
+                 }}
               />
               <Select
                 label="允许创建节点"
+                labelPlacement="outside"
                 selectedKeys={[userForm.allowNodeCreate.toString()]}
                 onSelectionChange={(keys) => {
                   const value = Array.from(keys)[0] as string;
                   setUserForm(prev => ({ ...prev, allowNodeCreate: Number(value) }));
                 }}
+                variant="bordered"
+                classNames={{
+                    trigger: "bg-white dark:bg-zinc-900 border-gray-300 dark:border-gray-700 shadow-none hover:border-gray-400 focus-within:!border-blue-500 rounded-lg",
+                 }}
               >
                 <SelectItem key="1" textValue="允许">
                   允许
@@ -686,11 +706,16 @@ export default function UserPage() {
               </Select>
               <Select
                 label="限速规则"
+                labelPlacement="outside"
                 selectedKeys={userForm.speedId ? [userForm.speedId.toString()] : ["null"]}
                 onSelectionChange={(keys) => {
                   const value = Array.from(keys)[0] as string;
                   setUserForm(prev => ({ ...prev, speedId: value === "null" ? null : Number(value) }));
                 }}
+                variant="bordered"
+                classNames={{
+                    trigger: "bg-white dark:bg-zinc-900 border-gray-300 dark:border-gray-700 shadow-none hover:border-gray-400 focus-within:!border-blue-500 rounded-lg",
+                 }}
               >
                 {[
                   <SelectItem key="null" textValue="不限速">不限速</SelectItem>,
@@ -703,25 +728,31 @@ export default function UserPage() {
               </Select>
               <Select
                 label="流量重置日期"
+                labelPlacement="outside"
                 selectedKeys={[userForm.flowResetTime.toString()]}
                 onSelectionChange={(keys) => {
                   const value = Array.from(keys)[0] as string;
                   setUserForm(prev => ({ ...prev, flowResetTime: Number(value) }));
                 }}
+                variant="bordered"
+                classNames={{
+                    trigger: "bg-white dark:bg-zinc-900 border-gray-300 dark:border-gray-700 shadow-none hover:border-gray-400 focus-within:!border-blue-500 rounded-lg",
+                 }}
               >
-                <>
+                {[
                   <SelectItem key="0" textValue="不重置">
                     不重置
-                  </SelectItem>
-                {Array.from({ length: 31 }, (_, i) => i + 1).map(day => (
-                  <SelectItem key={day.toString()} textValue={`每月${day}号（0点重置）`}>
-                    每月{day}号（0点重置）
-                  </SelectItem>
-                ))}
-                </>
+                  </SelectItem>,
+                  ...Array.from({ length: 31 }, (_, i) => i + 1).map(day => (
+                    <SelectItem key={day.toString()} textValue={`每月${day}号（0点重置）`}>
+                      每月{day}号（0点重置）
+                    </SelectItem>
+                  ))
+                ]}
               </Select>
               <DatePicker
                 label="过期时间"
+                labelPlacement="outside"
                 value={userForm.expTime ? parseDate(userForm.expTime.toISOString().split('T')[0]) as any : null}
                 onChange={(date) => {
                   if (date) {
@@ -734,21 +765,27 @@ export default function UserPage() {
                 isRequired
                 showMonthAndYearPickers
                 className="cursor-pointer"
+                variant="bordered"
               />
             </div>
             
-            <RadioGroup
-              label="状态"
-              value={userForm.status.toString()}
-              onValueChange={(value: string) => setUserForm(prev => ({ ...prev, status: Number(value) }))}
-              orientation="horizontal"
-            >
-              <Radio value="1">正常</Radio>
-              <Radio value="0">禁用</Radio>
-            </RadioGroup>
+            <div className="mt-4">
+                <RadioGroup
+                  label="状态"
+                  value={userForm.status.toString()}
+                  onValueChange={(value: string) => setUserForm(prev => ({ ...prev, status: Number(value) }))}
+                  orientation="horizontal"
+                  classNames={{
+                      label: "text-sm text-gray-700 dark:text-gray-300 mb-2"
+                  }}
+                >
+                  <Radio value="1">正常</Radio>
+                  <Radio value="0">禁用</Radio>
+                </RadioGroup>
+            </div>
           </ModalBody>
           <ModalFooter>
-            <Button size="sm" onPress={onUserModalClose}>
+            <Button size="sm" variant="light" onPress={onUserModalClose}>
               取消
             </Button>
             <Button
@@ -767,30 +804,39 @@ export default function UserPage() {
       <Modal
         isOpen={isNodeModalOpen}
         onClose={onNodeModalClose}
-        size="2xl"
+        size="3xl"
         scrollBehavior="outside"
         backdrop="blur"
         placement="center"
         isDismissable={false}
         classNames={{
-          base: "max-w-[95vw] sm:max-w-4xl"
+            base: "bg-white dark:bg-[#18181b] border border-gray-100 dark:border-gray-800 shadow-xl rounded-xl",
+            header: "border-b border-gray-100 dark:border-gray-800 pb-4",
+            body: "py-6",
+            footer: "border-t border-gray-100 dark:border-gray-800 pt-4"
         }}
       >
         <ModalContent>
-          <ModalHeader>
+          <ModalHeader className="text-lg font-bold">
             用户 {currentUser?.user} 的节点权限
           </ModalHeader>
           <ModalBody>
             <div className="space-y-6">
-              <div>
-                <h3 className="text-lg font-semibold mb-4">分配节点</h3>
+              <div className="bg-gray-50 dark:bg-zinc-800/50 p-4 rounded-xl border border-gray-100 dark:border-gray-800">
+                <h3 className="text-sm font-semibold mb-3 text-gray-700 dark:text-gray-300">分配新权限</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-3 items-end">
                   <Select
                     label="选择节点"
+                    placeholder="请选择节点"
+                    labelPlacement="outside"
                     selectedKeys={nodeForm.nodeId ? [nodeForm.nodeId.toString()] : []}
                     onSelectionChange={(keys) => {
                       const value = Array.from(keys)[0] as string;
                       setNodeForm((prev) => ({ ...prev, nodeId: Number(value) || null }));
+                    }}
+                    variant="bordered"
+                    classNames={{
+                        trigger: "bg-white dark:bg-zinc-900 border-gray-200"
                     }}
                   >
                     {availableNodes.map((node) => (
@@ -801,11 +847,17 @@ export default function UserPage() {
                   </Select>
                   <Select
                     label="权限类型"
+                    placeholder="选择权限"
+                    labelPlacement="outside"
                     selectedKeys={[nodeForm.accessType.toString()]}
                     onSelectionChange={(keys) => {
                       const value = Array.from(keys)[0] as string;
                       const parsed = Number(value);
                       setNodeForm((prev) => ({ ...prev, accessType: Number.isNaN(parsed) ? 0 : parsed }));
+                    }}
+                    variant="bordered"
+                    classNames={{
+                        trigger: "bg-white dark:bg-zinc-900 border-gray-200"
                     }}
                   >
                     <SelectItem key="0">出/入口</SelectItem>
@@ -816,6 +868,7 @@ export default function UserPage() {
                     color="primary"
                     onPress={handleAssignNode}
                     isLoading={assignLoading}
+                    className="mb-0.5"
                   >
                     分配
                   </Button>
@@ -823,55 +876,59 @@ export default function UserPage() {
               </div>
 
               <div>
-                <h3 className="text-lg font-semibold mb-4">已有节点权限</h3>
-                <Table
-                  aria-label="用户节点权限列表"
-                  classNames={{
-                    wrapper: "shadow-none",
-                    th: "bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-medium"
-                  }}
-                >
-                  <TableHeader>
-                    <TableColumn>节点名称</TableColumn>
-                    <TableColumn>权限类型</TableColumn>
-                    <TableColumn>入口IP</TableColumn>
-                    <TableColumn>服务器IP</TableColumn>
-                    <TableColumn className="text-right">操作</TableColumn>
-                  </TableHeader>
-                  <TableBody
-                    items={userNodes}
-                    isLoading={nodeListLoading}
-                    loadingContent={<Spinner />}
-                    emptyContent="暂无节点权限"
-                  >
-                    {(userNode) => (
-                      <TableRow key={userNode.id}>
-                        <TableCell>{userNode.nodeName}</TableCell>
-                        <TableCell>{getNodeAccessTypeLabel(userNode.accessType)}</TableCell>
-                        <TableCell>{userNode.ip}</TableCell>
-                        <TableCell>{userNode.serverIp}</TableCell>
-                        <TableCell>
-                          <div className="flex justify-end">
-                            <Button
-                              size="sm"
-                              variant="flat"
-                              color="danger"
-                              isIconOnly
-                              onClick={() => handleRemoveNode(userNode)}
-                            >
-                              <DeleteIcon className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
+                <h3 className="text-sm font-semibold mb-3 text-gray-700 dark:text-gray-300">已有节点权限</h3>
+                <div className="border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden">
+                    <table className="w-full text-left text-sm">
+                        <thead className="bg-gray-50 dark:bg-zinc-800 text-gray-500 font-medium border-b border-gray-200 dark:border-gray-800">
+                            <tr>
+                                <th className="px-4 py-2">节点名称</th>
+                                <th className="px-4 py-2">权限类型</th>
+                                <th className="px-4 py-2">入口IP</th>
+                                <th className="px-4 py-2">服务器IP</th>
+                                <th className="px-4 py-2 text-right">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 dark:divide-zinc-800 bg-white dark:bg-zinc-900">
+                            {userNodes.length === 0 ? (
+                                <tr>
+                                    <td colSpan={5} className="px-4 py-8 text-center text-gray-400">
+                                        暂无节点权限
+                                    </td>
+                                </tr>
+                            ) : (
+                                userNodes.map(userNode => (
+                                    <tr key={userNode.id}>
+                                        <td className="px-4 py-3">{userNode.nodeName}</td>
+                                        <td className="px-4 py-3">
+                                            <span className="inline-block px-1.5 py-0.5 rounded text-xs bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400">
+                                                {getNodeAccessTypeLabel(userNode.accessType)}
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-3 text-gray-500 text-xs font-mono">{userNode.ip}</td>
+                                        <td className="px-4 py-3 text-gray-500 text-xs font-mono">{userNode.serverIp}</td>
+                                        <td className="px-4 py-3 text-right">
+                                            <Button
+                                              size="sm"
+                                              variant="light"
+                                              color="danger"
+                                              isIconOnly
+                                              onClick={() => handleRemoveNode(userNode)}
+                                              className="h-7 w-7 min-w-0"
+                                            >
+                                              <DeleteIcon className="w-4 h-4" />
+                                            </Button>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
               </div>
             </div>
           </ModalBody>
           <ModalFooter>
-            <Button size="sm" onPress={onNodeModalClose}>
+            <Button size="sm" variant="light" onPress={onNodeModalClose}>
               关闭
             </Button>
           </ModalFooter>
@@ -882,10 +939,16 @@ export default function UserPage() {
       <Modal
         isOpen={isDeleteModalOpen}
         onClose={onDeleteModalClose}
-        size="2xl"
-      scrollBehavior="outside"
-      backdrop="blur"
-      placement="center"
+        size="md"
+        scrollBehavior="outside"
+        placement="center"
+        backdrop="blur"
+        classNames={{
+            base: "bg-white dark:bg-[#18181b] border border-gray-100 dark:border-gray-800 shadow-xl rounded-xl",
+            header: "border-b border-gray-100 dark:border-gray-800 pb-4",
+            body: "py-6",
+            footer: "border-t border-gray-100 dark:border-gray-800 pt-4"
+        }}
       >
         <ModalContent>
           <ModalHeader className="flex flex-col gap-1">
@@ -893,14 +956,14 @@ export default function UserPage() {
           </ModalHeader>
           <ModalBody>
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-danger-100 rounded-full flex items-center justify-center">
-                <DeleteIcon className="w-6 h-6 text-danger" />
+              <div className="w-12 h-12 bg-red-50 dark:bg-red-900/20 rounded-full flex items-center justify-center flex-shrink-0">
+                <DeleteIcon className="w-6 h-6 text-red-500" />
               </div>
-              <div className="flex-1">
-                <p className="text-foreground">
-                  确定要删除用户 <span className="font-semibold text-danger">"{userToDelete?.user}"</span> 吗？
+              <div className="flex-1 text-sm">
+                <p className="text-gray-900 dark:text-gray-100">
+                  确定要删除用户 <span className="font-semibold text-red-500">"{userToDelete?.user}"</span> 吗？
                 </p>
-                <p className="text-small text-default-500 mt-1">
+                <p className="text-gray-500 mt-2">
                   此操作不可撤销，用户的所有数据将被永久删除。
                 </p>
               </div>
@@ -929,10 +992,16 @@ export default function UserPage() {
       <Modal
         isOpen={isDeleteNodeModalOpen}
         onClose={onDeleteNodeModalClose}
-        size="2xl"
+        size="md"
+        placement="center"
         scrollBehavior="outside"
         backdrop="blur"
-        placement="center"
+        classNames={{
+            base: "bg-white dark:bg-[#18181b] border border-gray-100 dark:border-gray-800 shadow-xl rounded-xl",
+            header: "border-b border-gray-100 dark:border-gray-800 pb-4",
+            body: "py-6",
+            footer: "border-t border-gray-100 dark:border-gray-800 pt-4"
+        }}
       >
         <ModalContent>
           <ModalHeader className="flex flex-col gap-1">
@@ -940,14 +1009,14 @@ export default function UserPage() {
           </ModalHeader>
           <ModalBody>
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-danger-100 rounded-full flex items-center justify-center">
-                <DeleteIcon className="w-6 h-6 text-danger" />
+              <div className="w-12 h-12 bg-red-50 dark:bg-red-900/20 rounded-full flex items-center justify-center flex-shrink-0">
+                <DeleteIcon className="w-6 h-6 text-red-500" />
               </div>
-              <div className="flex-1">
-                <p className="text-foreground">
-                  确定要删除用户 <span className="font-semibold">{currentUser?.user}</span> 对节点 <span className="font-semibold text-danger">"{nodeToDelete?.nodeName}"</span> 的权限吗？
+              <div className="flex-1 text-sm">
+                <p className="text-gray-900 dark:text-gray-100">
+                  确定要删除用户 <span className="font-semibold">{currentUser?.user}</span> 对节点 <span className="font-semibold text-red-500">"{nodeToDelete?.nodeName}"</span> 的权限吗？
                 </p>
-                <p className="text-small text-default-500 mt-1">
+                <p className="text-gray-500 mt-2">
                   删除后该用户将无法在节点监控与隧道绑定中使用此节点。
                 </p>
               </div>
@@ -976,10 +1045,16 @@ export default function UserPage() {
       <Modal
         isOpen={isResetFlowModalOpen}
         onClose={onResetFlowModalClose}
-        size="2xl"
-      scrollBehavior="outside"
-      backdrop="blur"
-      placement="center"
+        size="md"
+        placement="center"
+        scrollBehavior="outside"
+        backdrop="blur"
+        classNames={{
+            base: "bg-white dark:bg-[#18181b] border border-gray-100 dark:border-gray-800 shadow-xl rounded-xl",
+            header: "border-b border-gray-100 dark:border-gray-800 pb-4",
+            body: "py-6",
+            footer: "border-t border-gray-100 dark:border-gray-800 pt-4"
+        }}
       >
         <ModalContent>
           <ModalHeader className="flex flex-col gap-1">
@@ -987,34 +1062,31 @@ export default function UserPage() {
           </ModalHeader>
           <ModalBody>
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-warning-100 rounded-full flex items-center justify-center">
-                <svg className="w-6 h-6 text-warning" fill="currentColor" viewBox="0 0 20 20">
+              <div className="w-12 h-12 bg-orange-50 dark:bg-orange-900/20 rounded-full flex items-center justify-center flex-shrink-0">
+                <svg className="w-6 h-6 text-orange-500" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
                 </svg>
               </div>
-              <div className="flex-1">
-                <p className="text-foreground">
-                  确定要重置用户 <span className="font-semibold text-warning">"{userToReset?.user}"</span> 的流量吗？
+              <div className="flex-1 text-sm">
+                <p className="text-gray-900 dark:text-gray-100">
+                  确定要重置用户 <span className="font-semibold text-orange-500">"{userToReset?.user}"</span> 的流量吗？
                 </p>
-                <p className="text-small text-default-500 mt-1">
-                  该操作只会重置账号流量，不影响节点权限设置，重置后该用户的上下行流量将归零，此操作不可撤销。
-                </p>
-                <div className="mt-2 p-2 bg-warning-50 dark:bg-warning-100/10 rounded text-xs">
-                  <div className="text-warning-700 dark:text-warning-300">
-                    当前流量使用情况：
+                <div className="mt-4 p-3 bg-orange-50 dark:bg-orange-900/10 rounded-lg text-xs border border-orange-100 dark:border-orange-900/20">
+                  <div className="font-medium text-orange-800 dark:text-orange-300 mb-2">
+                    当前使用统计：
                   </div>
-                  <div className="mt-1 space-y-1">
+                  <div className="space-y-1 text-orange-700 dark:text-orange-400">
                     <div className="flex justify-between">
-                      <span>上行流量：</span>
+                      <span>上行：</span>
                       <span className="font-mono">{userToReset ? formatFlow(userToReset.inFlow || 0) : '-'}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span>下行流量：</span>
+                      <span>下行：</span>
                       <span className="font-mono">{userToReset ? formatFlow(userToReset.outFlow || 0) : '-'}</span>
                     </div>
-                    <div className="flex justify-between font-medium">
+                    <div className="flex justify-between font-bold border-t border-orange-200 dark:border-orange-800/30 pt-1 mt-1">
                       <span>总计：</span>
-                      <span className="font-mono text-warning-700 dark:text-warning-300">
+                      <span className="font-mono">
                         {userToReset ? formatFlow(calculateUserTotalUsedFlow(userToReset)) : '-'}
                       </span>
                     </div>

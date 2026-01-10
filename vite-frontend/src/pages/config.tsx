@@ -257,12 +257,10 @@ export default function ConfigPage() {
             onChange={(e) => handleConfigChange(item.key, e.target.value)}
             placeholder={item.placeholder}
             variant="bordered"
-            size="md"
+            size="sm"
             classNames={{
-              input: "text-sm",
-              inputWrapper: isChanged 
-                ? "border-warning-300 data-[hover=true]:border-warning-400" 
-                : ""
+                inputWrapper: `bg-white dark:bg-zinc-900 border-gray-300 dark:border-gray-700 shadow-none hover:border-gray-400 focus-within:!border-blue-500 rounded-lg ${isChanged ? "!border-orange-400" : ""}`,
+                input: "text-sm",
             }}
           />
         );
@@ -273,9 +271,9 @@ export default function ConfigPage() {
             isSelected={configs[item.key] === 'true'}
             onValueChange={(checked) => handleConfigChange(item.key, checked ? 'true' : 'false')}
             color="primary"
-            size="md"
+            size="sm"
             classNames={{
-              wrapper: isChanged ? "border-warning-300" : ""
+              wrapper: isChanged ? "group-data-[selected=true]:bg-orange-400" : ""
             }}
           >
             <span className="text-sm text-gray-700 dark:text-gray-300">
@@ -294,13 +292,12 @@ export default function ConfigPage() {
                 handleConfigChange(item.key, selectedKey);
               }
             }}
-            placeholder="请选择验证码类型"
+            placeholder="请选择配置项"
             variant="bordered"
-            size="md"
+            size="sm"
             classNames={{
-              trigger: isChanged 
-                ? "border-warning-300 data-[hover=true]:border-warning-400" 
-                : ""
+                trigger: `bg-white dark:bg-zinc-900 border-gray-300 dark:border-gray-700 shadow-none hover:border-gray-400 focus-within:!border-blue-500 rounded-lg ${isChanged ? "!border-orange-400" : ""}`,
+                value: "text-sm"
             }}
           >
             {item.options?.map((option) => (
@@ -319,71 +316,87 @@ export default function ConfigPage() {
     }
   };
 
-  if (loading) {
-    return (
-      
-        <div className="flex items-center justify-center min-h-[400px]">
-          <Spinner size="lg" label="加载配置中..." />
-        </div>
-      
-    );
-  }
-
   return (
-    
-      <div className="px-4 lg:px-6 py-6">
-        <div className="flex justify-end mb-6">
-          <Button
-            size="sm"
-            color="primary"
-            startContent={<SaveIcon className="w-4 h-4" />}
-            onClick={handleSave}
-            isLoading={saving}
-            disabled={!hasChanges}
-          >
-            {saving ? '保存中...' : '保存配置'}
-          </Button>
+    <div className="flex flex-col gap-6">
+        {/* 顶部工具栏 */}
+        <div className="bg-white dark:bg-zinc-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+             <div className="flex items-center justify-between">
+                 <div className="flex flex-col">
+                    <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">系统配置</h2>
+                    <p className="text-xs text-gray-500 mt-0.5">管理面板的核心设置选项</p>
+                 </div>
+                 
+                 <Button
+                    size="sm"
+                    color={hasChanges ? "warning" : "primary"}
+                    startContent={<SaveIcon className="w-4 h-4" />}
+                    onPress={handleSave}
+                    isLoading={saving}
+                    isDisabled={!hasChanges}
+                    className="font-medium"
+                  >
+                    {saving ? '保存中...' : hasChanges ? '保存变更' : '已保存'}
+                  </Button>
+             </div>
         </div>
 
-        <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden divide-y divide-gray-200 dark:divide-gray-700">
-          <div className="p-4">
-            {CONFIG_ITEMS.map((item, index) => {
-              // 检查配置项是否应该显示
-              if (!shouldShowItem(item)) {
-                return null;
-              }
-
-              // 计算是否是最后一个显示的项目（用于决定是否显示分隔线）
-              const remainingItems = CONFIG_ITEMS.slice(index + 1).filter(shouldShowItem);
-              const isLastItem = remainingItems.length === 0;
-
-              return (
-                <div key={item.key} className="space-y-2 py-4 first:pt-0 last:pb-0">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-sm font-medium text-default-700">
-                      {item.label}
-                    </label>
-                    {item.description && (
-                      <p className="text-xs text-default-500">
-                        {item.description}
-                      </p>
-                    )}
-                  </div>
+        {/* 配置表单 */}
+        <div className="bg-white dark:bg-zinc-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6 min-h-[400px]">
+           {loading ? (
+             <div className="flex items-center justify-center h-64">
+               <div className="flex flex-col items-center gap-3">
+                 <Spinner size="lg" color="primary" />
+                 <span className="text-gray-500 text-sm">正在加载配置...</span>
+               </div>
+             </div>
+           ) : (
+             <div className="space-y-6 max-w-3xl">
+                {CONFIG_ITEMS.map((item) => {
+                  if (!shouldShowItem(item)) return null;
                   
-                  {/* 渲染配置项 */}
-                  {renderConfigItem(item)}
-                  {!isLastItem && <div className="pt-4" />}
-                </div>
-              );
-            })}
-          </div>
-          {hasChanges && (
-            <div className="px-4 py-3 text-sm text-warning-600">
-              检测到配置变更，请记得保存您的修改
-            </div>
-          )}
+                  const isChanged = hasChanges && configs[item.key] !== originalConfigs[item.key];
+                  
+                  return (
+                    <div key={item.key} className={`pb-6 last:pb-0 border-b border-gray-100 dark:border-zinc-800 last:border-0 ${isChanged ? "bg-orange-50/50 dark:bg-orange-900/10 -mx-4 px-4 py-4 rounded-lg border-transparent transition-colors" : ""}`}>
+                       <div className="flex flex-col md:flex-row md:items-start gap-4">
+                          <div className="md:w-1/3 flex flex-col gap-1">
+                             <label className="text-sm font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                                {item.label}
+                                {isChanged && <span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span>}
+                             </label>
+                             {item.description && (
+                               <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                                 {item.description}
+                               </p>
+                             )}
+                          </div>
+                          <div className="md:w-2/3">
+                             {renderConfigItem(item)}
+                          </div>
+                       </div>
+                    </div>
+                  );
+                })}
+
+                {hasChanges && (
+                    <div className="fixed bottom-6 right-6 z-20 bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 px-4 py-3 rounded-xl border border-orange-200 dark:border-orange-800 shadow-lg flex items-center gap-3 animate-slide-up">
+                        <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></div>
+                        <span className="text-sm font-medium">配置已修改，请记得保存</span>
+                        <Button 
+                           size="sm" 
+                           color="warning" 
+                           variant="flat" 
+                           onPress={handleSave} 
+                           isLoading={saving}
+                           className="ml-2"
+                        >
+                            保存
+                        </Button>
+                    </div>
+                )}
+             </div>
+           )}
         </div>
-      </div>
-    
+    </div>
   );
 } 

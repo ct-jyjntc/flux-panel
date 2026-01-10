@@ -4,10 +4,9 @@ import { Input } from "@heroui/input";
 import { Textarea } from "@heroui/input";
 import { Select, SelectItem } from "@heroui/select";
 import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from "@heroui/modal";
-import { Chip } from "@heroui/chip";
 import { Spinner } from "@heroui/spinner";
-import { Switch } from "@heroui/switch";
 import { Checkbox } from "@heroui/checkbox";
+import { Dropdown, DropdownTrigger, DropdownMenu, DropdownItem } from "@heroui/dropdown";
 import toast from 'react-hot-toast';
 import {
   DndContext,
@@ -39,9 +38,20 @@ import {
   diagnoseForward,
   updateForwardOrder,
   batchDeleteForwards,
-  batchUpdateForwardTunnel
+  batchUpdateForwardTunnel,
+  getUserPackageInfo
 } from "@/api";
 import { JwtUtil } from "@/utils/jwt";
+import { SearchIcon } from "@/components/icons";
+
+interface UserInfo {
+  flow: number;
+  inFlow: number;
+  outFlow: number;
+  num: number;
+  expTime?: string;
+  flowResetTime?: number;
+}
 
 interface Forward {
   id: number;
@@ -106,15 +116,17 @@ interface DiagnosisResult {
 // 添加分组接口
 export default function ForwardPage() {
   const [loading, setLoading] = useState(true);
+  const [userInfo, setUserInfo] = useState<UserInfo>({ flow: 0, inFlow: 0, outFlow: 0, num: 0 });
   const [forwards, setForwards] = useState<Forward[]>([]);
   const [tunnels, setTunnels] = useState<Tunnel[]>([]);
-  const [filterTunnelId, setFilterTunnelId] = useState<string>("all");
+  const [filterTunnelId] = useState<string>("all");
   
   // 拖拽排序相关状态
   const [forwardOrder, setForwardOrder] = useState<number[]>([]);
   
   // 模态框状态
   const [modalOpen, setModalOpen] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [addressModalOpen, setAddressModalOpen] = useState(false);
   const [diagnosisModalOpen, setDiagnosisModalOpen] = useState(false);
@@ -173,11 +185,16 @@ export default function ForwardPage() {
   const loadData = async (lod = true) => {
     setLoading(lod);
     try {
-      const [forwardsRes, tunnelsRes] = await Promise.all([
+      const [forwardsRes, tunnelsRes, userRes] = await Promise.all([
         getForwardList(),
-        userTunnel()
+        userTunnel(),
+        getUserPackageInfo()
       ]);
       
+      if (userRes.code === 200) {
+        setUserInfo(userRes.data);
+      }
+
       if (forwardsRes.code === 0) {
         const forwardsData = forwardsRes.data?.map((forward: any) => ({
           ...forward,
@@ -299,6 +316,7 @@ export default function ForwardPage() {
   // 新增转发
   const handleAdd = () => {
     setIsEdit(false);
+    setShowAdvanced(false);
     setForm({
       name: '',
       tunnelId: null,
@@ -315,6 +333,7 @@ export default function ForwardPage() {
   // 编辑转发
   const handleEdit = (forward: Forward) => {
     setIsEdit(true);
+    setShowAdvanced(false);
     setForm({
       id: forward.id,
       userId: forward.userId,
@@ -574,21 +593,7 @@ export default function ForwardPage() {
     return `${formattedFirstIp}:${port} (+${ips.length - 1})`;
   };
 
-  // 格式化远程地址
-  const formatRemoteAddress = (addressString: string): string => {
-    if (!addressString) return '';
-    
-    const addresses = addressString.split(',').map(addr => addr.trim()).filter(addr => addr);
-    if (addresses.length === 0) return '';
-    return addresses[0];
-  };
 
-  // 检查是否有多个地址
-  const hasMultipleAddresses = (addressString: string): boolean => {
-    if (!addressString) return false;
-    const addresses = addressString.split(',').map(addr => addr.trim()).filter(addr => addr);
-    return addresses.length > 1;
-  };
 
   // 显示地址列表弹窗
   const showAddressModal = (addressString: string, port: number | null, title: string) => {
@@ -991,24 +996,6 @@ export default function ForwardPage() {
     }
   };
 
-  const renderAddressCell = (address: string, port: number | null, title: string, showMultiple: boolean) => {
-    const display = port === null ? formatRemoteAddress(address) : formatInAddress(address, port);
-    const hasMultiple = showMultiple && hasMultipleAddresses(address);
-    return (
-      <button
-        type="button"
-        onClick={() => showAddressModal(address, port, title)}
-        title={display}
-        className="flex items-center gap-1 text-left text-xs text-default-600 hover:text-foreground transition-colors cursor-pointer"
-      >
-        <code className="font-mono truncate max-w-[220px]">{display}</code>
-        {hasMultiple && (
-          <span className="text-[10px] text-default-400">多</span>
-        )}
-      </button>
-    );
-  };
-
   const SortableForwardRow = ({ forward }: { forward: Forward }) => {
     const {
       attributes,
@@ -1019,19 +1006,26 @@ export default function ForwardPage() {
       transition,
       isDragging,
     } = useSortable({ id: forward.id });
+    
+    // Hide drag styles as we removed the handle column for cleaner look (kept functional if needed via row drag?)
+    // Actually we keep it simple.
     const style = {
       transform: CSS.Transform.toString(transform),
       transition,
       opacity: isDragging ? 0.6 : 1,
     };
     const statusDisplay = getStatusDisplay(forward.status);
-    const inPort = typeof forward.inPort === 'number' ? forward.inPort : 0;
+    
+    // Address processing
+    const inAddr = forward.inIp || '未分配';
+    const inPortDisplay = forward.inPort || '自动';
+    const hasMultiple = addressList.filter(a => a.id === forward.id).length > 1;
 
     return (
-      <tr ref={setNodeRef} style={style} className="border-t border-divider hover:bg-default-50/60">
-        <td className="w-10 px-3 py-3 align-top">
+      <tr ref={setNodeRef} style={style} className="border-b border-gray-100 dark:border-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors group">
+        <td className="w-12 px-4 py-4 align-middle">
           <Checkbox
-            aria-label={`选择 ${forward.name}`}
+            aria-label={`Select ${forward.name}`}
             isSelected={selectedForwardKeys.has(forward.id.toString())}
             onValueChange={(checked) => {
               const nextKeys = new Set(selectedForwardKeys);
@@ -1044,79 +1038,126 @@ export default function ForwardPage() {
             }}
           />
         </td>
-        <td className="w-12 px-3 py-3 align-top">
-          <button
-            type="button"
-            aria-label="拖拽排序"
-            ref={setActivatorNodeRef}
-            className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-divider text-default-400 hover:text-foreground hover:border-default-300 cursor-grab active:cursor-grabbing"
-            {...attributes}
-            {...listeners}
-          >
-            <span className="text-base leading-none">⋮⋮</span>
-          </button>
-        </td>
-        <td className="px-3 py-3 align-top">
-          <div className="min-w-0">
-            <div className="text-sm font-medium text-foreground truncate">{forward.name}</div>
-            <div className="text-xs text-default-500 truncate">{forward.tunnelName}</div>
+        
+        {/* Name */}
+        <td className="px-4 py-3 align-middle">
+          <div className="flex flex-col">
+            <span className="font-medium text-sm text-gray-900 dark:text-gray-100 flex items-center gap-2">
+              {forward.name}
+              <span className="text-xs text-gray-400 font-normal">(#{forward.id})</span>
+            </span>
+            <span className="text-xs text-gray-500 mt-1">{forward.tunnelName}</span>
           </div>
         </td>
-        <td className="px-3 py-3 align-top">
-          {renderAddressCell(forward.inIp, inPort, '入口端口', true)}
+
+        {/* Ingress */}
+        <td className="px-4 py-3 align-middle">
+           <div className="flex flex-col gap-1">
+             <div className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+               <span className="bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400 px-1.5 py-0.5 rounded text-xs border border-orange-200 dark:border-orange-900/50">入口</span>
+               <span>{inAddr}</span>
+               {hasMultiple && <span className="bg-red-50 text-red-500 px-1 rounded text-[10px] border border-red-100 cursor-pointer" onClick={() => showAddressModal(forward.inIp, forward.inPort, forward.name)}>多</span>}
+             </div>
+              <div className="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
+                <span className="bg-gray-100 dark:bg-zinc-800 px-1 rounded text-[10px]">端口: {inPortDisplay}</span>
+                 {hasMultiple && <span className="text-blue-500 cursor-pointer" onClick={() => showAddressModal(forward.inIp, forward.inPort, forward.name)}>2个地址</span>}
+              </div>
+           </div>
         </td>
-        <td className="px-3 py-3 align-top">
-          {renderAddressCell(forward.remoteAddr, null, '目标地址', false)}
+
+        {/* Egress */}
+        <td className="px-4 py-3 align-middle">
+           <div className="flex flex-col gap-1">
+             <div className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                <span className="bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400 px-1.5 py-0.5 rounded text-xs border border-green-200 dark:border-green-900/50">目标</span>
+                {/* Drag handle integrated here if needed, or invisible overlay */}
+                <div ref={setActivatorNodeRef} {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing truncate max-w-[200px]" title={forward.remoteAddr}>
+                   {forward.remoteAddr}
+                </div>
+             </div>
+             <div className="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
+                <span className="bg-green-50 dark:bg-green-900/10 text-green-600 dark:text-green-400 px-1 rounded text-[10px]">倍率 1.0</span>
+                <span className="truncate max-w-[150px]">{forward.tunnelName}</span>
+             </div>
+           </div>
         </td>
-        <td className="px-3 py-3 align-top">
-          <div className="flex items-center gap-2">
-            <Chip variant="flat" size="sm" className="text-xs" color="primary">
-              ↑{formatFlow(forward.inFlow || 0)}
-            </Chip>
-            <Chip variant="flat" size="sm" className="text-xs" color="success">
-              ↓{formatFlow(forward.outFlow || 0)}
-            </Chip>
-          </div>
+
+        {/* Traffic */}
+        <td className="px-4 py-3 align-middle">
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            {formatFlow((forward.inFlow || 0) + (forward.outFlow || 0))}
+          </span>
         </td>
-        <td className="px-3 py-3 align-top">
-          <div className="flex items-center gap-2">
-            <Switch
-              size="sm"
-              isSelected={forward.serviceRunning}
-              onValueChange={() => handleServiceToggle(forward)}
-              isDisabled={forward.status !== 1 && forward.status !== 0}
-            />
-            <Chip color={statusDisplay.color as any} variant="flat" size="sm" className="text-xs">
-              {statusDisplay.text}
-            </Chip>
-          </div>
+
+        {/* Status */}
+        <td className="px-4 py-3 align-middle">
+           <span className={`text-sm ${forward.status === 1 ? 'text-green-600 dark:text-green-400' : 'text-gray-500'}`}>
+             {statusDisplay.text}
+           </span>
         </td>
-        <td className="px-3 py-3 align-top text-right">
-          <div className="flex justify-end gap-2">
-            <Button
-              size="sm"
-              variant="flat"
-              color="primary"
-              onPress={() => handleEdit(forward)}
+
+        {/* Actions */}
+        <td className="px-4 py-3 align-middle text-right w-[180px]">
+          <div className="flex justify-end gap-1">
+            {/* Start/Stop */}
+            <button 
+              className={`w-7 h-7 rounded border flex items-center justify-center transition-colors ${forward.serviceRunning 
+                ? 'bg-red-50 border-red-200 text-red-500 hover:bg-red-100' 
+                : 'bg-green-50 border-green-200 text-green-500 hover:bg-green-100'}`}
+              onClick={() => handleServiceToggle(forward)}
+              title={forward.serviceRunning ? "暂停" : "启动"}
             >
-              编辑
-            </Button>
-            <Button
-              size="sm"
-              variant="flat"
-              color="warning"
-              onPress={() => handleDiagnose(forward)}
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                {forward.serviceRunning ? (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                ) : (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                )}
+              </svg>
+            </button>
+
+            {/* Diagnose */}
+            <button 
+              className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 flex items-center justify-center transition-colors" 
+              onClick={() => handleDiagnose(forward)} 
+              title="诊断"
             >
-              诊断
-            </Button>
-            <Button
-              size="sm"
-              variant="flat"
-              color="danger"
-              onPress={() => handleDelete(forward)}
+               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+               </svg>
+            </button>
+            
+            {/* Logs (Mock) */}
+             <button 
+              className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 flex items-center justify-center transition-colors" 
+              title="日志"
             >
-              删除
-            </Button>
+               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+               </svg>
+            </button>
+
+             {/* Edit */}
+             <button 
+               className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 flex items-center justify-center transition-colors" 
+               onClick={() => handleEdit(forward)} 
+               title="编辑"
+              >
+               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+               </svg>
+            </button>
+            
+            {/* Delete */}
+            <button 
+              className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-red-50 text-gray-600 hover:text-red-500 flex items-center justify-center transition-colors" 
+              onClick={() => handleDelete(forward)} 
+              title="删除"
+            >
+               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+               </svg>
+            </button>
           </div>
         </td>
       </tr>
@@ -1195,98 +1236,98 @@ export default function ForwardPage() {
   }
 
   return (
-    
-      <div className="px-4 lg:px-6 py-6">
-        {/* 页面头部 */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <Select
-              aria-label="按隧道筛选"
-              size="sm"
-              variant="bordered"
-              selectedKeys={[filterTunnelId]}
-              onSelectionChange={(keys) => {
-                const selectedKey = Array.from(keys)[0] as string;
-                setFilterTunnelId(selectedKey || "all");
-              }}
-              className="min-w-[180px]"
-              items={[
-                { id: "all", name: "全部隧道" },
-                ...tunnels.map((tunnel) => ({
-                  id: tunnel.id.toString(),
-                  name: tunnel.name,
-                })),
-              ]}
-            >
-              {(item) => (
-                <SelectItem key={item.id}>
-                  {item.name}
-                </SelectItem>
-              )}
-            </Select>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="text-xs text-default-500 px-2 py-1 border border-divider rounded-md">
-              已选 {selectedForwardCount} 条
-            </div>
-            <Button
-              size="sm"
-              variant="flat"
-              color="primary"
-              onPress={handleBulkUpdateTunnel}
-              isDisabled={selectedForwardCount === 0}
-            >
-              批量更换隧道
-            </Button>
-            <Button
-              size="sm"
-              variant="flat"
-              color="danger"
-              onPress={handleBulkDelete}
-              isDisabled={selectedForwardCount === 0}
-            >
-              批量删除
-            </Button>
-            {/* 导入按钮 */}
-            <Button
-              size="sm"
-              variant="flat"
-              color="warning"
-              onPress={handleImport}
-            >
-              导入
-            </Button>
-            
-            {/* 导出按钮 */}
-            <Button
-              size="sm"
-              variant="flat"
-              color="success"
-              onPress={handleExport}
-              isLoading={exportLoading}
-          
-            >
-              导出
-            </Button>
-
-            <Button
-              size="sm"
-              variant="flat"
-              color="primary"
-              onPress={handleAdd}
+    <div className="flex flex-col gap-6">
+      {/* 1. Toolbar */}
+      <div className="bg-white dark:bg-zinc-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+         {/* Stats and Controls Header */}
+         <div className="flex flex-wrap items-center justify-between gap-4 text-sm mb-4 pb-4 border-b border-gray-100 dark:border-gray-800">
+             <div className="flex items-center gap-6">
+               <div className="flex items-center gap-2">
+                   <span className="text-gray-500">流量:</span>
+                   <span className="font-semibold text-gray-900 dark:text-gray-100">
+                     {formatFlow((userInfo.inFlow || 0) + (userInfo.outFlow || 0))} / {formatFlow(userInfo.flow || 0)}
+                   </span>
+               </div>
+               <div className="flex items-center gap-2">
+                   <span className="text-gray-500">到期:</span>
+                   <span className="font-semibold text-gray-900 dark:text-gray-100">{userInfo.expTime || '永久有效'}</span>
+               </div>
+               <div className="flex items-center gap-2">
+                   <span className="text-gray-500">规则数:</span>
+                   <span className="font-semibold text-gray-900 dark:text-gray-100">{forwards.length} / {userInfo.num}</span>
+               </div>
+             </div>
              
-            >
-              新增
-            </Button>
+             {/* Action Buttons */}
+             <div className="flex items-center gap-2">
+                <Button 
+                  size="sm" 
+                  color="primary" 
+                  startContent={<span className="text-lg">+</span>}
+                  onPress={handleAdd}
+                >
+                  添加规则
+                </Button>
+                <Button size="sm" variant="bordered" onPress={handleImport}>批量导入</Button>
+                <Button size="sm" variant="bordered" onPress={handleExport}>批量导出</Button>
+                <Dropdown>
+                  <DropdownTrigger>
+                    <Button size="sm" variant="bordered">更多操作</Button>
+                  </DropdownTrigger>
+                  <DropdownMenu>
+                    <DropdownItem key="switch" onPress={handleBulkUpdateTunnel}>批量切换</DropdownItem>
+                    <DropdownItem key="clear" className="text-warning">清空流量</DropdownItem>
+                    <DropdownItem key="delete" className="text-danger" color="danger" onPress={handleBulkDelete}>删除选中</DropdownItem>
+                  </DropdownMenu>
+                </Dropdown>
+             </div>
+         </div>
+         
+         {/* Filter/Search Row */}
+         <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2 w-full max-w-xl">
+                 <Input 
+                   size="sm" 
+                   placeholder="搜索规则" 
+                   startContent={<SearchIcon size={16} />}
+                   className="w-[240px]"
+                   isClearable
+                   classNames={{
+                      inputWrapper: "bg-gray-50 dark:bg-zinc-800 border-none shadow-none"
+                   }}
+                   // Add search logic if needed
+                 />
+                 <Button size="sm" variant="light" isIconOnly onPress={() => loadData(true)} title="刷新">
+                    <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                 </Button>
+                 <Button size="sm" variant="light" isIconOnly title="统计数据">
+                    <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                 </Button>
+            </div>
             
-        
-          </div>
-        </div>
+             <div className="flex items-center gap-3">
+                 <div className="text-xs text-gray-400">
+                   共 {forwards.length} 条
+                 </div>
+                 {/* Pagination Placeholders */}
+                 <div className="flex gap-1">
+                    <button className="w-6 h-6 flex items-center justify-center rounded border border-gray-200 text-xs hover:bg-gray-50">&lt;</button>
+                    <button className="w-6 h-6 flex items-center justify-center rounded bg-blue-50 text-blue-600 text-xs font-bold border border-blue-100">1</button>
+                    <button className="w-6 h-6 flex items-center justify-center rounded border border-gray-200 text-xs hover:bg-gray-50">&gt;</button>
+                 </div>
+             </div>
+         </div>
+      </div>
 
-
-        {getSortedForwards().length > 0 ? (
-          <div className="border border-divider rounded-lg overflow-hidden">
-            <DndContext
+      {/* 2. Content Table */}
+      <div className="bg-white dark:bg-zinc-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden min-h-[400px]">
+          {getSortedForwards().length > 0 ? (
+            <div className="overflow-x-auto">
+               <DndContext
               sensors={sensors}
               collisionDetection={closestCenter}
               onDragEnd={handleDragEnd}
@@ -1295,12 +1336,11 @@ export default function ForwardPage() {
                 items={getSortedForwards().map((forward) => forward.id)}
                 strategy={verticalListSortingStrategy}
               >
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-default-50 text-default-600 text-xs">
-                      <tr>
-                        <th className="w-10 px-3 py-3 text-left">
-                          <Checkbox
+               <table className="w-full text-left text-sm">
+                  <thead className="bg-gray-50 dark:bg-zinc-800/50 text-gray-500 font-medium border-b border-gray-100 dark:border-gray-800">
+                     <tr>
+                        <th className="w-12 px-4 py-3">
+                           <Checkbox
                             aria-label="全选"
                             isSelected={allVisibleSelected}
                             onValueChange={(checked) => {
@@ -1314,144 +1354,188 @@ export default function ForwardPage() {
                             }}
                           />
                         </th>
-                        <th className="w-12 px-3 py-3 text-left">排序</th>
-                        <th className="px-3 py-3 text-left">转发名称</th>
-                        <th className="px-3 py-3 text-left">入口</th>
-                        <th className="px-3 py-3 text-left">目标</th>
-                        <th className="px-3 py-3 text-left">流量</th>
-                        <th className="px-3 py-3 text-left">状态</th>
-                        <th className="px-3 py-3 text-right">操作</th>
-                      </tr>
-                    </thead>
-                    <tbody>
+                        <th className="px-4 py-3">规则名</th>
+                        <th className="px-4 py-3">入口</th>
+                        <th className="px-4 py-3">目标</th>
+                        <th className="px-4 py-3">已用流量</th>
+                        <th className="px-4 py-3">状态</th>
+                        <th className="px-4 py-3 text-right">操作</th>
+                     </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-zinc-800">
                       {getSortedForwards().map((forward) => (
                         <SortableForwardRow key={forward.id} forward={forward} />
                       ))}
-                    </tbody>
-                  </table>
-                  {getSortedForwards().length === 0 && (
-                    <div className="text-default-500 text-sm py-8 text-center">
-                      暂无转发配置
-                    </div>
-                  )}
-                </div>
-              </SortableContext>
+                  </tbody>
+               </table>
+               </SortableContext>
             </DndContext>
-          </div>
-        ) : (
-          <div className="border border-gray-200 dark:border-gray-700 rounded-lg text-center py-16">
-            <div className="flex flex-col items-center gap-4">
-              <div className="w-16 h-16 bg-default-100 rounded-full flex items-center justify-center">
-                <svg className="w-8 h-8 text-default-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
-                </svg>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-foreground">暂无转发配置</h3>
-                <p className="text-default-500 text-sm mt-1">还没有创建任何转发配置，点击上方按钮开始创建</p>
-              </div>
             </div>
-          </div>
-        )}
+          ) : (
+             <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+                <svg className="w-12 h-12 mb-4 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                </svg>
+                <p>暂无转发规则</p>
+                <Button size="sm" variant="light" color="primary" className="mt-2" onPress={handleAdd}>立即创建</Button>
+             </div>
+          )}
+      </div>
 
         {/* 新增/编辑模态框 */}
         <Modal 
-          isOpen={modalOpen}
+          isOpen={modalOpen} 
           onOpenChange={setModalOpen}
-          size="2xl"
-          scrollBehavior="outside"
+          size="lg"
           backdrop="blur"
           placement="center"
+          scrollBehavior="outside"
+          classNames={{
+            base: "bg-white dark:bg-[#18181b] border border-default-100 shadow-xl rounded-xl",
+            header: "border-b border-gray-100 dark:border-gray-800 pb-4",
+            body: "py-6",
+            footer: "border-t border-gray-100 dark:border-gray-800 pt-4"
+          }}
         >
           <ModalContent>
             {(onClose) => (
               <>
                 <ModalHeader className="flex flex-col gap-1">
-                  <h2 className="text-xl font-bold">
-                    {isEdit ? '编辑转发' : '新增转发'}
-                  </h2>
-                  <p className="text-small text-default-500">
-                    {isEdit ? '修改现有转发配置的信息' : '创建新的转发配置'}
-                  </p>
+                  <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">{isEdit ? '编辑转发' : '添加规则'}</h2>
                 </ModalHeader>
                 <ModalBody>
-                  <div className="space-y-4 pb-4">
-                    <Input
-                      label="转发名称"
-                      placeholder="请输入转发名称"
-                      value={form.name}
-                      onChange={(e) => setForm(prev => ({ ...prev, name: e.target.value }))}
-                      isInvalid={!!errors.name}
-                      errorMessage={errors.name}
-                      variant="bordered"
-                    />
+                  <div className="flex flex-col gap-6">
+                    {/* 名称 */}
+                    <div className="flex flex-col gap-2">
+                       <label className="text-sm font-medium text-gray-700 dark:text-gray-300">名称</label>
+                       <Input
+                          placeholder="请输入规则名称"
+                          value={form.name}
+                          onChange={(e) => setForm(prev => ({ ...prev, name: e.target.value }))}
+                          isInvalid={!!errors.name}
+                          errorMessage={errors.name}
+                          variant="bordered"
+                          classNames={{
+                             inputWrapper: "bg-white dark:bg-zinc-900 border-gray-300 dark:border-gray-700 shadow-none hover:border-gray-400 focus-within:!border-blue-500 rounded-lg",
+                             input: "text-sm"
+                          }}
+                        />
+                    </div>
                     
-                    <Select
-                      label="选择隧道"
-                      placeholder="请选择关联的隧道"
-                      selectedKeys={form.tunnelId ? [form.tunnelId.toString()] : []}
-                      onSelectionChange={(keys) => {
-                        const selectedKey = Array.from(keys)[0] as string;
-                        if (selectedKey) {
-                          handleTunnelChange(selectedKey);
-                        }
-                      }}
-                      isInvalid={!!errors.tunnelId}
-                      errorMessage={errors.tunnelId}
-                      variant="bordered"
-                    >
-                      {tunnels.map((tunnel) => (
-                        <SelectItem key={tunnel.id} >
-                          {tunnel.name}
-                        </SelectItem>
-                      ))}
-                    </Select>
+                     {/* 入口 */}
+                    <div className="flex flex-col gap-2">
+                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">入口</label>
+                        <Select
+                          placeholder="选择隧道节点"
+                          selectedKeys={form.tunnelId ? [form.tunnelId.toString()] : []}
+                          onSelectionChange={(keys) => {
+                            const selectedKey = Array.from(keys)[0] as string;
+                            if (selectedKey) {
+                              handleTunnelChange(selectedKey);
+                            }
+                          }}
+                          isInvalid={!!errors.tunnelId}
+                          errorMessage={errors.tunnelId}
+                          variant="bordered"
+                          classNames={{
+                             trigger: "bg-white dark:bg-zinc-900 border-gray-300 dark:border-gray-700 shadow-none hover:border-gray-400 focus:!border-blue-500 rounded-lg",
+                             value: "text-sm",
+                             popoverContent: "bg-white dark:bg-zinc-900 border border-gray-200 dark:border-gray-800 shadow-lg rounded-lg"
+                          }}
+                        >
+                          {tunnels.map((tunnel) => (
+                            <SelectItem key={tunnel.id} >
+                              {tunnel.name}
+                            </SelectItem>
+                          ))}
+                        </Select>
+                    </div>
+
                     
-                    <Input
-                      label="入口端口"
-                      placeholder="留空自动分配"
-                      type="number"
-                      value={form.inPort?.toString() || ''}
-                      onChange={(e) => setForm(prev => ({ 
-                        ...prev, 
-                        inPort: e.target.value ? parseInt(e.target.value) : null 
-                      }))}
-                      isInvalid={!!errors.inPort}
-                      errorMessage={errors.inPort}
-                      variant="bordered"
-                      description={
-                        selectedTunnel && selectedTunnel.inNodePortSta && selectedTunnel.inNodePortEnd
-                          ? `允许范围: ${selectedTunnel.inNodePortSta}-${selectedTunnel.inNodePortEnd}`
-                          : '留空将自动分配可用端口'
-                      }
-                    />
+                    {/* 监听端口 */}
+                    <div className="flex flex-col gap-2">
+                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">监听端口</label>
+                        <Input
+                          placeholder="留空则随机"
+                          type="number"
+                          value={form.inPort?.toString() || ''}
+                          onChange={(e) => setForm(prev => ({ 
+                            ...prev, 
+                            inPort: e.target.value ? parseInt(e.target.value) : null 
+                          }))}
+                          isInvalid={!!errors.inPort}
+                          //errorMessage={errors.inPort}
+                          variant="bordered"
+                          classNames={{
+                             inputWrapper: "bg-white dark:bg-zinc-900 border-gray-300 dark:border-gray-700 shadow-none hover:border-gray-400 focus-within:!border-blue-500 rounded-lg",
+                             input: "text-sm"
+                          }}
+                        />
+                        {errors.inPort && <span className="text-xs text-red-500">{errors.inPort}</span>}
+                        {selectedTunnel && selectedTunnel.inNodePortSta && selectedTunnel.inNodePortEnd && (
+                            <div className="text-xs text-gray-400">
+                                允许范围: {selectedTunnel.inNodePortSta}-{selectedTunnel.inNodePortEnd}
+                            </div>
+                        )}
+                    </div>
                     
-                    <Input
-                      label="远程地址"
-                      placeholder="请输入远程地址，例如: 192.168.1.100:8080"
-                      value={form.remoteAddr}
-                      onChange={(e) => setForm(prev => ({ ...prev, remoteAddr: e.target.value }))}
-                      isInvalid={!!errors.remoteAddr}
-                      errorMessage={errors.remoteAddr}
-                      variant="bordered"
-                      description="格式: IP:端口 或 域名:端口，仅支持单个地址"
-                    />
+                    {/* 目标地址 */}
+                    <div className="flex flex-col gap-2">
+                         <label className="text-sm font-medium text-gray-700 dark:text-gray-300">目标地址</label>
+                         <Textarea
+                           minRows={4}
+                           placeholder={`一行一个，空行会被忽略，格式如下：
+
+1.2.3.4:5678
+[2001::]:80
+example.com:443`}
+                           value={form.remoteAddr}
+                           onChange={(e) => setForm(prev => ({ ...prev, remoteAddr: e.target.value }))}
+                           isInvalid={!!errors.remoteAddr}
+                           errorMessage={errors.remoteAddr}
+                           variant="bordered"
+                           classNames={{
+                             inputWrapper: "bg-white dark:bg-zinc-900 border-gray-300 dark:border-gray-700 shadow-none hover:border-gray-400 focus-within:!border-blue-500 rounded-lg",
+                             input: "text-sm font-mono placeholder:text-gray-400"
+                          }}
+                         />
+                    </div>
                     
-                    <Input
-                      label="出口网卡名或IP"
-                      placeholder="请输入出口网卡名或IP"
-                      value={form.interfaceName}
-                      onChange={(e) => setForm(prev => ({ ...prev, interfaceName: e.target.value }))}
-                      isInvalid={!!errors.interfaceName}
-                      errorMessage={errors.interfaceName}
-                      variant="bordered"
-                      description="用于多IP服务器指定使用那个IP请求远程地址，不懂的默认为空就行"
-                    />
+                    {/* 高级选项 (Accordion style toggler) */}
+                     <div className="border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden">
+                        <button 
+                           className="w-full flex items-center justify-between p-3 bg-gray-50 dark:bg-zinc-800 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-zinc-700 transition-colors"
+                           onClick={() => setShowAdvanced(!showAdvanced)}
+                        >
+                           <span>高级选项</span>
+                           <svg className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${showAdvanced ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                           </svg>
+                        </button>
+                        {showAdvanced && (
+                          <div className="p-3 bg-white dark:bg-zinc-900 border-t border-gray-200 dark:border-gray-800">
+                             <Input
+                              label="出口网卡名或IP"
+                              labelPlacement="outside"
+                              placeholder="请输入出口网卡名或IP"
+                              value={form.interfaceName}
+                              onChange={(e) => setForm(prev => ({ ...prev, interfaceName: e.target.value }))}
+                              isInvalid={!!errors.interfaceName}
+                              errorMessage={errors.interfaceName}
+                              variant="bordered"
+                              classNames={{
+                                 inputWrapper: "bg-white dark:bg-zinc-900 border-gray-300 dark:border-gray-700 shadow-none hover:border-gray-400 focus-within:!border-blue-500 rounded-lg",
+                              }}
+                              description="用于多IP服务器指定使用那个IP请求远程地址"
+                            />
+                        </div>
+                        )}
+                     </div>
                     
                   </div>
                 </ModalBody>
-                <ModalFooter>
-                  <Button size="sm" variant="light" onPress={onClose}>
+                <ModalFooter className="gap-2">
+                  <Button size="sm" variant="bordered" onPress={onClose} className="border-gray-300 text-gray-700 dark:border-gray-700 dark:text-gray-300">
                     取消
                   </Button>
                   <Button 
@@ -1459,8 +1543,9 @@ export default function ForwardPage() {
                     color="primary" 
                     onPress={handleSubmit}
                     isLoading={submitLoading}
+                    className="bg-blue-600 font-medium shadow-sm"
                   >
-                    {isEdit ? '保存修改' : '创建转发'}
+                    确定
                   </Button>
                 </ModalFooter>
               </>
@@ -1473,9 +1558,15 @@ export default function ForwardPage() {
           isOpen={deleteModalOpen}
           onOpenChange={setDeleteModalOpen}
           size="2xl"
-        scrollBehavior="outside"
-        backdrop="blur"
-        placement="center"
+          scrollBehavior="outside"
+          backdrop="blur"
+          placement="center"
+          classNames={{
+            base: "bg-white dark:bg-[#18181b] border border-gray-100 dark:border-gray-800 shadow-xl rounded-xl",
+            header: "border-b border-gray-100 dark:border-gray-800 pb-4",
+            body: "py-6",
+            footer: "border-t border-gray-100 dark:border-gray-800 pt-4"
+          }}
         >
           <ModalContent>
             {(onClose) => (
@@ -1510,7 +1601,19 @@ export default function ForwardPage() {
         </Modal>
 
         {/* 地址列表弹窗 */}
-        <Modal isOpen={addressModalOpen} onClose={() => setAddressModalOpen(false)} size="lg" scrollBehavior="outside">
+        <Modal 
+          isOpen={addressModalOpen} 
+          onClose={() => setAddressModalOpen(false)} 
+          size="lg" 
+          scrollBehavior="outside" 
+          placement="center"
+          classNames={{
+            base: "bg-white dark:bg-[#18181b] border border-gray-100 dark:border-gray-800 shadow-xl rounded-xl",
+            header: "border-b border-gray-100 dark:border-gray-800 pb-4",
+            body: "py-6",
+            footer: "border-t border-gray-100 dark:border-gray-800 pt-4"
+          }}
+        >
           <ModalContent>
             <ModalHeader className="text-base">{addressModalTitle}</ModalHeader>
             <ModalBody className="pb-6">
@@ -1549,9 +1652,15 @@ export default function ForwardPage() {
           }} 
           
           size="2xl"
-        scrollBehavior="outside"
-        backdrop="blur"
-        placement="center"
+          scrollBehavior="outside"
+          backdrop="blur"
+          placement="center"
+          classNames={{
+            base: "bg-white dark:bg-[#18181b] border border-gray-100 dark:border-gray-800 shadow-xl rounded-xl",
+            header: "border-b border-gray-100 dark:border-gray-800 pb-4",
+            body: "py-6",
+            footer: "border-t border-gray-100 dark:border-gray-800 pt-4"
+          }}
         >
           <ModalContent>
             <ModalHeader className="flex flex-col gap-1">
@@ -1667,15 +1776,20 @@ export default function ForwardPage() {
           </ModalContent>
         </Modal>
 
-        {/* 导入数据模态框 */}
+        {/* 导入模态框 */}
         <Modal 
           isOpen={importModalOpen} 
-          onClose={() => setImportModalOpen(false)} 
-          
+          onOpenChange={setImportModalOpen} 
           size="2xl"
-        scrollBehavior="outside"
-        backdrop="blur"
-        placement="center"
+          scrollBehavior="outside"
+          backdrop="blur"
+          placement="center"
+          classNames={{
+            base: "bg-white dark:bg-[#18181b] border border-gray-100 dark:border-gray-800 shadow-xl rounded-xl",
+            header: "border-b border-gray-100 dark:border-gray-800 pb-4",
+            body: "py-6",
+            footer: "border-t border-gray-100 dark:border-gray-800 pt-4"
+          }}
         >
           <ModalContent>
             <ModalHeader className="flex flex-col gap-1">
@@ -1817,6 +1931,12 @@ export default function ForwardPage() {
           scrollBehavior="outside"
           backdrop="blur"
           placement="center"
+          classNames={{
+            base: "bg-white dark:bg-[#18181b] border border-gray-100 dark:border-gray-800 shadow-xl rounded-xl",
+            header: "border-b border-gray-100 dark:border-gray-800 pb-4",
+            body: "py-6",
+            footer: "border-t border-gray-100 dark:border-gray-800 pt-4"
+          }}
         >
           <ModalContent>
             {(onClose) => (
@@ -1858,6 +1978,12 @@ export default function ForwardPage() {
           scrollBehavior="outside"
           backdrop="blur"
           placement="center"
+          classNames={{
+            base: "bg-white dark:bg-[#18181b] border border-gray-100 dark:border-gray-800 shadow-xl rounded-xl",
+            header: "border-b border-gray-100 dark:border-gray-800 pb-4",
+            body: "py-6",
+            footer: "border-t border-gray-100 dark:border-gray-800 pt-4"
+          }}
         >
           <ModalContent>
             {(onClose) => (
@@ -1911,84 +2037,90 @@ export default function ForwardPage() {
         <Modal 
           isOpen={diagnosisModalOpen}
           onOpenChange={setDiagnosisModalOpen}
-          
           size="2xl"
-        scrollBehavior="outside"
-        backdrop="blur"
-        placement="center"
+          scrollBehavior="outside"
+          backdrop="blur"
+          placement="center"
+          classNames={{
+            base: "bg-white dark:bg-[#18181b] border border-gray-100 dark:border-gray-800 shadow-xl rounded-xl",
+            header: "border-b border-gray-100 dark:border-gray-800 pb-4",
+            body: "py-0",
+            footer: "border-t border-gray-100 dark:border-gray-800 pt-4"
+          }}
         >
           <ModalContent>
             {(onClose) => (
               <>
-                <ModalHeader className="flex items-center justify-between gap-3">
+                <ModalHeader className="flex items-center justify-between gap-3 bg-gray-50/50 dark:bg-zinc-800/50 p-6">
                   <div className="min-w-0">
-                    <h2 className="text-lg font-semibold">转发诊断结果</h2>
+                    <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">转发诊断结果</h2>
                     {currentDiagnosisForward && (
-                      <div className="flex items-center gap-2 text-xs text-default-500 mt-1">
+                      <div className="flex items-center gap-2 text-xs text-gray-500 mt-1">
                         <span className="truncate">{currentDiagnosisForward.name}</span>
-                        <span className="text-default-300">•</span>
+                        <span className="text-gray-300">•</span>
                         <span>转发服务</span>
                       </div>
                     )}
                   </div>
                 </ModalHeader>
-                <ModalBody>
+                <ModalBody className="p-0">
                   {diagnosisLoading ? (
-                    <div className="flex items-center justify-center py-10">
-                      <div className="flex items-center gap-3">
-                        <Spinner size="sm" />
-                        <span className="text-default-600">正在诊断转发连接...</span>
+                    <div className="flex items-center justify-center py-20">
+                      <div className="flex flex-col items-center gap-3">
+                        <Spinner size="lg" color="primary" />
+                        <span className="text-sm text-gray-500">正在诊断网络连通性...</span>
                       </div>
                     </div>
                   ) : diagnosisResult ? (
-                    <div className="border border-divider rounded-md overflow-hidden">
-                      <div className="grid grid-cols-[1fr_120px_120px_120px_120px] bg-default-100 text-xs font-semibold text-default-700 px-4 py-2">
+                    <div className="bg-white dark:bg-zinc-900">
+                      <div className="grid grid-cols-[1fr_80px_80px_80px_80px] bg-gray-50 dark:bg-zinc-800/50 text-xs font-semibold text-gray-500 border-b border-gray-100 dark:border-gray-800 px-6 py-2">
                         <div>路径</div>
                         <div className="text-center">状态</div>
                         <div className="text-center">延迟(ms)</div>
                         <div className="text-center">丢包率</div>
                         <div className="text-center">质量</div>
                       </div>
-                      <div className="divide-y divide-divider">
+                      <div className="divide-y divide-gray-100 dark:divide-zinc-800">
                         {diagnosisResult.results.map((result, index) => {
                           const quality = getQualityDisplay(result.averageTime, result.packetLoss);
                           const targetAddress = `${result.targetIp}${result.targetPort ? ':' + result.targetPort : ''}`;
 
                           return (
-                            <div key={index} className="grid grid-cols-[1fr_120px_120px_120px_120px] px-4 py-3 items-center">
-                              <div className="min-w-0">
-                                <div className="text-sm font-semibold text-foreground truncate">
-                                  {result.description}（{result.nodeName}）
+                            <div key={index} className="grid grid-cols-[1fr_80px_80px_80px_80px] px-6 py-4 items-center hover:bg-gray-50 dark:hover:bg-zinc-800/30 transition-colors">
+                              <div className="min-w-0 pr-4">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <span className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{result.nodeName}</span>
+                                    <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-zinc-800 text-gray-500">{result.description}</span>
                                 </div>
-                                <div className="text-xs text-default-500 font-mono truncate">{targetAddress}</div>
+                                <div className="text-xs text-gray-400 font-mono truncate">{targetAddress}</div>
                                 {!result.success && (
-                                  <div className="text-xs text-default-500 mt-1 truncate">
-                                    错误: {result.message || '-'}
+                                  <div className="text-xs text-red-500 mt-1 truncate">
+                                    {result.message || '连接失败'}
                                   </div>
                                 )}
                               </div>
                               <div className="flex justify-center">
-                                <Chip 
-                                  color={result.success ? 'success' : 'danger'} 
-                                  variant="flat" 
-                                  size="sm"
-                                >
-                                  {result.success ? '成功' : '失败'}
-                                </Chip>
+                                {result.success ? (
+                                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400">
+                                        成功
+                                     </span>
+                                ) : (
+                                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400">
+                                        失败
+                                     </span>
+                                )}
                               </div>
-                              <div className="text-center text-sm font-semibold text-foreground">
-                                {result.success ? result.averageTime?.toFixed(0) : '--'}
+                              <div className="text-center text-sm text-gray-700 dark:text-gray-300 font-mono">
+                                {result.success ? result.averageTime?.toFixed(0) : '-'}
                               </div>
-                              <div className="text-center text-sm font-semibold text-foreground">
-                                {result.success ? `${result.packetLoss?.toFixed(1)}%` : '--'}
+                              <div className="text-center text-sm text-gray-700 dark:text-gray-300 font-mono">
+                                {result.success ? `${result.packetLoss?.toFixed(1)}%` : '-'}
                               </div>
                               <div className="flex justify-center">
                                 {result.success && quality ? (
-                                  <Chip color={quality.color as any} variant="flat" size="sm">
-                                    {quality.text}
-                                  </Chip>
+                                  <span className={`inline-flex w-2 h-2 rounded-full ${quality.color === 'success' ? 'bg-green-500' : quality.color === 'warning' ? 'bg-yellow-500' : 'bg-red-500'}`} title={quality.text}></span>
                                 ) : (
-                                  <span className="text-xs text-default-400">-</span>
+                                  <span className="text-xs text-gray-300">-</span>
                                 )}
                               </div>
                             </div>
@@ -1997,17 +2129,18 @@ export default function ForwardPage() {
                       </div>
                     </div>
                   ) : (
-                    <div className="text-center py-10">
-                      <div className="w-16 h-16 bg-default-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <svg className="w-8 h-8 text-default-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
+                    <div className="flex flex-col items-center justify-center py-16 text-center">
+                      <div className="w-16 h-16 bg-gray-50 dark:bg-zinc-800 rounded-full flex items-center justify-center mb-4 text-gray-300">
+                           <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                           </svg>
                       </div>
-                      <h3 className="text-lg font-semibold text-foreground">暂无诊断数据</h3>
+                      <h3 className="text-gray-900 dark:text-gray-100 font-medium">暂无诊断数据</h3>
+                      <p className="text-xs text-gray-500 mt-1">点击下方按钮开始诊断网络连接质量</p>
                     </div>
                   )}
                 </ModalBody>
-                <ModalFooter>
+                <ModalFooter className="p-6">
                   <Button size="sm" variant="light" onPress={onClose}>
                     关闭
                   </Button>
@@ -2017,6 +2150,7 @@ export default function ForwardPage() {
                       color="primary" 
                       onPress={() => handleDiagnose(currentDiagnosisForward)}
                       isLoading={diagnosisLoading}
+                      className="font-medium"
                     >
                       重新诊断
                     </Button>

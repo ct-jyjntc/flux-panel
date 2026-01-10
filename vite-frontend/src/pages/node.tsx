@@ -3,17 +3,9 @@ import { Button } from "@heroui/button";
 import { Input } from "@heroui/input";
 import { Textarea } from "@heroui/input";
 import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from "@heroui/modal";
-import { Chip } from "@heroui/chip";
 import { Switch } from "@heroui/switch";
+
 import { Spinner } from "@heroui/spinner";
-import { 
-  Table, 
-  TableHeader, 
-  TableColumn, 
-  TableBody, 
-  TableRow, 
-  TableCell 
-} from "@heroui/table";
 import toast from 'react-hot-toast';
 import axios from 'axios';
 
@@ -102,6 +94,7 @@ export default function NodePage() {
   const [installCommandModal, setInstallCommandModal] = useState(false);
   const [installCommand, setInstallCommand] = useState('');
   const [currentNodeName, setCurrentNodeName] = useState('');
+  const [showNodeAdvanced, setShowNodeAdvanced] = useState(false);
   
   const websocketRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -441,6 +434,7 @@ export default function NodePage() {
     }
     setDialogTitle('新增节点');
     setIsEdit(false);
+    setShowNodeAdvanced(false);
     setDialogVisible(true);
     resetForm();
     setProtocolDisabled(true);
@@ -451,6 +445,7 @@ export default function NodePage() {
   const handleEdit = (node: Node) => {
     setDialogTitle('编辑节点');
     setIsEdit(true);
+    setShowNodeAdvanced(false);
     setForm({
       id: node.id,
       name: node.name,
@@ -625,182 +620,216 @@ export default function NodePage() {
 
   return (
     
-      <div className="px-4 lg:px-6 py-6">
-        {/* 页面头部 */}
-        <div className="flex items-center justify-end mb-6">
-          {canCreateNode && (
-            <Button
-              size="sm"
-              variant="flat"
-              color="primary"
-              onPress={handleAdd}
-            >
-              新增
-            </Button>
-          )}
+      <div className="flex flex-col gap-6">
+        {/* Toolbar */}
+        <div className="bg-white dark:bg-zinc-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+             <div className="flex items-center justify-between gap-4">
+                 <div className="flex items-center gap-2">
+                    {/* Placeholder for search if needed later */}
+                 </div>
+                 
+                 <div className="flex items-center gap-2">
+                    {canCreateNode && (
+                      <Button 
+                        size="sm" 
+                        color="primary" 
+                        startContent={<span className="text-lg">+</span>}
+                        onPress={handleAdd}
+                      >
+                        新增节点
+                      </Button>
+                    )}
+                 </div>
+             </div>
         </div>
 
         {/* 节点列表 */}
-        {loading ? (
-          <div className="flex items-center justify-center h-64">
-            <div className="flex items-center gap-3">
-              <Spinner size="sm" />
-              <span className="text-default-600">正在加载...</span>
+        <div className="bg-white dark:bg-zinc-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden min-h-[400px]">
+          {loading ? (
+             <div className="flex items-center justify-center h-64">
+                <div className="flex flex-col items-center gap-3">
+                  <Spinner size="lg" color="primary" />
+                  <span className="text-gray-500 text-sm">正在加载节点数据...</span>
+                </div>
+             </div>
+          ) : nodeList.length > 0 ? (
+           <div className="overflow-x-auto">
+             <table className="w-full text-left text-sm">
+                <thead className="bg-gray-50 dark:bg-zinc-800/50 text-gray-500 font-medium border-b border-gray-100 dark:border-gray-800">
+                    <tr>
+                       <th className="px-4 py-3">节点名称</th>
+                       <th className="px-4 py-3">入口IP</th>
+                       <th className="px-4 py-3">端口范围</th>
+                       <th className="px-4 py-3">倍率</th>
+                       <th className="px-4 py-3">版本</th>
+                       <th className="px-4 py-3">状态</th>
+                       <th className="px-4 py-3">在线时长</th>
+                       <th className="px-4 py-3">CPU</th>
+                       <th className="px-4 py-3">内存</th>
+                       <th className="px-4 py-3">实时速率</th>
+                       <th className="px-4 py-3">总流量</th>
+                       <th className="px-4 py-3 text-right">操作</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-zinc-800">
+                  {nodeList.map((node) => (
+                      <tr key={node.id} className="border-b border-gray-100 dark:border-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors">
+                        <td className="px-4 py-3 align-middle">
+                           <div className="flex flex-col">
+                              <span className="font-medium text-gray-900 dark:text-gray-100">{node.name}</span>
+                              <span className="text-xs text-gray-400">{node.serverIp}</span>
+                           </div>
+                        </td>
+                        <td className="px-4 py-3 align-middle">
+                           <div className="text-xs font-mono text-gray-600 dark:text-gray-400">
+                             {node.ip ? (
+                               node.ip.split(',').length > 1 ? (
+                                 <span title={node.ip.split(',')[0].trim()} className="border-b border-dotted border-gray-300">
+                                   {node.ip.split(',')[0].trim()} +{node.ip.split(',').length - 1}
+                                 </span>
+                               ) : (
+                                 <span title={node.ip.trim()}>{node.ip.trim()}</span>
+                               )
+                             ) : '-'}
+                           </div>
+                        </td>
+                        <td className="px-4 py-3 align-middle">
+                          <div className="flex flex-col gap-0.5 text-xs text-gray-600 dark:text-gray-400 font-mono">
+                             <span>{node.portSta}-{node.portEnd}</span>
+                             <span className="text-gray-400">出口: {node.outPort ?? '-'}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 align-middle">
+                           <span className="px-2 py-0.5 rounded text-xs bg-gray-100 dark:bg-zinc-800 text-gray-600 border border-gray-200 dark:border-gray-700">
+                             {typeof node.trafficRatio === 'number' ? `${node.trafficRatio}x` : '-'}
+                           </span>
+                        </td>
+                        <td className="px-4 py-3 align-middle">
+                           <span className="text-xs text-gray-500">{node.version || '未知'}</span>
+                        </td>
+                        <td className="px-4 py-3 align-middle">
+                           <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${
+                              node.connectionStatus === 'online' 
+                                ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-900/50' 
+                                : 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-900/50'
+                           }`}>
+                             <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${
+                                node.connectionStatus === 'online' ? 'bg-green-500' : 'bg-red-500'
+                             }`}></span>
+                             {node.connectionStatus === 'online' ? '在线' : '离线'}
+                           </span>
+                        </td>
+                        <td className="px-4 py-3 align-middle text-xs text-gray-600 dark:text-gray-400">
+                           {node.connectionStatus === 'online' && node.systemInfo 
+                              ? formatUptime(node.systemInfo.uptime)
+                              : '-'
+                           }
+                        </td>
+                        <td className="px-4 py-3 align-middle">
+                           {node.connectionStatus === 'online' && node.systemInfo ? (
+                             <div className="flex items-center gap-2">
+                                <div className="w-16 h-1.5 bg-gray-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                                   <div className="h-full bg-blue-500 rounded-full transition-all duration-500" style={{ width: `${Math.min(node.systemInfo.cpuUsage, 100)}%` }}></div>
+                                </div>
+                                <span className="text-xs text-gray-500 w-8">{node.systemInfo.cpuUsage.toFixed(0)}%</span>
+                             </div>
+                           ) : '-'}
+                        </td>
+                        <td className="px-4 py-3 align-middle">
+                           {node.connectionStatus === 'online' && node.systemInfo ? (
+                             <div className="flex items-center gap-2">
+                                <div className="w-16 h-1.5 bg-gray-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                                   <div className="h-full bg-purple-500 rounded-full transition-all duration-500" style={{ width: `${Math.min(node.systemInfo.memoryUsage, 100)}%` }}></div>
+                                </div>
+                                <span className="text-xs text-gray-500 w-8">{node.systemInfo.memoryUsage.toFixed(0)}%</span>
+                             </div>
+                           ) : '-'}
+                        </td>
+                        <td className="px-4 py-3 align-middle">
+                           <div className="flex flex-col text-xs font-mono text-gray-600 dark:text-gray-400">
+                             <div className="flex items-center gap-1">
+                                <span className="text-green-500">↑</span>
+                                {node.connectionStatus === 'online' && node.systemInfo ? formatSpeed(node.systemInfo.uploadSpeed) : '-'}
+                             </div>
+                             <div className="flex items-center gap-1">
+                                <span className="text-blue-500">↓</span>
+                                {node.connectionStatus === 'online' && node.systemInfo ? formatSpeed(node.systemInfo.downloadSpeed) : '-'}
+                             </div>
+                           </div>
+                        </td>
+                        <td className="px-4 py-3 align-middle">
+                           <div className="flex flex-col text-xs font-mono text-gray-600 dark:text-gray-400">
+                             <div className="flex items-center gap-1">
+                                <span className="text-green-500">↑</span>
+                                {node.connectionStatus === 'online' && node.systemInfo ? formatTraffic(node.systemInfo.uploadTraffic) : '-'}
+                             </div>
+                             <div className="flex items-center gap-1">
+                                <span className="text-blue-500">↓</span>
+                                {node.connectionStatus === 'online' && node.systemInfo ? formatTraffic(node.systemInfo.downloadTraffic) : '-'}
+                             </div>
+                           </div>
+                        </td>
+                        <td className="px-4 py-3 align-middle text-right w-[140px]">
+                            <div className="flex justify-end gap-1">
+                              {isAdmin || (currentUserId !== null && node.ownerId === currentUserId) ? (
+                                <>
+                                  <button 
+                                    className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-green-50 text-gray-600 hover:text-green-600 flex items-center justify-center transition-colors"
+                                    onClick={() => handleCopyInstallCommand(node)} 
+                                    title="复制安装命令"
+                                    disabled={node.copyLoading}
+                                  >
+                                     {node.copyLoading ? (
+                                       <Spinner size="sm" color="current" />
+                                     ) : (
+                                       <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                       </svg>
+                                     )}
+                                  </button>
+                                  <button 
+                                   className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 flex items-center justify-center transition-colors"
+                                   onClick={() => handleEdit(node)}
+                                   title="编辑"
+                                  >
+                                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                     </svg>
+                                  </button>
+                                  <button 
+                                    className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-red-50 text-gray-600 hover:text-red-500 flex items-center justify-center transition-colors"
+                                    onClick={() => handleDelete(node)}
+                                    title="删除"
+                                  >
+                                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                     </svg>
+                                  </button>
+                                </>
+                              ) : (
+                                <span className="text-xs text-gray-300">-</span>
+                              )}
+                            </div>
+                        </td>
+                      </tr>
+                  ))}
+                </tbody>
+             </table>
+           </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+                <svg className="w-12 h-12 mb-4 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                </svg>
+                <p>
+                    {canCreateNode ? '暂无节点配置' : '暂无节点权限，请联系管理员分配'}
+                </p>
+                {canCreateNode && (
+                  <Button size="sm" variant="light" color="primary" className="mt-2" onPress={handleAdd}>立即创建</Button>
+                )}
             </div>
-          </div>
-        ) : (
-          <div className="border border-divider rounded-lg overflow-hidden">
-            <Table
-              removeWrapper
-              aria-label="节点列表"
-              classNames={{
-                th: "bg-default-50 text-default-600 text-xs",
-                td: "py-3 align-top",
-              }}
-            >
-              <TableHeader>
-                <TableColumn>节点</TableColumn>
-                <TableColumn>入口IP</TableColumn>
-                <TableColumn>端口</TableColumn>
-                <TableColumn>倍率</TableColumn>
-                <TableColumn>版本</TableColumn>
-                <TableColumn>状态</TableColumn>
-                <TableColumn>开机时间</TableColumn>
-                <TableColumn>CPU</TableColumn>
-                <TableColumn>内存</TableColumn>
-                <TableColumn>网络</TableColumn>
-                <TableColumn>流量</TableColumn>
-                <TableColumn className="text-right">操作</TableColumn>
-              </TableHeader>
-              <TableBody
-                emptyContent={
-                  <div className="text-default-500 text-sm py-8">
-                    {canCreateNode ? '暂无节点配置，点击上方按钮开始创建' : '暂无节点权限，请联系管理员分配'}
-                  </div>
-                }
-              >
-                {nodeList.map((node) => (
-                  <TableRow key={node.id}>
-                    <TableCell>
-                      <div className="min-w-0">
-                        <div className="font-medium text-foreground truncate text-sm">{node.name}</div>
-                        <div className="text-xs text-default-500 truncate">{node.serverIp}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="text-xs font-mono">
-                        {node.ip ? (
-                          node.ip.split(',').length > 1 ? (
-                            <span title={node.ip.split(',')[0].trim()}>
-                              {node.ip.split(',')[0].trim()} +{node.ip.split(',').length - 1}
-                            </span>
-                          ) : (
-                            <span title={node.ip.trim()}>{node.ip.trim()}</span>
-                          )
-                        ) : '-'}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="text-xs space-y-1">
-                        <div>{node.portSta}-{node.portEnd}</div>
-                        <div>出口端口: {node.outPort ?? '-'}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="text-xs">
-                        {typeof node.trafficRatio === 'number' ? `${node.trafficRatio}x` : '-'}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="text-xs">{node.version || '未知'}</div>
-                    </TableCell>
-                    <TableCell>
-                      <Chip 
-                        color={node.connectionStatus === 'online' ? 'success' : 'danger'} 
-                        variant="flat" 
-                        size="sm"
-                        className="text-xs"
-                      >
-                        {node.connectionStatus === 'online' ? '在线' : '离线'}
-                      </Chip>
-                    </TableCell>
-                    <TableCell>
-                      <div className="text-xs">
-                        {node.connectionStatus === 'online' && node.systemInfo 
-                          ? formatUptime(node.systemInfo.uptime)
-                          : '-'
-                        }
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="text-xs">
-                        {node.connectionStatus === 'online' && node.systemInfo 
-                          ? `${node.systemInfo.cpuUsage.toFixed(1)}%` 
-                          : '-'
-                        }
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="text-xs">
-                        {node.connectionStatus === 'online' && node.systemInfo 
-                          ? `${node.systemInfo.memoryUsage.toFixed(1)}%` 
-                          : '-'
-                        }
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="text-xs space-y-1">
-                        <div>↑ {node.connectionStatus === 'online' && node.systemInfo ? formatSpeed(node.systemInfo.uploadSpeed) : '-'}</div>
-                        <div>↓ {node.connectionStatus === 'online' && node.systemInfo ? formatSpeed(node.systemInfo.downloadSpeed) : '-'}</div>
-                      </div>
-                    </TableCell>
-                  <TableCell>
-                    <div className="text-xs space-y-1">
-                      <div>↑ {node.connectionStatus === 'online' && node.systemInfo ? formatTraffic(node.systemInfo.uploadTraffic) : '-'}</div>
-                      <div>↓ {node.connectionStatus === 'online' && node.systemInfo ? formatTraffic(node.systemInfo.downloadTraffic) : '-'}</div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex justify-end gap-1.5">
-                      {isAdmin || (currentUserId !== null && node.ownerId === currentUserId) ? (
-                        <>
-                          <Button
-                            size="sm"
-                            variant="flat"
-                            color="success"
-                            onPress={() => handleCopyInstallCommand(node)}
-                            isLoading={node.copyLoading}
-                          >
-                            安装
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="flat"
-                            color="primary"
-                            onPress={() => handleEdit(node)}
-                          >
-                            编辑
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="flat"
-                            color="danger"
-                            onPress={() => handleDelete(node)}
-                          >
-                            删除
-                          </Button>
-                        </>
-                      ) : (
-                        <span className="text-xs text-default-400">-</span>
-                      )}
-                    </div>
-                  </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* 新增/编辑节点对话框 */}
         <Modal 
@@ -810,206 +839,253 @@ export default function NodePage() {
           scrollBehavior="outside"
           backdrop="blur"
           placement="center"
+          classNames={{
+            base: "bg-white dark:bg-[#18181b] border border-gray-100 dark:border-gray-800 shadow-xl rounded-xl",
+            header: "border-b border-gray-100 dark:border-gray-800 pb-4",
+            body: "py-6",
+            footer: "border-t border-gray-100 dark:border-gray-800 pt-4"
+          }}
         >
           <ModalContent>
-            <ModalHeader>{dialogTitle}</ModalHeader>
+            <ModalHeader className="flex flex-col gap-1">
+               <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">{dialogTitle}</h2>
+            </ModalHeader>
             <ModalBody>
-              <div className="space-y-3">
-                <Input
-                  label="节点名称"
-                  placeholder="请输入节点名称"
-                  value={form.name}
-                  onChange={(e) => setForm(prev => ({ ...prev, name: e.target.value }))}
-                  isInvalid={!!errors.name}
-                  errorMessage={errors.name}
-                  variant="bordered"
-                  classNames={{
-                    inputWrapper: "rounded-lg border border-default-200 dark:border-default-200/40 bg-transparent shadow-none",
-                    label: "text-default-600",
-                  }}
-                />
-
-                <Input
-                  label="服务器IP"
-                  placeholder="请输入服务器IP地址，如: 192.168.1.100 或 example.com"
-                  value={form.serverIp}
-                  onChange={(e) => setForm(prev => ({ ...prev, serverIp: e.target.value }))}
-                  isInvalid={!!errors.serverIp}
-                  errorMessage={errors.serverIp}
-                  variant="bordered"
-                  classNames={{
-                    inputWrapper: "rounded-lg border border-default-200 dark:border-default-200/40 bg-transparent shadow-none",
-                    label: "text-default-600",
-                  }}
-                />
-
-                <Textarea
-                  label="入口IP"
-                  placeholder="一行一个IP地址或域名，例如:&#10;192.168.1.100&#10;example.com"
-                  value={form.ipString}
-                  onChange={(e) => setForm(prev => ({ ...prev, ipString: e.target.value }))}
-                  isInvalid={!!errors.ipString}
-                  errorMessage={errors.ipString}
-                  variant="bordered"
-                  minRows={3}
-                  maxRows={5}
-                  description="支持多个IP，每行一个地址"
-                  classNames={{
-                    inputWrapper: "rounded-lg border border-default-200 dark:border-default-200/40 bg-transparent shadow-none",
-                    label: "text-default-600",
-                    description: "text-xs text-default-400",
-                  }}
-                />
-
-                <div className="grid grid-cols-2 gap-3">
-                  <Input
-                    label="起始端口"
-                    type="number"
-                    placeholder="1000"
-                    value={form.portSta.toString()}
-                    onChange={(e) => setForm(prev => ({ ...prev, portSta: parseInt(e.target.value) || 1000 }))}
-                    isInvalid={!!errors.portSta}
-                    errorMessage={errors.portSta}
-                    variant="bordered"
-                    min={1}
-                    max={65535}
-                    classNames={{
-                      inputWrapper: "rounded-lg border border-default-200 dark:border-default-200/40 bg-transparent shadow-none",
-                      label: "text-default-600",
-                    }}
-                  />
-
-                  <Input
-                    label="结束端口"
-                    type="number"
-                    placeholder="65535"
-                    value={form.portEnd.toString()}
-                    onChange={(e) => setForm(prev => ({ ...prev, portEnd: parseInt(e.target.value) || 65535 }))}
-                    isInvalid={!!errors.portEnd}
-                    errorMessage={errors.portEnd}
-                    variant="bordered"
-                    min={1}
-                    max={65535}
-                    classNames={{
-                      inputWrapper: "rounded-lg border border-default-200 dark:border-default-200/40 bg-transparent shadow-none",
-                      label: "text-default-600",
-                    }}
-                  />
+              <div className="flex flex-col gap-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="flex flex-col gap-2">
+                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">节点名称</label>
+                        <Input
+                          placeholder="请输入节点名称"
+                          value={form.name}
+                          onChange={(e) => setForm(prev => ({ ...prev, name: e.target.value }))}
+                          isInvalid={!!errors.name}
+                          errorMessage={errors.name}
+                          variant="bordered"
+                          classNames={{
+                            inputWrapper: "bg-white dark:bg-zinc-900 border-gray-300 dark:border-gray-700 shadow-none hover:border-gray-400 focus-within:!border-blue-500 rounded-lg",
+                            input: "text-sm",
+                          }}
+                        />
+                    </div>
+                
+                    <div className="flex flex-col gap-2">
+                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">服务器IP</label>
+                        <Input
+                          placeholder="如: 192.168.1.100"
+                          value={form.serverIp}
+                          onChange={(e) => setForm(prev => ({ ...prev, serverIp: e.target.value }))}
+                          isInvalid={!!errors.serverIp}
+                          errorMessage={errors.serverIp}
+                          variant="bordered"
+                          classNames={{
+                            inputWrapper: "bg-white dark:bg-zinc-900 border-gray-300 dark:border-gray-700 shadow-none hover:border-gray-400 focus-within:!border-blue-500 rounded-lg",
+                            input: "text-sm",
+                          }}
+                        />
+                    </div>
                 </div>
 
-                <Input
-                  label="出口共享端口（所有隧道共用）"
-                  type="number"
-                  placeholder="请输入出口共享端口"
-                  value={form.outPort.toString()}
-                  onChange={(e) => setForm(prev => ({ 
-                    ...prev, 
-                    outPort: parseInt(e.target.value) || 0 
-                  }))}
-                  isInvalid={!!errors.outPort}
-                  errorMessage={errors.outPort}
-                  variant="bordered"
-                  min={1}
-                  max={65535}
-                  classNames={{
-                    inputWrapper: "rounded-lg border border-default-200 dark:border-default-200/40 bg-transparent shadow-none",
-                    label: "text-default-600",
-                  }}
-                />
+                <div className="flex flex-col gap-2">
+                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">入口IP</label>
+                    <Textarea
+                      placeholder="一行一个IP地址或域名，例如:&#10;192.168.1.100&#10;example.com"
+                      value={form.ipString}
+                      onChange={(e) => setForm(prev => ({ ...prev, ipString: e.target.value }))}
+                      isInvalid={!!errors.ipString}
+                      errorMessage={errors.ipString}
+                      variant="bordered"
+                      minRows={3}
+                      maxRows={5}
+                      classNames={{
+                        inputWrapper: "bg-white dark:bg-zinc-900 border-gray-300 dark:border-gray-700 shadow-none hover:border-gray-400 focus-within:!border-blue-500 rounded-lg",
+                        input: "text-sm font-mono",
+                      }}
+                    />
+                    <div className="text-xs text-gray-400">支持多个IP，每行一个地址，用于展示给用户连接。</div>
+                </div>
 
-                {isAdmin && (
-                  <Input
-                    label="流量倍率"
-                    type="number"
-                    placeholder="1.0"
-                    value={form.trafficRatio.toString()}
-                    onChange={(e) => setForm(prev => ({ 
-                      ...prev, 
-                      trafficRatio: Number(e.target.value) || 0 
-                    }))}
-                    isInvalid={!!errors.trafficRatio}
-                    errorMessage={errors.trafficRatio}
-                    variant="bordered"
-                    min={0}
-                    max={100}
-                    step="0.1"
-                    classNames={{
-                      inputWrapper: "rounded-lg border border-default-200 dark:border-default-200/40 bg-transparent shadow-none",
-                      label: "text-default-600",
-                    }}
-                  />
-                )}
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <div className="flex flex-col gap-2">
+                      <label className="text-sm font-medium text-gray-700 dark:text-gray-300">起始端口</label>
+                      <Input
+                        type="number"
+                        placeholder="1000"
+                        value={form.portSta.toString()}
+                        onChange={(e) => setForm(prev => ({ ...prev, portSta: parseInt(e.target.value) || 1000 }))}
+                        isInvalid={!!errors.portSta}
+                        errorMessage={errors.portSta}
+                        variant="bordered"
+                        min={1}
+                        max={65535}
+                        classNames={{
+                          inputWrapper: "bg-white dark:bg-zinc-900 border-gray-300 dark:border-gray-700 shadow-none hover:border-gray-400 focus-within:!border-blue-500 rounded-lg",
+                          input: "text-sm",
+                        }}
+                      />
+                  </div>
 
-                {/* 屏蔽协议 */}
-                <div className="mt-1">
-                  <div className="text-sm font-medium text-default-700">屏蔽协议</div>
-                  <div className="text-xs text-default-500 mb-1">开启开关以屏蔽对应协议</div>
-                  {protocolDisabled && (
-                    <div className="text-xs text-warning-600 mb-2">
-                      {protocolDisabledReason || '等待节点上线后再设置'}
-                    </div>
-                  )}
-                  <div className={`divide-y divide-default-200 dark:divide-default-200/40 border-t border-default-200 dark:border-default-200/40 ${protocolDisabled ? 'opacity-70' : ''}`}>
-                    <div className="flex items-center justify-between py-3">
-                      <div className="flex items-center gap-2">
-                        <svg className="w-4 h-4 text-default-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 10h20"/></svg>
-                        <div className="text-sm font-medium text-default-700">HTTP</div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <div className="text-xs text-default-400">{form.http === 1 ? '已开启' : '已关闭'}</div>
-                        <Switch
-                          size="sm"
-                          isSelected={form.http === 1}
-                          isDisabled={protocolDisabled}
-                          onValueChange={(v) => setForm(prev => ({ ...prev, http: v ? 1 : 0 }))}
-                        />
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between py-3">
-                      <div className="flex items-center gap-2">
-                        <svg className="w-4 h-4 text-default-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 10V7a6 6 0 1 1 12 0v3"/><rect x="4" y="10" width="16" height="10" rx="2"/></svg>
-                        <div className="text-sm font-medium text-default-700">TLS</div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <div className="text-xs text-default-400">{form.tls === 1 ? '已开启' : '已关闭'}</div>
-                        <Switch
-                          size="sm"
-                          isSelected={form.tls === 1}
-                          isDisabled={protocolDisabled}
-                          onValueChange={(v) => setForm(prev => ({ ...prev, tls: v ? 1 : 0 }))}
-                        />
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between py-3">
-                      <div className="flex items-center gap-2">
-                        <svg className="w-4 h-4 text-default-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                        <div className="text-sm font-medium text-default-700">SOCKS</div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <div className="text-xs text-default-400">{form.socks === 1 ? '已开启' : '已关闭'}</div>
-                        <Switch
-                          size="sm"
-                          isSelected={form.socks === 1}
-                          isDisabled={protocolDisabled}
-                          onValueChange={(v) => setForm(prev => ({ ...prev, socks: v ? 1 : 0 }))}
-                        />
-                      </div>
-                    </div>
+                  <div className="flex flex-col gap-2">
+                      <label className="text-sm font-medium text-gray-700 dark:text-gray-300">结束端口</label>
+                      <Input
+                        type="number"
+                        placeholder="65535"
+                        value={form.portEnd.toString()}
+                        onChange={(e) => setForm(prev => ({ ...prev, portEnd: parseInt(e.target.value) || 65535 }))}
+                        isInvalid={!!errors.portEnd}
+                        errorMessage={errors.portEnd}
+                        variant="bordered"
+                        min={1}
+                        max={65535}
+                        classNames={{
+                          inputWrapper: "bg-white dark:bg-zinc-900 border-gray-300 dark:border-gray-700 shadow-none hover:border-gray-400 focus-within:!border-blue-500 rounded-lg",
+                          input: "text-sm",
+                        }}
+                      />
+                  </div>
+                  
+                  <div className="flex flex-col gap-2">
+                      <label className="text-sm font-medium text-gray-700 dark:text-gray-300">出口共享端口</label>
+                      <Input
+                        type="number"
+                        placeholder="0"
+                        value={form.outPort.toString()}
+                        onChange={(e) => setForm(prev => ({ 
+                          ...prev, 
+                          outPort: parseInt(e.target.value) || 0 
+                        }))}
+                        isInvalid={!!errors.outPort}
+                        errorMessage={errors.outPort}
+                        variant="bordered"
+                        min={1}
+                        max={65535}
+                        classNames={{
+                          inputWrapper: "bg-white dark:bg-zinc-900 border-gray-300 dark:border-gray-700 shadow-none hover:border-gray-400 focus-within:!border-blue-500 rounded-lg",
+                          input: "text-sm",
+                        }}
+                      />
                   </div>
                 </div>
 
+                {isAdmin && (
+                  <div className="flex flex-col gap-2">
+                       <label className="text-sm font-medium text-gray-700 dark:text-gray-300">流量倍率</label>
+                       <Input
+                        type="number"
+                        placeholder="1.0"
+                        value={form.trafficRatio.toString()}
+                        onChange={(e) => setForm(prev => ({ 
+                          ...prev, 
+                          trafficRatio: Number(e.target.value) || 0 
+                        }))}
+                        isInvalid={!!errors.trafficRatio}
+                        errorMessage={errors.trafficRatio}
+                        variant="bordered"
+                        min={0}
+                        max={100}
+                        step="0.1"
+                        classNames={{
+                          inputWrapper: "bg-white dark:bg-zinc-900 border-gray-300 dark:border-gray-700 shadow-none hover:border-gray-400 focus-within:!border-blue-500 rounded-lg",
+                          input: "text-sm",
+                        }}
+                      />
+                  </div>
+                )}
 
+                {/* 屏蔽协议 (In Advanced Options) */}
+                <div className="border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden">
+                   <button 
+                      className="w-full flex items-center justify-between p-3 bg-gray-50 dark:bg-zinc-800 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-zinc-700 transition-colors"
+                      onClick={() => setShowNodeAdvanced(!showNodeAdvanced)}
+                   >
+                      <span>高级选项</span>
+                      <svg className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${showNodeAdvanced ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                   </button>
+                   {showNodeAdvanced && (
+                     <div className="p-4 bg-white dark:bg-zinc-900 border-t border-gray-200 dark:border-gray-800">
+                        <div className="flex items-center justify-between mb-4">
+                            <div>
+                              <div className="text-sm font-bold text-gray-800 dark:text-gray-200">屏蔽协议</div>
+                              <div className="text-xs text-gray-500">开启开关以屏蔽对应协议</div>
+                            </div>
+                            {protocolDisabled && (
+                              <div className="text-xs text-orange-500 bg-orange-50 dark:bg-orange-900/20 px-2 py-1 rounded border border-orange-200 dark:border-orange-800">
+                                 ⚠️ {protocolDisabledReason || '等待节点上线后再设置'}
+                              </div>
+                            )}
+                        </div>
+                        
+                        <div className={`space-y-3 ${protocolDisabled ? 'opacity-70 pointer-events-none' : ''}`}>
+                          <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-zinc-800/50 border border-gray-200 dark:border-gray-700 rounded-lg">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-blue-500">
+                                   <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 10h20"/></svg>
+                              </div>
+                              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">HTTP</span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <span className="text-xs text-gray-400">{form.http === 1 ? '已开启' : '已关闭'}</span>
+                              <Switch
+                                size="sm"
+                                isSelected={form.http === 1}
+                                isDisabled={protocolDisabled}
+                                onValueChange={(v) => setForm(prev => ({ ...prev, http: v ? 1 : 0 }))}
+                              />
+                            </div>
+                          </div>
 
-                <div className="mt-2 text-xs text-default-500 space-y-1">
-                  <div>请不要在出口节点执行屏蔽协议，否则可能影响转发；屏蔽协议仅需在入口节点执行。</div>
-                  <div>服务器ip是你要添加的服务器的ip地址，不是面板的ip地址。入口ip是用于展示在转发页面，面向用户的访问地址。实在理解不到说明你没这个需求，都填节点的服务器ip就行！</div>
+                          <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-zinc-800/50 border border-gray-200 dark:border-gray-700 rounded-lg">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-purple-50 dark:bg-purple-900/20 flex items-center justify-center text-purple-500">
+                                   <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 10V7a6 6 0 1 1 12 0v3"/><rect x="4" y="10" width="16" height="10" rx="2"/></svg>
+                              </div>
+                              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">TLS</span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <span className="text-xs text-gray-400">{form.tls === 1 ? '已开启' : '已关闭'}</span>
+                              <Switch
+                                size="sm"
+                                isSelected={form.tls === 1}
+                                isDisabled={protocolDisabled}
+                                onValueChange={(v) => setForm(prev => ({ ...prev, tls: v ? 1 : 0 }))}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-zinc-800/50 border border-gray-200 dark:border-gray-700 rounded-lg">
+                            <div className="flex items-center gap-3">
+                               <div className="w-8 h-8 rounded-full bg-green-50 dark:bg-green-900/20 flex items-center justify-center text-green-500">
+                                   <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                              </div>
+                              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">SOCKS</span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <span className="text-xs text-gray-400">{form.socks === 1 ? '已开启' : '已关闭'}</span>
+                              <Switch
+                                size="sm"
+                                isSelected={form.socks === 1}
+                                isDisabled={protocolDisabled}
+                                onValueChange={(v) => setForm(prev => ({ ...prev, socks: v ? 1 : 0 }))}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                     </div>
+                   )}
+                </div>
+
+                <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-100 dark:border-blue-800 text-xs text-blue-600 dark:text-blue-400 space-y-1">
+                  <p>• 请不要在出口节点执行屏蔽协议，否则可能影响转发；屏蔽协议仅需在入口节点执行。</p>
+                  <p>• 服务器IP是真实的物理IP。入口IP是展示给用户看的。</p>
                 </div>
               </div>
             </ModalBody>
             <ModalFooter>
               <Button
                 size="sm"
-                variant="flat"
+                variant="light"
                 onPress={() => setDialogVisible(false)}
               >
                 取消
@@ -1019,6 +1095,7 @@ export default function NodePage() {
                 color="primary"
                 onPress={handleSubmit}
                 isLoading={submitLoading}
+                className="font-medium"
               >
                 {submitLoading ? '提交中...' : '确定'}
               </Button>
@@ -1030,20 +1107,28 @@ export default function NodePage() {
         <Modal 
           isOpen={deleteModalOpen}
           onOpenChange={setDeleteModalOpen}
-          size="2xl"
-        scrollBehavior="outside"
-        backdrop="blur"
-        placement="center"
+          size="md"
+          backdrop="blur"
+          placement="center"
+          scrollBehavior="outside"
+          classNames={{
+            base: "bg-white dark:bg-[#18181b] border border-gray-100 dark:border-gray-800 shadow-xl rounded-xl",
+            header: "border-b border-gray-100 dark:border-gray-800 pb-4",
+            body: "py-6",
+            footer: "border-t border-gray-100 dark:border-gray-800 pt-4"
+          }}
         >
           <ModalContent>
             {(onClose) => (
               <>
                 <ModalHeader className="flex flex-col gap-1">
-                  <h2 className="text-xl font-bold">确认删除</h2>
+                  <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">确认删除</h2>
                 </ModalHeader>
                 <ModalBody>
-                  <p>确定要删除节点 <strong>"{nodeToDelete?.name}"</strong> 吗？</p>
-                  <p className="text-small text-default-500">此操作不可恢复，请谨慎操作。</p>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">
+                    <p>确定要删除节点 <strong className="text-gray-900 dark:text-gray-100">"{nodeToDelete?.name}"</strong> 吗？</p>
+                    <p className="mt-1">此操作不可恢复，请谨慎操作。</p>
+                  </div>
                 </ModalBody>
                 <ModalFooter>
                   <Button size="sm" variant="light" onPress={onClose}>
@@ -1054,6 +1139,7 @@ export default function NodePage() {
                     color="danger" 
                     onPress={confirmDelete}
                     isLoading={deleteLoading}
+                    className="font-medium"
                   >
                     {deleteLoading ? '删除中...' : '确认删除'}
                   </Button>
@@ -1068,15 +1154,23 @@ export default function NodePage() {
           isOpen={installCommandModal} 
           onClose={() => setInstallCommandModal(false)}
           size="2xl"
-        scrollBehavior="outside"
-        backdrop="blur"
-        placement="center"
+          placement="center"
+          scrollBehavior="outside"
+          backdrop="blur"
+          classNames={{
+            base: "bg-white dark:bg-[#18181b] border border-gray-100 dark:border-gray-800 shadow-xl rounded-xl",
+            header: "border-b border-gray-100 dark:border-gray-800 pb-4",
+            body: "py-6",
+            footer: "border-t border-gray-100 dark:border-gray-800 pt-4"
+          }}
         >
           <ModalContent>
-            <ModalHeader>安装命令 - {currentNodeName}</ModalHeader>
+            <ModalHeader className="flex flex-col gap-1">
+                <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">安装命令 - {currentNodeName}</h2>
+            </ModalHeader>
             <ModalBody>
               <div className="space-y-4">
-                <p className="text-sm text-default-600">
+                <p className="text-sm text-gray-600 dark:text-gray-400">
                   请复制以下安装命令到服务器上执行：
                 </p>
                 <div className="relative">
@@ -1086,9 +1180,9 @@ export default function NodePage() {
                     variant="bordered"
                     minRows={6}
                     maxRows={10}
-                    className="font-mono text-sm"
                     classNames={{
-                      input: "font-mono text-sm"
+                      inputWrapper: "bg-gray-900 border-gray-800 shadow-none rounded-lg",
+                      input: "font-mono text-sm text-green-400"
                     }}
                   />
                   <Button
@@ -1101,15 +1195,16 @@ export default function NodePage() {
                     复制
                   </Button>
                 </div>
-                <div className="text-xs text-default-500">
-                  💡 提示：如果复制按钮失效，请手动选择上方文本进行复制
+                <div className="text-xs text-gray-500 flex items-center gap-1">
+                   <span>💡</span>
+                   <span>提示：如果复制按钮失效，请手动选择上方文本进行复制</span>
                 </div>
               </div>
             </ModalBody>
             <ModalFooter>
               <Button
                 size="sm"
-                variant="flat"
+                variant="light"
                 onPress={() => setInstallCommandModal(false)}
               >
                 关闭

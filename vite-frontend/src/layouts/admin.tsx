@@ -5,15 +5,22 @@ import { Dropdown, DropdownTrigger, DropdownMenu, DropdownItem } from "@heroui/d
 import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, useDisclosure } from "@heroui/modal";
 import { Input } from "@heroui/input";
 import { toast } from 'react-hot-toast';
+import { Avatar } from "@heroui/avatar";
 
 import { updatePassword } from '@/api';
 import { safeLogout } from '@/utils/logout';
 import { siteConfig } from '@/config/site';
+import { 
+  SunFilledIcon, 
+  MoonFilledIcon 
+} from "@/components/icons";
+import { useTheme } from "next-themes";
 
 interface MenuItem {
   path: string;
   label: string;
   icon: React.ReactNode;
+  group?: string;
   adminOnly?: boolean;
 }
 
@@ -32,16 +39,10 @@ export default function AdminLayout({
   const navigate = useNavigate();
   const location = useLocation();
   const { isOpen, onOpen, onOpenChange } = useDisclosure();
+  const { theme, setTheme } = useTheme();
 
   const [isMobile, setIsMobile] = useState(false);
   const [mobileMenuVisible, setMobileMenuVisible] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
-    try {
-      return localStorage.getItem('sidebar-collapsed') === 'true';
-    } catch {
-      return false;
-    }
-  });
   const [username, setUsername] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
@@ -56,437 +57,338 @@ export default function AdminLayout({
   const menuItems: MenuItem[] = [
     {
       path: '/dashboard',
-      label: '仪表板',
+      label: '主页',
+      group: 'main',
       icon: (
-        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-          <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" />
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+        </svg>
+      )
+    },
+    {
+      path: '/profile',
+      label: '个人中心',
+       group: 'main',
+      icon: (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
         </svg>
       )
     },
     {
       path: '/forward',
-      label: '转发管理',
+      label: '转发规则',
+      group: 'features',
       icon: (
-        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-          <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
         </svg>
       )
     },
     {
       path: '/tunnel',
-      label: '隧道管理',
+      label: '单端口隧道',
+      group: 'features',
       icon: (
-        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-          <path fillRule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0 1 1 0 00-1.414 1.414 4 4 0 005.656 0l3-3a4 4 0 00-5.656-5.656l-1.5 1.5a1 1 0 101.414 1.414l1.5-1.5zm-5 5a2 2 0 012.828 0 1 1 0 101.414-1.414 4 4 0 00-5.656 0l-3 3a4 4 0 105.656 5.656l1.5-1.5a1 1 0 10-1.414-1.414l-1.5 1.5a2 2 0 11-2.828-2.828l3-3z" clipRule="evenodd" />
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+        </svg>
+      )
+    },
+    {
+      path: '/store',
+      label: '商城',
+      group: 'features',
+      icon: (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+        </svg>
+      )
+    },
+    {
+      path: '/orders',
+      label: '我的订单',
+      group: 'features',
+      icon: (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+        </svg>
+      )
+    },
+    {
+      path: '/looking-glass',
+      label: 'LookingGlass',
+      group: 'features',
+      icon: (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
         </svg>
       )
     },
     {
       path: '/node',
-      label: '节点监控',
+      label: '节点状态',
+      group: 'features',
       icon: (
-        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-          <path fillRule="evenodd" d="M3 3a1 1 0 000 2v8a2 2 0 002 2h2.586l-1.293 1.293a1 1 0 101.414 1.414L10 15.414l2.293 2.293a1 1 0 001.414-1.414L12.414 15H15a2 2 0 002-2V5a1 1 0 100-2H3zm11.707 4.707a1 1 0 00-1.414-1.414L10 9.586 8.707 8.293a1 1 0 00-1.414 0l-2 2a1 1 0 101.414 1.414L8 10.414l1.293 1.293a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
         </svg>
       )
     },
-    {
-      path: '/limit',
-      label: '限速管理',
-      icon: (
-        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-        </svg>
-      ),
-      adminOnly: true
-    },
-    {
-      path: '/user',
-      label: '用户管理',
-      icon: (
-        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-          <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
-        </svg>
-      ),
-      adminOnly: true
-    },
-    {
-      path: '/config',
-      label: '网站配置',
-      icon: (
-        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-          <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
-        </svg>
-      ),
-      adminOnly: true
-    }
   ];
 
-  // 检查移动端
-  const checkMobile = () => {
-    setIsMobile(window.innerWidth <= 768);
-    if (window.innerWidth > 768) {
-      setMobileMenuVisible(false);
-    }
-  };
-
-  useEffect(() => {
-    // 获取用户信息
-    const name = localStorage.getItem('name') || 'Admin';
-    
-    // 兼容处理：如果没有admin字段，根据role_id判断（0为管理员）
-    let adminFlag = localStorage.getItem('admin') === 'true';
-    if (localStorage.getItem('admin') === null) {
-      const roleId = parseInt(localStorage.getItem('role_id') || '1', 10);
-      adminFlag = roleId === 0;
-      // 补充设置admin字段，避免下次再次判断
-      localStorage.setItem('admin', adminFlag.toString());
-    }
-    
-    setUsername(name);
-    setIsAdmin(adminFlag);
-
-    // 响应式检查
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-
-    return () => {
-      window.removeEventListener('resize', checkMobile);
+   useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 1024);
+      if (window.innerWidth >= 1024) {
+        setMobileMenuVisible(false);
+      }
     };
+
+    window.addEventListener('resize', handleResize);
+    handleResize();
+
+    // 恢复用户信息
+    const savedName = localStorage.getItem('username');
+    const roleId = localStorage.getItem('role_id');
+    if (savedName) setUsername(savedName);
+    if (roleId === '1') setIsAdmin(true);
+
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // 退出登录
   const handleLogout = () => {
     safeLogout();
-    navigate('/');
+    navigate('/login');
+    toast.success('已安全退出');
   };
 
-  // 切换移动端菜单
-  const toggleMobileMenu = () => {
-    setMobileMenuVisible(!mobileMenuVisible);
-  };
-
-  const toggleSidebarCollapsed = () => {
-    const next = !isSidebarCollapsed;
-    setIsSidebarCollapsed(next);
-    try {
-      localStorage.setItem('sidebar-collapsed', next ? 'true' : 'false');
-    } catch {
-      // ignore storage errors
-    }
-  };
-
-  // 隐藏移动端菜单
-  const hideMobileMenu = () => {
-    setMobileMenuVisible(false);
-  };
-
-  // 菜单点击处理
-  const handleMenuClick = (path: string) => {
-    navigate(path);
-    if (isMobile) {
-      hideMobileMenu();
-    }
-  };
-
-  // 密码表单验证
-  const validatePasswordForm = (): boolean => {
-    if (!passwordForm.newUsername.trim()) {
-      toast.error('请输入新用户名');
-      return false;
-    }
-    if (passwordForm.newUsername.length < 3) {
-      toast.error('用户名长度至少3位');
-      return false;
-    }
-    if (!passwordForm.currentPassword) {
-      toast.error('请输入当前密码');
-      return false;
-    }
-    if (!passwordForm.newPassword) {
-      toast.error('请输入新密码');
-      return false;
-    }
-    if (passwordForm.newPassword.length < 6) {
-      toast.error('新密码长度不能少于6位');
-      return false;
-    }
+  const handlePasswordChange = async () => {
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      toast.error('两次输入密码不一致');
-      return false;
+      toast.error('两次输入的密码不一致');
+      return;
     }
-    return true;
-  };
 
-  // 提交密码修改
-  const handlePasswordSubmit = async () => {
-    if (!validatePasswordForm()) return;
+    if (!passwordForm.currentPassword || !passwordForm.newPassword) {
+      toast.error('请填写完整信息');
+      return;
+    }
 
-    setPasswordLoading(true);
     try {
-      const response = await updatePassword(passwordForm);
-      if (response.code === 0) {
-        toast.success('密码修改成功，请重新登录');
+      setPasswordLoading(true);
+      const res = await updatePassword({
+        newUsername: passwordForm.newUsername || undefined,
+        currentPassword: passwordForm.currentPassword,
+        newPassword: passwordForm.newPassword
+      });
+
+      if (res.code === 200) {
+        toast.success(res.msg || '修改成功，请重新登录');
         onOpenChange();
-        handleLogout();
+        setTimeout(() => {
+          safeLogout();
+          navigate('/login');
+        }, 1500);
       } else {
-        toast.error(response.msg || '密码修改失败');
+        toast.error(res.msg || '修改失败');
       }
     } catch (error) {
-      toast.error('修改密码时发生错误');
-      console.error('修改密码错误:', error);
+      toast.error('请求失败');
     } finally {
       setPasswordLoading(false);
     }
   };
 
-  // 重置密码表单
-  const resetPasswordForm = () => {
-    setPasswordForm({
-      newUsername: '',
-      currentPassword: '',
-      newPassword: '',
-      confirmPassword: ''
-    });
-  };
+  const currentPathLabel = menuItems.find(item => item.path === location.pathname)?.label || 'Flux Panel';
 
-  // 过滤菜单项（根据权限）
-  const filteredMenuItems = menuItems.filter(item => 
-    !item.adminOnly || isAdmin
-  );
-
-  return (
-          <div className={`flex ${isMobile ? 'min-h-screen' : 'h-screen'} bg-gray-100 dark:bg-black`}>
-      {/* 移动端遮罩层 */}
-      {isMobile && mobileMenuVisible && (
-        <div 
-          className="fixed inset-0 backdrop-blur-sm bg-white/50 dark:bg-black/30 z-40"
-          onClick={hideMobileMenu}
-        />
-      )}
-
-      {/* 左侧菜单栏 */}
-      <aside className={`
-        ${isMobile ? 'fixed' : 'relative'} 
-        ${isMobile && !mobileMenuVisible ? '-translate-x-full' : 'translate-x-0'}
-        ${isMobile ? 'w-64' : (isSidebarCollapsed ? 'w-17' : 'w-72')} 
-        bg-white dark:bg-black 
-        border-r border-gray-200 dark:border-gray-600
-        z-50 
-        transition-transform duration-300 ease-in-out
-        flex flex-col
-        ${isMobile ? 'h-screen' : 'h-full'}
-        ${isMobile ? 'top-0 left-0' : ''}
-      `}>
-                 {/* Logo 区域 */}
-        <div className={`px-4 h-14 flex items-center border-b border-gray-200 dark:border-gray-600 ${isSidebarCollapsed ? 'justify-center' : ''}`}>
-           <div className="flex items-center w-full">
-             {!isSidebarCollapsed && (
-               <div className="flex-1 min-w-0">
-                 <h1 className="text-sm font-semibold text-foreground tracking-wide overflow-hidden whitespace-nowrap">{siteConfig.name}</h1>
-               </div>
-             )}
-             {!isMobile && (
-               <Button
-                 isIconOnly
-                 size="sm"
-                 variant="light"
-                 onPress={toggleSidebarCollapsed}
-                 aria-label={isSidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
-                 className={isSidebarCollapsed ? 'hidden' : ''}
-               >
-                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                 </svg>
-               </Button>
-             )}
-           </div>
-         </div>
-
-                 {/* 菜单导航 */}
-        <nav className={`flex-1 py-3 overflow-y-auto ${isSidebarCollapsed ? 'px-2' : 'px-3'}`}>
-          <ul className="space-y-0.5">
-            {filteredMenuItems.map((item) => {
-              const isActive = location.pathname === item.path;
-              return (
-                <li key={item.path}>
-                                     <button
-                     onClick={() => handleMenuClick(item.path)}
-                     className={`
-                       w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-2' : 'gap-2.5 px-3'} py-2 rounded-md text-left
-                       transition-colors duration-150 min-h-[40px] relative
-                       ${isActive 
-                         ? 'text-primary-700 dark:text-primary-300 bg-transparent' 
-                         : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100/60 dark:hover:bg-gray-900/60'
-                       }
-                     `}
-                   >
-                     {isActive && !isSidebarCollapsed && (
-                       <span className="absolute left-1 top-1.5 bottom-1.5 w-[2px] rounded-full bg-primary-500" />
-                     )}
-                     <div className={`flex-shrink-0 ${isActive ? 'text-primary-600 dark:text-primary-300' : ''}`}>
-                      {item.icon}
-                     </div>
-                     {!isSidebarCollapsed && <span className="font-medium text-sm">{item.label}</span>}
-                   </button>
-                </li>
-              );
-            })}
-          </ul>
-        </nav>
-
-                {/* 底部版权信息 */}
-        <div className={`py-2 pb-4 mt-auto flex-shrink-0 ${isSidebarCollapsed ? 'px-2' : 'px-4'}`}>
-          {!isSidebarCollapsed && (
-            <div className="text-center text-xs text-gray-400 dark:text-gray-500">
-              v{siteConfig.version}
-            </div>
-          )}
-        </div>
-      </aside>
-
-      {/* 主内容区域 */}
-      <div className={`flex flex-col flex-1 ${isMobile ? 'min-h-0' : 'h-full overflow-hidden'}`}>
-                 {/* 顶部导航栏 */}
-         <header className="bg-white dark:bg-black border-b border-gray-200 dark:border-gray-600 h-14 flex items-center justify-between px-4 lg:px-6 relative z-10">
-         <div className="flex items-center gap-4">
-           {/* 移动端菜单按钮 */}
-           {isMobile && (
-             <Button
-               isIconOnly
-               variant="light"
-               onPress={toggleMobileMenu}
-               className="lg:hidden"
-             >
-               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-               </svg>
-             </Button>
-           )}
-            {!isMobile && isSidebarCollapsed && (
-              <Button
-                isIconOnly
-                size="sm"
-                variant="light"
-                onPress={toggleSidebarCollapsed}
-                aria-label="展开侧边栏"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </Button>
-            )}
-          </div>
-
-          <div className="flex items-center gap-3">
-            {/* 用户菜单 */}
-             <Dropdown placement="bottom-end">
-               <DropdownTrigger>
-                 <Button variant="light" className="text-sm font-medium text-foreground">
-                   {username}
-                   <svg className="w-4 h-4 ml-1" fill="currentColor" viewBox="0 0 20 20">
-                     <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                   </svg>
-                 </Button>
-               </DropdownTrigger>
-              <DropdownMenu aria-label="用户菜单">
-                <DropdownItem
-                  key="change-password"
-                  startContent={
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M18 8a6 6 0 01-7.743 5.743L10 14l-1 1-1 1H6v2H2v-4l4.257-4.257A6 6 0 1118 8zm-6-4a1 1 0 100 2 2 2 0 012 2 1 1 0 102 0 4 4 0 00-4-4z" clipRule="evenodd" />
-                    </svg>
-                  }
-                  onPress={onOpen}
-                >
-                  修改密码
-                </DropdownItem>
-                <DropdownItem
-                  key="logout"
-                  startContent={
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" />
-                    </svg>
-                  }
-                  className="text-danger"
-                  color="danger"
-                  onPress={handleLogout}
-                >
+  // Mobile Header
+  const MobileHeader = () => (
+    <div className="lg:hidden flex items-center justify-between p-4 bg-white dark:bg-zinc-800 border-b border-gray-200 dark:border-gray-700">
+      <div className="flex items-center gap-2">
+         <button onClick={() => setMobileMenuVisible(!mobileMenuVisible)}>
+          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+         </button>
+         <span className="font-bold text-lg">{siteConfig.name}</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <Dropdown>
+              <DropdownTrigger>
+                <Avatar 
+                  size="sm" 
+                  name={username || "User"} 
+                  className="cursor-pointer bg-blue-500 text-white"
+                />
+              </DropdownTrigger>
+              <DropdownMenu aria-label="User Actions">
+                <DropdownItem key="password" onPress={onOpen}>修改密码</DropdownItem>
+                <DropdownItem key="logout" className="text-danger" color="danger" onPress={handleLogout}>
                   退出登录
                 </DropdownItem>
               </DropdownMenu>
             </Dropdown>
-          </div>
-        </header>
-
-        {/* 主内容 */}
-        <main className={`flex-1 bg-gray-100 dark:bg-black ${isMobile ? '' : 'overflow-y-auto'}`}>
-          {children}
-        </main>
+      </div>
+    </div>
+  );
+  
+  // Sidebar Component
+  const Sidebar = () => (
+    <div className={`
+      fixed left-0 top-0 bottom-0 bg-white dark:bg-zinc-900 border-r border-gray-200 dark:border-gray-800
+      w-64 flex flex-col transition-transform duration-300 z-50
+      ${isMobile && !mobileMenuVisible ? '-translate-x-full' : 'translate-x-0'}
+      lg:translate-x-0
+    `}>
+      {/* Logo Area */}
+      <div className="h-16 flex items-center px-6 border-b border-gray-100 dark:border-gray-800">
+        <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-cyan-500">
+           {siteConfig.name}
+        </span>
       </div>
 
-      {/* 修改密码弹窗 */}
-      <Modal 
-        isOpen={isOpen} 
-        onOpenChange={() => {
-          onOpenChange();
-          resetPasswordForm();
-        }}
-        size="2xl"
-        scrollBehavior="outside"
-        backdrop="blur"
-        placement="center"
-      >
-                 <ModalContent>
-           {(onClose: () => void) => (
+      {/* Menu Items */}
+      <div className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
+        {menuItems.map((item) => {
+            // Check admin only
+            if (item.adminOnly && !isAdmin) return null;
+
+            const isActive = location.pathname === item.path;
+            
+            return (
+              <div 
+                key={item.path}
+                onClick={() => {
+                   navigate(item.path);
+                   if (isMobile) setMobileMenuVisible(false);
+                }}
+                className={`
+                  flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-all
+                  ${isActive 
+                    ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400 font-medium' 
+                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-zinc-800'}
+                `}
+              >
+                  {item.icon}
+                  <span className="text-sm">{item.label}</span>
+              </div>
+            );
+        })}
+      </div>
+
+      {/* Footer / Version if needed */}
+      <div className="p-4 text-xs text-gray-400 text-center">
+         v{siteConfig.version}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-gray-50 dark:bg-zinc-950 flex flex-col lg:flex-row">
+      {/* Mobile Header */}
+      <MobileHeader />
+
+      {/* Sidebar */}
+      <Sidebar />
+      
+      {/* Overlay for mobile sidebar */}
+      {isMobile && mobileMenuVisible && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-40"
+          onClick={() => setMobileMenuVisible(false)}
+        />
+      )}
+
+      {/* Main Content Area */}
+      <div className="flex-1 lg:ml-64 flex flex-col min-w-0">
+        {/* Top Header (Desktop) */}
+        <div className="hidden lg:flex h-16 bg-white dark:bg-zinc-900 border-b border-gray-200 dark:border-gray-800 px-6 items-center justify-between sticky top-0 z-30">
+           {/* Breadcrumbs / Page Title */}
+           <div className="font-bold text-gray-800 dark:text-white">
+              {currentPathLabel}
+           </div>
+
+           {/* Right Actions */}
+           <div className="flex items-center gap-4">
+             <Button
+                isIconOnly
+                variant="light"
+                onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+             >
+                {theme === "dark" ? <SunFilledIcon size={20}/> : <MoonFilledIcon size={20}/>}
+             </Button>
+
+              <Dropdown>
+                <DropdownTrigger>
+                  <div className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-zinc-800 p-1.5 rounded-full pr-3 transition-colors border border-transparent hover:border-gray-200">
+                    <Avatar 
+                       size="sm" 
+                       name={username || "User"} 
+                       className="w-8 h-8 bg-gradient-to-tr from-blue-500 to-cyan-500 text-white"
+                     />
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-200 max-w-[100px] truncate">
+                      {username || '用户'}
+                    </span>
+                  </div>
+                </DropdownTrigger>
+                <DropdownMenu aria-label="User Actions">
+                  <DropdownItem key="username" className="h-14 gap-2" textValue="Signed in as">
+                    <p className="font-semibold">Signed in as</p>
+                    <p className="font-semibold">{username}</p>
+                  </DropdownItem>
+                  <DropdownItem key="password" onPress={onOpen}>修改密码</DropdownItem>
+                  <DropdownItem key="logout" className="text-danger" color="danger" onPress={handleLogout}>
+                    退出登录
+                  </DropdownItem>
+                </DropdownMenu>
+              </Dropdown>
+           </div>
+        </div>
+
+        {/* Page Content */}
+        <div className="p-4 lg:p-6 mx-auto w-full max-w-full">
+           {children}
+        </div>
+      </div>
+
+       {/* 修改密码模态框 */}
+       <Modal isOpen={isOpen} onOpenChange={onOpenChange}>
+        <ModalContent>
+          {(onClose) => (
             <>
-              <ModalHeader className="flex flex-col gap-1">修改密码</ModalHeader>
+              <ModalHeader>修改密码</ModalHeader>
               <ModalBody>
-                                 <div className="space-y-4">
-                   <Input
-                     label="新用户名"
-                     placeholder="请输入新用户名（至少3位）"
-                     value={passwordForm.newUsername}
-                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPasswordForm(prev => ({ ...prev, newUsername: e.target.value }))}
-                     variant="bordered"
-                   />
-                   <Input
-                     label="当前密码"
-                     type="password"
-                     placeholder="请输入当前密码"
-                     value={passwordForm.currentPassword}
-                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPasswordForm(prev => ({ ...prev, currentPassword: e.target.value }))}
-                     variant="bordered"
-                   />
-                   <Input
-                     label="新密码"
-                     type="password"
-                     placeholder="请输入新密码（至少6位）"
-                     value={passwordForm.newPassword}
-                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPasswordForm(prev => ({ ...prev, newPassword: e.target.value }))}
-                     variant="bordered"
-                   />
-                   <Input
-                     label="确认密码"
-                     type="password"
-                     placeholder="请再次输入新密码"
-                     value={passwordForm.confirmPassword}
-                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPasswordForm(prev => ({ ...prev, confirmPassword: e.target.value }))}
-                     variant="bordered"
-                   />
-                 </div>
+                <Input
+                  label="新用户名 (选填)"
+                  placeholder="留空则不修改用户名"
+                  value={passwordForm.newUsername}
+                  onValueChange={(v) => setPasswordForm({ ...passwordForm, newUsername: v })}
+                />
+                <Input
+                  label="当前密码"
+                  type="password"
+                  value={passwordForm.currentPassword}
+                  onValueChange={(v) => setPasswordForm({ ...passwordForm, currentPassword: v })}
+                />
+                <Input
+                  label="新密码"
+                  type="password"
+                  value={passwordForm.newPassword}
+                  onValueChange={(v) => setPasswordForm({ ...passwordForm, newPassword: v })}
+                />
+                <Input
+                  label="确认新密码"
+                  type="password"
+                  value={passwordForm.confirmPassword}
+                  onValueChange={(v) => setPasswordForm({ ...passwordForm, confirmPassword: v })}
+                />
               </ModalBody>
               <ModalFooter>
-                <Button size="sm" color="default" variant="light" onPress={onClose}>
+                <Button variant="light" onPress={onClose}>
                   取消
                 </Button>
-                <Button 
-                  size="sm"
-                  color="primary" 
-                  onPress={handlePasswordSubmit}
-                  isLoading={passwordLoading}
-                >
-                  确定
+                <Button color="primary" isLoading={passwordLoading} onPress={handlePasswordChange}>
+                  确认修改
                 </Button>
               </ModalFooter>
             </>
@@ -495,4 +397,4 @@ export default function AdminLayout({
       </Modal>
     </div>
   );
-} 
+}
