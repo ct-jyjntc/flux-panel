@@ -501,6 +501,31 @@ public class NodeServiceImpl extends ServiceImpl<NodeMapper, Node> implements No
         return false;
     }
 
+    private boolean tunnelUsesInNode(Tunnel tunnel, Long nodeId) {
+        if (tunnel == null || nodeId == null) {
+            return false;
+        }
+        if (Objects.equals(tunnel.getInNodeId(), nodeId)) {
+            return true;
+        }
+        if (StrUtil.isBlank(tunnel.getInNodeIds())) {
+            return false;
+        }
+        for (String part : tunnel.getInNodeIds().split(",")) {
+            String trimmed = part.trim();
+            if (trimmed.isEmpty()) {
+                continue;
+            }
+            try {
+                if (Objects.equals(Long.parseLong(trimmed), nodeId)) {
+                    return true;
+                }
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return false;
+    }
+
     private List<Node> resolveOutNodesFromTunnel(Tunnel tunnel) {
         if (tunnel == null) {
             return Collections.emptyList();
@@ -570,15 +595,15 @@ public class NodeServiceImpl extends ServiceImpl<NodeMapper, Node> implements No
      * @return 检查结果响应
      */
     private R checkInNodeUsage(Long nodeId) {
-        QueryWrapper<Tunnel> query = new QueryWrapper<>();
-        query.eq("in_node_id", nodeId);
-        
-        long tunnelCount = tunnelMapper.selectCount(query);
+        List<Tunnel> tunnels = tunnelService.list();
+        long tunnelCount = tunnels.stream()
+                .filter(tunnel -> tunnelUsesInNode(tunnel, nodeId))
+                .count();
         if (tunnelCount > 0) {
             String errorMsg = String.format(ERROR_IN_NODE_IN_USE, tunnelCount);
             return R.err(errorMsg);
         }
-        
+
         return R.ok();
     }
 

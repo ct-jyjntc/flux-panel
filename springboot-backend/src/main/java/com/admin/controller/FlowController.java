@@ -275,7 +275,9 @@ public class FlowController extends BaseController {
         for (Forward forward : forwardList) {
             Tunnel tunnel = tunnelService.getById(forward.getTunnelId());
             if (tunnel != null){
-                GostUtil.PauseService(tunnel.getInNodeId(), name);
+                for (Long inNodeId : resolveInNodeIds(tunnel)) {
+                    GostUtil.PauseService(inNodeId, name);
+                }
                 if (tunnel.getType() == 2 && !Boolean.TRUE.equals(tunnel.getMuxEnabled())) {
                     for (Long outNodeId : resolveOutNodeIds(tunnel)) {
                         GostUtil.PauseRemoteService(outNodeId, name);
@@ -308,6 +310,29 @@ public class FlowController extends BaseController {
             outNodeIds.add(tunnel.getOutNodeId());
         }
         return outNodeIds;
+    }
+
+    private List<Long> resolveInNodeIds(Tunnel tunnel) {
+        if (tunnel == null) {
+            return Collections.emptyList();
+        }
+        List<Long> inNodeIds = new ArrayList<>();
+        if (tunnel.getInNodeIds() != null && !tunnel.getInNodeIds().trim().isEmpty()) {
+            String[] parts = tunnel.getInNodeIds().split(",");
+            for (String part : parts) {
+                String trimmed = part.trim();
+                if (!trimmed.isEmpty()) {
+                    try {
+                        inNodeIds.add(Long.parseLong(trimmed));
+                    } catch (NumberFormatException ignored) {
+                    }
+                }
+            }
+        }
+        if (inNodeIds.isEmpty() && tunnel.getInNodeId() != null) {
+            inNodeIds.add(tunnel.getInNodeId());
+        }
+        return inNodeIds;
     }
 
     private FlowDto filterFlowData(FlowDto flowDto, Forward forward, Node reportingNode) {

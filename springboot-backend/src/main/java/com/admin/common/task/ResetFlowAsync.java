@@ -147,7 +147,9 @@ public class ResetFlowAsync {
         Tunnel tunnel = tunnelService.getById(forward.getTunnelId());
         if (tunnel == null) return;
 
-        GostUtil.PauseService(tunnel.getInNodeId(), buildServiceName(forward.getId(), forward.getUserId()));
+        for (Long inNodeId : resolveInNodeIds(tunnel)) {
+            GostUtil.PauseService(inNodeId, buildServiceName(forward.getId(), forward.getUserId()));
+        }
         if (tunnel.getType() == 2 && !Boolean.TRUE.equals(tunnel.getMuxEnabled())) {
             for (Long outNodeId : resolveOutNodeIds(tunnel)) {
                 GostUtil.PauseRemoteService(outNodeId, buildServiceName(forward.getId(), forward.getUserId()));
@@ -175,6 +177,28 @@ public class ResetFlowAsync {
             outNodeIds.add(tunnel.getOutNodeId());
         }
         return outNodeIds;
+    }
+
+    private List<Long> resolveInNodeIds(Tunnel tunnel) {
+        if (tunnel == null) {
+            return Collections.emptyList();
+        }
+        List<Long> inNodeIds = new ArrayList<>();
+        if (tunnel.getInNodeIds() != null && !tunnel.getInNodeIds().trim().isEmpty()) {
+            for (String part : tunnel.getInNodeIds().split(",")) {
+                String trimmed = part.trim();
+                if (!trimmed.isEmpty()) {
+                    try {
+                        inNodeIds.add(Long.parseLong(trimmed));
+                    } catch (NumberFormatException ignored) {
+                    }
+                }
+            }
+        }
+        if (inNodeIds.isEmpty() && tunnel.getInNodeId() != null) {
+            inNodeIds.add(tunnel.getInNodeId());
+        }
+        return inNodeIds;
     }
 
 

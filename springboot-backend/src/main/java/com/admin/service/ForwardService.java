@@ -105,4 +105,10 @@ public interface ForwardService extends IService<Forward> {
     R rebuildForwardsForTunnelUpdate(Tunnel oldTunnel, Tunnel newTunnel);
 
     void updateForwardA(Forward forward);
+
+    /**
+     * 节点上线后同步相关转发配置
+     * @param nodeId 节点ID
+     */
+    void syncNodeConfig(Long nodeId);
 }

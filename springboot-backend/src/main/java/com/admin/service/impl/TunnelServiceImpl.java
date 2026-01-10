@@ -253,7 +253,7 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
         List<Long> resolvedInNodeIds = resolveInNodeIds(tunnelUpdateDto.getInNodeIds(), tunnelUpdateDto.getInNodeId());
         NodeValidationResult inNodeValidation = null;
         if (!resolvedInNodeIds.isEmpty()) {
-            inNodeValidation = validateInNodes(resolvedInNodeIds);
+            inNodeValidation = validateInNodes(resolvedInNodeIds, true);
             if (inNodeValidation.isHasError()) {
                 return R.err(inNodeValidation.getErrorMessage());
             }
@@ -402,37 +402,11 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
         } else if (outNodeChanged && Boolean.TRUE.equals(oldTunnelSnapshot.getMuxEnabled()) && !removedOutNodeIds.isEmpty()) {
             deleteMuxServiceForNodes(removedOutNodeIds, oldTunnelSnapshot.getId());
         }
-        if (inNodeChanged || outNodeChanged || muxChanged || outStrategyChanged) {
+        if (inNodeChanged || outNodeChanged || muxChanged || outStrategyChanged || up != 0) {
             R rebuildResult = forwardService.rebuildForwardsForTunnelUpdate(oldTunnelSnapshot, existingTunnel);
             if (rebuildResult.getCode() != 0) {
                 return rebuildResult;
             }
-        }
-        int err = 0;
-        if (up != 0){
-            System.out.println("123123");
-            List<Forward> tunnel = forwardService.list(new QueryWrapper<Forward>().eq("tunnel_id", tunnelUpdateDto.getId()));
-            if (!tunnel.isEmpty()) {
-                for (Forward forward : tunnel) {
-                    ForwardUpdateDto forwardUpdateDto = new ForwardUpdateDto();
-                    forwardUpdateDto.setId(forward.getId());
-                    forwardUpdateDto.setUserId(forward.getUserId());
-                    forwardUpdateDto.setName(forward.getName());
-                    forwardUpdateDto.setTunnelId(forward.getTunnelId());
-                    forwardUpdateDto.setRemoteAddr(forward.getRemoteAddr());
-                    forwardUpdateDto.setStrategy(forward.getStrategy());
-                    forwardUpdateDto.setInPort(forward.getInPort());
-                    forwardUpdateDto.setInterfaceName(forward.getInterfaceName());
-                    R r = forwardService.updateForward(forwardUpdateDto);
-                    if (r.getCode() != 0){
-                        err++;
-                    }
-                }
-            }
-        }
-
-        if (err != 0) {
-            return R.err("隧道信息更新成功，但部分转发同步更新失败");
         }
         return R.ok("隧道更新成功");
     }
@@ -562,17 +536,29 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
      * @return 节点验证结果
      */
     private NodeValidationResult validateInNodes(List<Long> inNodeIds) {
+        return validateInNodes(inNodeIds, false);
+    }
+
+    private NodeValidationResult validateInNodes(List<Long> inNodeIds, boolean allowPartialOffline) {
         List<Node> nodes = new ArrayList<>();
         Set<Long> uniqueIds = new LinkedHashSet<>(inNodeIds);
+        boolean hasOnline = false;
         for (Long nodeId : uniqueIds) {
             Node inNode = nodeService.getById(nodeId);
             if (inNode == null) {
                 return NodeValidationResult.error(ERROR_IN_NODE_NOT_FOUND);
             }
             if (inNode.getStatus() != NODE_STATUS_ONLINE) {
-                return NodeValidationResult.error(ERROR_IN_NODE_OFFLINE);
+                if (!allowPartialOffline) {
+                    return NodeValidationResult.error(ERROR_IN_NODE_OFFLINE);
+                }
+            } else {
+                hasOnline = true;
             }
             nodes.add(inNode);
+        }
+        if (allowPartialOffline && !hasOnline) {
+            return NodeValidationResult.error(ERROR_IN_NODE_OFFLINE);
         }
         return NodeValidationResult.success(nodes);
     }
