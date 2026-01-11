@@ -164,6 +164,51 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
             forwardList = baseMapper.selectAllForwardsWithTunnel();
         }
 
+        if (forwardList == null || forwardList.isEmpty()) {
+            return R.ok(forwardList);
+        }
+
+        Set<Long> tunnelIds = forwardList.stream()
+                .map(ForwardWithTunnelDto::getTunnelId)
+                .filter(Objects::nonNull)
+                .map(Integer::longValue)
+                .collect(Collectors.toSet());
+        Map<Long, Tunnel> tunnelMap = tunnelIds.isEmpty()
+                ? Collections.emptyMap()
+                : tunnelService.listByIds(tunnelIds).stream()
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toMap(Tunnel::getId, tunnel -> tunnel, (a, b) -> a));
+
+        Set<Long> inNodeIds = new LinkedHashSet<>();
+        for (Tunnel tunnel : tunnelMap.values()) {
+            if (tunnel == null) {
+                continue;
+            }
+            collectNodeIds(tunnel.getInNodeIds(), inNodeIds);
+            if (tunnel.getInNodeId() != null) {
+                inNodeIds.add(tunnel.getInNodeId());
+            }
+        }
+        Map<Long, Node> nodeMap = inNodeIds.isEmpty()
+                ? Collections.emptyMap()
+                : nodeService.listByIds(inNodeIds).stream()
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toMap(Node::getId, node -> node, (a, b) -> a));
+
+        for (ForwardWithTunnelDto forward : forwardList) {
+            if (forward == null || forward.getTunnelId() == null) {
+                continue;
+            }
+            Tunnel tunnel = tunnelMap.get(forward.getTunnelId().longValue());
+            if (tunnel == null) {
+                continue;
+            }
+            String computedInIp = buildInIpForTunnel(tunnel, nodeMap);
+            if (StringUtils.isNotBlank(computedInIp)) {
+                forward.setInIp(computedInIp);
+            }
+        }
+
         return R.ok(forwardList);
     }
 
@@ -932,6 +977,47 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
         return nodes.stream()
                 .filter(node -> node != null && node.getStatus() != null && node.getStatus() == NODE_STATUS_ONLINE)
                 .collect(Collectors.toList());
+    }
+
+    private void collectNodeIds(String nodeIds, Set<Long> target) {
+        if (target == null || StringUtils.isBlank(nodeIds)) {
+            return;
+        }
+        for (String part : nodeIds.split(",")) {
+            String trimmed = part.trim();
+            if (trimmed.isEmpty()) {
+                continue;
+            }
+            try {
+                target.add(Long.parseLong(trimmed));
+            } catch (NumberFormatException ignored) {
+            }
+        }
+    }
+
+    private String buildInIpForTunnel(Tunnel tunnel, Map<Long, Node> nodeMap) {
+        if (tunnel == null) {
+            return null;
+        }
+        Set<Long> inNodeIds = new LinkedHashSet<>();
+        collectNodeIds(tunnel.getInNodeIds(), inNodeIds);
+        if (inNodeIds.isEmpty() && tunnel.getInNodeId() != null) {
+            inNodeIds.add(tunnel.getInNodeId());
+        }
+        if (inNodeIds.isEmpty()) {
+            return tunnel.getInIp();
+        }
+        List<String> ips = new ArrayList<>();
+        for (Long nodeId : inNodeIds) {
+            Node node = nodeMap != null ? nodeMap.get(nodeId) : nodeService.getById(nodeId);
+            if (node != null && StringUtils.isNotBlank(node.getIp())) {
+                ips.add(node.getIp());
+            }
+        }
+        if (ips.isEmpty()) {
+            return tunnel.getInIp();
+        }
+        return String.join(",", ips);
     }
 
     private List<Node> resolveInNodes(Tunnel tunnel) {

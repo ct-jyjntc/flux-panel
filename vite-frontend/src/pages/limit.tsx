@@ -242,7 +242,7 @@ export default function LimitPage() {
                       <td className="px-6 py-4 align-middle text-right w-[140px]">
                           <div className="flex justify-end gap-1">
                              <button 
-                               className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 flex items-center justify-center transition-colors"
+                               className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 dark:border-gray-700 dark:bg-zinc-900 dark:text-gray-300 dark:hover:bg-zinc-800 flex items-center justify-center transition-colors"
                                onClick={() => handleEdit(rule)}
                                title="编辑"
                               >
@@ -251,7 +251,7 @@ export default function LimitPage() {
                                  </svg>
                               </button>
                               <button 
-                                className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-red-50 text-gray-600 hover:text-red-500 flex items-center justify-center transition-colors" 
+                                className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-red-50 text-gray-600 hover:text-red-500 dark:border-gray-700 dark:bg-zinc-900 dark:text-gray-300 dark:hover:bg-red-900/20 dark:hover:text-red-400 flex items-center justify-center transition-colors" 
                                 onClick={() => handleDelete(rule)}
                                 title="删除"
                               >

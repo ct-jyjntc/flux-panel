@@ -26,7 +26,7 @@ public class TunnelDto {
     
     private String interfaceName;
     
-    // 协议类型，默认为tls
+    // 协议类型（由出口节点决定）
     private String protocol;
 
     // 出口负载策略（fifo/round/random/hash）

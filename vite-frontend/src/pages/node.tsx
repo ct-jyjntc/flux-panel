@@ -4,6 +4,7 @@ import { Input } from "@heroui/input";
 import { Textarea } from "@heroui/input";
 import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from "@heroui/modal";
 import { Switch } from "@heroui/switch";
+import { Select, SelectItem } from "@heroui/select";
 
 import { Spinner } from "@heroui/spinner";
 import toast from 'react-hot-toast';
@@ -26,6 +27,7 @@ interface Node {
   portSta: number;
   portEnd: number;
   outPort?: number | null;
+  tunnelProtocol?: string;
   version?: string;
   ownerId?: number | null;
   trafficRatio?: number;
@@ -55,6 +57,7 @@ interface NodeForm {
   portEnd: number;
   outPort: number;
   trafficRatio: number;
+  tunnelProtocol: string;
   http: number; // 0 关 1 开
   tls: number;  // 0 关 1 开
   socks: number; // 0 关 1 开
@@ -84,6 +87,7 @@ export default function NodePage() {
     portEnd: 65535,
     outPort: 1000,
     trafficRatio: 1,
+    tunnelProtocol: 'tls',
     http: 0,
     tls: 0,
     socks: 0
@@ -416,6 +420,10 @@ export default function NodePage() {
       newErrors.outPort = '出口共享端口必须在1-65535之间';
     }
 
+    if (!form.tunnelProtocol) {
+      newErrors.tunnelProtocol = '请选择出口隧道协议';
+    }
+
     if (isAdmin) {
       if (form.trafficRatio < 0 || form.trafficRatio > 100) {
         newErrors.trafficRatio = '流量倍率必须在0-100之间';
@@ -455,6 +463,7 @@ export default function NodePage() {
       portEnd: node.portEnd,
       outPort: typeof node.outPort === 'number' ? node.outPort : 1000,
       trafficRatio: typeof node.trafficRatio === 'number' ? node.trafficRatio : 1,
+      tunnelProtocol: node.tunnelProtocol || 'tls',
       http: typeof node.http === 'number' ? node.http : 1,
       tls: typeof node.tls === 'number' ? node.tls : 1,
       socks: typeof node.socks === 'number' ? node.socks : 1
@@ -561,6 +570,7 @@ export default function NodePage() {
         portEnd: form.portEnd,
         outPort: form.outPort,
         trafficRatio: form.trafficRatio,
+        tunnelProtocol: form.tunnelProtocol,
         http: form.http,
         tls: form.tls,
         socks: form.socks
@@ -582,6 +592,7 @@ export default function NodePage() {
               portEnd: form.portEnd,
               outPort: form.outPort,
               trafficRatio: form.trafficRatio,
+              tunnelProtocol: form.tunnelProtocol,
               http: form.http,
               tls: form.tls,
               socks: form.socks
@@ -611,6 +622,7 @@ export default function NodePage() {
       portEnd: 65535,
       outPort: 1000,
       trafficRatio: 1,
+      tunnelProtocol: 'tls',
       http: 0,
       tls: 0,
       socks: 0
@@ -774,7 +786,7 @@ export default function NodePage() {
                               {isAdmin || (currentUserId !== null && node.ownerId === currentUserId) ? (
                                 <>
                                   <button 
-                                    className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-green-50 text-gray-600 hover:text-green-600 flex items-center justify-center transition-colors"
+                                    className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-green-50 text-gray-600 hover:text-green-600 dark:border-gray-700 dark:bg-zinc-900 dark:text-gray-300 dark:hover:bg-green-900/20 dark:hover:text-green-400 flex items-center justify-center transition-colors"
                                     onClick={() => handleCopyInstallCommand(node)} 
                                     title="复制安装命令"
                                     disabled={node.copyLoading}
@@ -788,7 +800,7 @@ export default function NodePage() {
                                      )}
                                   </button>
                                   <button 
-                                   className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 flex items-center justify-center transition-colors"
+                                   className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 dark:border-gray-700 dark:bg-zinc-900 dark:text-gray-300 dark:hover:bg-zinc-800 flex items-center justify-center transition-colors"
                                    onClick={() => handleEdit(node)}
                                    title="编辑"
                                   >
@@ -797,7 +809,7 @@ export default function NodePage() {
                                      </svg>
                                   </button>
                                   <button 
-                                    className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-red-50 text-gray-600 hover:text-red-500 flex items-center justify-center transition-colors"
+                                    className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-red-50 text-gray-600 hover:text-red-500 dark:border-gray-700 dark:bg-zinc-900 dark:text-gray-300 dark:hover:bg-red-900/20 dark:hover:text-red-400 flex items-center justify-center transition-colors"
                                     onClick={() => handleDelete(node)}
                                     title="删除"
                                   >
@@ -964,6 +976,34 @@ export default function NodePage() {
                           input: "text-sm",
                         }}
                       />
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                      <label className="text-sm font-medium text-gray-700 dark:text-gray-300">出口隧道协议</label>
+                      <Select
+                        placeholder="请选择出口隧道协议"
+                        selectedKeys={[form.tunnelProtocol]}
+                        onSelectionChange={(keys) => {
+                          const selectedKey = Array.from(keys)[0] as string;
+                          if (selectedKey) {
+                            setForm(prev => ({ ...prev, tunnelProtocol: selectedKey }));
+                          }
+                        }}
+                        isInvalid={!!errors.tunnelProtocol}
+                        errorMessage={errors.tunnelProtocol}
+                        variant="bordered"
+                        classNames={{
+                          trigger: "bg-white dark:bg-zinc-900 border-gray-300 dark:border-gray-700 shadow-none hover:border-gray-400 focus:!border-blue-500 rounded-lg",
+                          value: "text-sm"
+                        }}
+                      >
+                        <SelectItem key="tls">TLS</SelectItem>
+                        <SelectItem key="wss">WSS</SelectItem>
+                        <SelectItem key="tcp">TCP</SelectItem>
+                        <SelectItem key="mtls">MTLS</SelectItem>
+                        <SelectItem key="mwss">MWSS</SelectItem>
+                        <SelectItem key="mtcp">MTCP</SelectItem>
+                      </Select>
                   </div>
                 </div>
 

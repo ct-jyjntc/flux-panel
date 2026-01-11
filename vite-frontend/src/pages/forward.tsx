@@ -6,7 +6,6 @@ import { Select, SelectItem } from "@heroui/select";
 import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from "@heroui/modal";
 import { Spinner } from "@heroui/spinner";
 import { Checkbox } from "@heroui/checkbox";
-import { Dropdown, DropdownTrigger, DropdownMenu, DropdownItem } from "@heroui/dropdown";
 import toast from 'react-hot-toast';
 import {
   DndContext,
@@ -42,14 +41,14 @@ import {
   getUserPackageInfo
 } from "@/api";
 import { JwtUtil } from "@/utils/jwt";
-import { SearchIcon } from "@/components/icons";
+import { SearchIcon, ActivityIcon } from "@/components/icons";
 
 interface UserInfo {
   flow: number;
   inFlow: number;
   outFlow: number;
   num: number;
-  expTime?: string;
+  expTime?: string | number;
   flowResetTime?: number;
 }
 
@@ -119,7 +118,8 @@ export default function ForwardPage() {
   const [userInfo, setUserInfo] = useState<UserInfo>({ flow: 0, inFlow: 0, outFlow: 0, num: 0 });
   const [forwards, setForwards] = useState<Forward[]>([]);
   const [tunnels, setTunnels] = useState<Tunnel[]>([]);
-  const [filterTunnelId] = useState<string>("all");
+  const [filterTunnelId, setFilterTunnelId] = useState<string>("all");
+  const [searchKeyword, setSearchKeyword] = useState('');
   
   // 拖拽排序相关状态
   const [forwardOrder, setForwardOrder] = useState<number[]>([]);
@@ -191,8 +191,10 @@ export default function ForwardPage() {
         getUserPackageInfo()
       ]);
       
-      if (userRes.code === 200) {
-        setUserInfo(userRes.data);
+      if (userRes.code === 0) {
+        const packageInfo = userRes.data || {};
+        const info = packageInfo.userInfo || packageInfo;
+        setUserInfo(info);
       }
 
       if (forwardsRes.code === 0) {
@@ -558,12 +560,26 @@ export default function ForwardPage() {
   };
 
   // 格式化流量
-  const formatFlow = (value: number): string => {
+  const formatFlow = (value: number, unit: 'bytes' | 'gb' = 'bytes'): string => {
+    if (unit === 'gb') {
+      return `${value} GB`;
+    }
     if (value === 0) return '0 B';
     if (value < 1024) return value + ' B';
     if (value < 1024 * 1024) return (value / 1024).toFixed(2) + ' KB';
     if (value < 1024 * 1024 * 1024) return (value / (1024 * 1024)).toFixed(2) + ' MB';
     return (value / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+  };
+
+  const formatExpireTime = (expTime?: string | number) => {
+    if (!expTime) {
+      return '永久有效';
+    }
+    const date = new Date(expTime);
+    if (Number.isNaN(date.getTime())) {
+      return String(expTime);
+    }
+    return date.toLocaleString();
   };
 
   // 格式化入口地址
@@ -889,6 +905,19 @@ export default function ForwardPage() {
         filteredForwards = filteredForwards.filter(forward => forward.tunnelId === tunnelId);
       }
     }
+
+    const normalizedKeyword = searchKeyword.trim().toLowerCase();
+    if (normalizedKeyword) {
+      filteredForwards = filteredForwards.filter((forward) => {
+        const haystack = [
+          forward.name,
+          forward.tunnelName,
+          forward.remoteAddr,
+          forward.inIp
+        ].filter(Boolean).join(' ').toLowerCase();
+        return haystack.includes(normalizedKeyword);
+      });
+    }
     
     // 确保过滤后的转发列表有效
     if (!filteredForwards || filteredForwards.length === 0) {
@@ -932,6 +961,14 @@ export default function ForwardPage() {
   const visibleForwardIds = getSortedForwards().map(forward => forward.id);
   const allVisibleSelected = visibleForwardIds.length > 0 &&
     visibleForwardIds.every(id => selectedForwardKeys.has(id.toString()));
+  const currentUserId = JwtUtil.getUserIdFromToken();
+  const userForwardCount = currentUserId !== null
+    ? forwards.filter((forward) => forward.userId === currentUserId).length
+    : forwards.length;
+  const tunnelFilterItems = [
+    { id: 'all', name: '全部隧道' },
+    ...tunnels.map((tunnel) => ({ id: tunnel.id.toString(), name: tunnel.name }))
+  ];
 
   const handleBulkDelete = () => {
     if (selectedForwardCount === 0) return;
@@ -1017,9 +1054,16 @@ export default function ForwardPage() {
     const statusDisplay = getStatusDisplay(forward.status);
     
     // Address processing
-    const inAddr = forward.inIp || '未分配';
+    const inIps = forward.inIp ? forward.inIp.split(',').map(ip => ip.trim()).filter(Boolean) : [];
+    const hasMultiple = inIps.length > 1;
+    const primaryIp = inIps[0] || '';
+    const formattedPrimaryIp = primaryIp && primaryIp.includes(':') && !primaryIp.startsWith('[')
+      ? `[${primaryIp}]`
+      : primaryIp;
+    const inAddrDisplay = primaryIp
+      ? (forward.inPort ? `${formattedPrimaryIp}:${forward.inPort}` : formattedPrimaryIp)
+      : (forward.inIp || '未分配');
     const inPortDisplay = forward.inPort || '自动';
-    const hasMultiple = addressList.filter(a => a.id === forward.id).length > 1;
 
     return (
       <tr ref={setNodeRef} style={style} className="border-b border-gray-100 dark:border-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors group">
@@ -1042,11 +1086,29 @@ export default function ForwardPage() {
         {/* Name */}
         <td className="px-4 py-3 align-middle">
           <div className="flex flex-col">
-            <span className="font-medium text-sm text-gray-900 dark:text-gray-100 flex items-center gap-2">
-              {forward.name}
-              <span className="text-xs text-gray-400 font-normal">(#{forward.id})</span>
-            </span>
-            <span className="text-xs text-gray-500 mt-1">{forward.tunnelName}</span>
+            <div className="flex items-center gap-2">
+              <button
+                ref={setActivatorNodeRef}
+                {...attributes}
+                {...listeners}
+                type="button"
+                className="inline-flex items-center justify-center w-6 h-6 rounded border border-gray-200 text-gray-400 hover:text-gray-600 hover:border-gray-300 dark:border-gray-700 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:border-gray-600 cursor-grab active:cursor-grabbing"
+                title="拖拽排序"
+              >
+                <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                  <circle cx="5" cy="4" r="1.2" />
+                  <circle cx="11" cy="4" r="1.2" />
+                  <circle cx="5" cy="8" r="1.2" />
+                  <circle cx="11" cy="8" r="1.2" />
+                  <circle cx="5" cy="12" r="1.2" />
+                  <circle cx="11" cy="12" r="1.2" />
+                </svg>
+              </button>
+              <span className="font-medium text-sm text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                {forward.name}
+                <span className="text-xs text-gray-400 font-normal">(#{forward.id})</span>
+              </span>
+            </div>
           </div>
         </td>
 
@@ -1055,12 +1117,23 @@ export default function ForwardPage() {
            <div className="flex flex-col gap-1">
              <div className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
                <span className="bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400 px-1.5 py-0.5 rounded text-xs border border-orange-200 dark:border-orange-900/50">入口</span>
-               <span>{inAddr}</span>
-               {hasMultiple && <span className="bg-red-50 text-red-500 px-1 rounded text-[10px] border border-red-100 cursor-pointer" onClick={() => showAddressModal(forward.inIp, forward.inPort, forward.name)}>多</span>}
+               <span>{inAddrDisplay}</span>
+               {hasMultiple && (
+                 <span
+                   className="bg-red-50 text-red-500 dark:bg-red-900/20 dark:text-red-400 px-1 rounded text-[10px] border border-red-100 dark:border-red-900/50 cursor-pointer"
+                   onClick={() => showAddressModal(forward.inIp, forward.inPort, forward.name)}
+                 >
+                   +{inIps.length - 1}
+                 </span>
+               )}
              </div>
               <div className="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
                 <span className="bg-gray-100 dark:bg-zinc-800 px-1 rounded text-[10px]">端口: {inPortDisplay}</span>
-                 {hasMultiple && <span className="text-blue-500 cursor-pointer" onClick={() => showAddressModal(forward.inIp, forward.inPort, forward.name)}>2个地址</span>}
+                 {hasMultiple && (
+                   <span className="text-blue-500 cursor-pointer" onClick={() => showAddressModal(forward.inIp, forward.inPort, forward.name)}>
+                     {inIps.length}个地址
+                   </span>
+                 )}
               </div>
            </div>
         </td>
@@ -1070,10 +1143,14 @@ export default function ForwardPage() {
            <div className="flex flex-col gap-1">
              <div className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
                 <span className="bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400 px-1.5 py-0.5 rounded text-xs border border-green-200 dark:border-green-900/50">目标</span>
-                {/* Drag handle integrated here if needed, or invisible overlay */}
-                <div ref={setActivatorNodeRef} {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing truncate max-w-[200px]" title={forward.remoteAddr}>
+                <button
+                  type="button"
+                  className="truncate max-w-[200px] text-left hover:text-blue-600 dark:hover:text-blue-400 cursor-copy"
+                  title="点击复制目标地址"
+                  onClick={() => showAddressModal(forward.remoteAddr, null, "目标地址")}
+                >
                    {forward.remoteAddr}
-                </div>
+                </button>
              </div>
              <div className="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
                 <span className="bg-green-50 dark:bg-green-900/10 text-green-600 dark:text-green-400 px-1 rounded text-[10px]">倍率 1.0</span>
@@ -1101,45 +1178,33 @@ export default function ForwardPage() {
           <div className="flex justify-end gap-1">
             {/* Start/Stop */}
             <button 
-              className={`w-7 h-7 rounded border flex items-center justify-center transition-colors ${forward.serviceRunning 
-                ? 'bg-red-50 border-red-200 text-red-500 hover:bg-red-100' 
-                : 'bg-green-50 border-green-200 text-green-500 hover:bg-green-100'}`}
+              className={`w-7 h-7 rounded border bg-white dark:bg-zinc-900 flex items-center justify-center transition-colors ${forward.serviceRunning 
+                ? 'border-red-200 text-red-500 hover:bg-red-50 dark:border-red-900/60 dark:text-red-400 dark:hover:bg-red-900/20' 
+                : 'border-green-200 text-green-500 hover:bg-green-50 dark:border-green-900/60 dark:text-green-400 dark:hover:bg-green-900/20'}`}
               onClick={() => handleServiceToggle(forward)}
               title={forward.serviceRunning ? "暂停" : "启动"}
             >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 {forward.serviceRunning ? (
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 ) : (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3L19 12L5 21V3Z" />
                 )}
               </svg>
             </button>
 
             {/* Diagnose */}
             <button 
-              className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 flex items-center justify-center transition-colors" 
+              className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 dark:border-gray-700 dark:bg-zinc-900 dark:text-gray-300 dark:hover:bg-zinc-800 flex items-center justify-center transition-colors" 
               onClick={() => handleDiagnose(forward)} 
               title="诊断"
             >
-               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-               </svg>
-            </button>
-            
-            {/* Logs (Mock) */}
-             <button 
-              className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 flex items-center justify-center transition-colors" 
-              title="日志"
-            >
-               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-               </svg>
+              <ActivityIcon className="w-3.5 h-3.5" />
             </button>
 
              {/* Edit */}
              <button 
-               className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 flex items-center justify-center transition-colors" 
+               className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 dark:border-gray-700 dark:bg-zinc-900 dark:text-gray-300 dark:hover:bg-zinc-800 flex items-center justify-center transition-colors" 
                onClick={() => handleEdit(forward)} 
                title="编辑"
               >
@@ -1150,7 +1215,7 @@ export default function ForwardPage() {
             
             {/* Delete */}
             <button 
-              className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-red-50 text-gray-600 hover:text-red-500 flex items-center justify-center transition-colors" 
+              className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-red-50 text-gray-600 hover:text-red-500 dark:border-gray-700 dark:bg-zinc-900 dark:text-gray-300 dark:hover:bg-red-900/20 dark:hover:text-red-400 flex items-center justify-center transition-colors" 
               onClick={() => handleDelete(forward)} 
               title="删除"
             >
@@ -1245,16 +1310,16 @@ export default function ForwardPage() {
                <div className="flex items-center gap-2">
                    <span className="text-gray-500">流量:</span>
                    <span className="font-semibold text-gray-900 dark:text-gray-100">
-                     {formatFlow((userInfo.inFlow || 0) + (userInfo.outFlow || 0))} / {formatFlow(userInfo.flow || 0)}
+                     {formatFlow((userInfo.inFlow || 0) + (userInfo.outFlow || 0))} / {formatFlow(userInfo.flow || 0, 'gb')}
                    </span>
                </div>
                <div className="flex items-center gap-2">
                    <span className="text-gray-500">到期:</span>
-                   <span className="font-semibold text-gray-900 dark:text-gray-100">{userInfo.expTime || '永久有效'}</span>
+                   <span className="font-semibold text-gray-900 dark:text-gray-100">{formatExpireTime(userInfo.expTime)}</span>
                </div>
                <div className="flex items-center gap-2">
                    <span className="text-gray-500">规则数:</span>
-                   <span className="font-semibold text-gray-900 dark:text-gray-100">{forwards.length} / {userInfo.num}</span>
+                   <span className="font-semibold text-gray-900 dark:text-gray-100">{userForwardCount} / {userInfo.num}</span>
                </div>
              </div>
              
@@ -1270,41 +1335,66 @@ export default function ForwardPage() {
                 </Button>
                 <Button size="sm" variant="bordered" onPress={handleImport}>批量导入</Button>
                 <Button size="sm" variant="bordered" onPress={handleExport}>批量导出</Button>
-                <Dropdown>
-                  <DropdownTrigger>
-                    <Button size="sm" variant="bordered">更多操作</Button>
-                  </DropdownTrigger>
-                  <DropdownMenu>
-                    <DropdownItem key="switch" onPress={handleBulkUpdateTunnel}>批量切换</DropdownItem>
-                    <DropdownItem key="clear" className="text-warning">清空流量</DropdownItem>
-                    <DropdownItem key="delete" className="text-danger" color="danger" onPress={handleBulkDelete}>删除选中</DropdownItem>
-                  </DropdownMenu>
-                </Dropdown>
+                <Button
+                  size="sm"
+                  variant="bordered"
+                  onPress={handleBulkUpdateTunnel}
+                  isDisabled={selectedForwardCount === 0}
+                >
+                  批量切换
+                </Button>
+                <Button
+                  size="sm"
+                  variant="bordered"
+                  color="danger"
+                  onPress={handleBulkDelete}
+                  isDisabled={selectedForwardCount === 0}
+                >
+                  删除选中
+                </Button>
              </div>
          </div>
          
          {/* Filter/Search Row */}
          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2 w-full max-w-xl">
+            <div className="flex items-center gap-2 w-full max-w-xl flex-wrap">
                  <Input 
                    size="sm" 
                    placeholder="搜索规则" 
                    startContent={<SearchIcon size={16} />}
                    className="w-[240px]"
                    isClearable
+                   value={searchKeyword}
+                   onValueChange={(value) => setSearchKeyword(value)}
                    classNames={{
                       inputWrapper: "bg-gray-50 dark:bg-zinc-800 border-none shadow-none"
                    }}
-                   // Add search logic if needed
                  />
+                 <Select
+                   size="sm"
+                   className="w-[200px]"
+                   selectedKeys={[filterTunnelId]}
+                   onSelectionChange={(keys) => {
+                     const selectedKey = Array.from(keys)[0] as string;
+                     if (selectedKey) {
+                       setFilterTunnelId(selectedKey);
+                     }
+                   }}
+                   items={tunnelFilterItems}
+                   classNames={{
+                     trigger: "bg-gray-50 dark:bg-zinc-800 border-none shadow-none",
+                     value: "text-sm"
+                   }}
+                 >
+                   {(item) => (
+                     <SelectItem key={item.id} textValue={item.name}>
+                       {item.name}
+                     </SelectItem>
+                   )}
+                 </Select>
                  <Button size="sm" variant="light" isIconOnly onPress={() => loadData(true)} title="刷新">
                     <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                 </Button>
-                 <Button size="sm" variant="light" isIconOnly title="统计数据">
-                    <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                     </svg>
                  </Button>
             </div>
@@ -1315,9 +1405,9 @@ export default function ForwardPage() {
                  </div>
                  {/* Pagination Placeholders */}
                  <div className="flex gap-1">
-                    <button className="w-6 h-6 flex items-center justify-center rounded border border-gray-200 text-xs hover:bg-gray-50">&lt;</button>
-                    <button className="w-6 h-6 flex items-center justify-center rounded bg-blue-50 text-blue-600 text-xs font-bold border border-blue-100">1</button>
-                    <button className="w-6 h-6 flex items-center justify-center rounded border border-gray-200 text-xs hover:bg-gray-50">&gt;</button>
+                    <button className="w-6 h-6 flex items-center justify-center rounded border border-gray-200 text-xs hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-zinc-800">&lt;</button>
+                    <button className="w-6 h-6 flex items-center justify-center rounded bg-blue-50 text-blue-600 text-xs font-bold border border-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-900/50">1</button>
+                    <button className="w-6 h-6 flex items-center justify-center rounded border border-gray-200 text-xs hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-zinc-800">&gt;</button>
                  </div>
              </div>
          </div>

@@ -12,9 +12,12 @@ import { safeLogout } from '@/utils/logout';
 import { siteConfig } from '@/config/site';
 import { 
   SunFilledIcon, 
-  MoonFilledIcon 
+  MoonFilledIcon,
+  SpeedLimitIcon,
+  UserIcon,
+  WebsiteConfigIcon
 } from "@/components/icons";
-import { useTheme } from "next-themes";
+import { useTheme } from "@heroui/use-theme";
 
 interface MenuItem {
   path: string;
@@ -43,6 +46,13 @@ export default function AdminLayout({
 
   const [isMobile, setIsMobile] = useState(false);
   const [mobileMenuVisible, setMobileMenuVisible] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('sidebar-collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
   const [username, setUsername] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
@@ -66,16 +76,6 @@ export default function AdminLayout({
       )
     },
     {
-      path: '/profile',
-      label: '个人中心',
-       group: 'main',
-      icon: (
-        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-        </svg>
-      )
-    },
-    {
       path: '/forward',
       label: '转发规则',
       group: 'features',
@@ -87,7 +87,7 @@ export default function AdminLayout({
     },
     {
       path: '/tunnel',
-      label: '单端口隧道',
+      label: '隧道管理',
       group: 'features',
       icon: (
         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -135,6 +135,33 @@ export default function AdminLayout({
         </svg>
       )
     },
+    {
+      path: '/limit',
+      label: '限速管理',
+      group: 'admin',
+      adminOnly: true,
+      icon: (
+        <SpeedLimitIcon size={20} />
+      )
+    },
+    {
+      path: '/user',
+      label: '用户管理',
+      group: 'admin',
+      adminOnly: true,
+      icon: (
+        <UserIcon size={20} />
+      )
+    },
+    {
+      path: '/config',
+      label: '网站配置',
+      group: 'admin',
+      adminOnly: true,
+      icon: (
+        <WebsiteConfigIcon size={20} />
+      )
+    },
   ];
 
    useEffect(() => {
@@ -150,16 +177,22 @@ export default function AdminLayout({
 
     // 恢复用户信息
     const savedName = localStorage.getItem('username');
-    const roleId = localStorage.getItem('role_id');
     if (savedName) setUsername(savedName);
-    if (roleId === '1') setIsAdmin(true);
+
+    let adminFlag = localStorage.getItem('admin') === 'true';
+    if (localStorage.getItem('admin') === null) {
+      const roleId = parseInt(localStorage.getItem('role_id') || '1', 10);
+      adminFlag = roleId === 0;
+      localStorage.setItem('admin', adminFlag.toString());
+    }
+    setIsAdmin(adminFlag);
 
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   const handleLogout = () => {
     safeLogout();
-    navigate('/login');
+    navigate('/');
     toast.success('已安全退出');
   };
 
@@ -187,7 +220,7 @@ export default function AdminLayout({
         onOpenChange();
         setTimeout(() => {
           safeLogout();
-          navigate('/login');
+          navigate('/');
         }, 1500);
       } else {
         toast.error(res.msg || '修改失败');
@@ -199,7 +232,20 @@ export default function AdminLayout({
     }
   };
 
+  const toggleSidebar = () => {
+    setIsSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('sidebar-collapsed', next ? 'true' : 'false');
+      } catch {
+        // ignore storage errors
+      }
+      return next;
+    });
+  };
+
   const currentPathLabel = menuItems.find(item => item.path === location.pathname)?.label || 'Flux Panel';
+  const sidebarCollapsed = !isMobile && isSidebarCollapsed;
 
   // Mobile Header
   const MobileHeader = () => (
@@ -236,15 +282,33 @@ export default function AdminLayout({
   const Sidebar = () => (
     <div className={`
       fixed left-0 top-0 bottom-0 bg-white dark:bg-zinc-900 border-r border-gray-200 dark:border-gray-800
-      w-64 flex flex-col transition-transform duration-300 z-50
+      ${sidebarCollapsed ? 'w-16' : 'w-64'} flex flex-col transition-all duration-300 z-50
       ${isMobile && !mobileMenuVisible ? '-translate-x-full' : 'translate-x-0'}
       lg:translate-x-0
     `}>
       {/* Logo Area */}
-      <div className="h-16 flex items-center px-6 border-b border-gray-100 dark:border-gray-800">
-        <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-cyan-500">
-           {siteConfig.name}
-        </span>
+      <div className={`h-16 flex items-center border-b border-gray-100 dark:border-gray-800 ${sidebarCollapsed ? 'justify-center px-2' : 'justify-between px-6'}`}>
+        {!sidebarCollapsed && (
+          <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-cyan-500">
+             {siteConfig.name}
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={toggleSidebar}
+          className="w-8 h-8 rounded-md border border-gray-200 dark:border-gray-700 flex items-center justify-center text-gray-500 hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors"
+          aria-label={sidebarCollapsed ? "展开侧边栏" : "收起侧边栏"}
+        >
+          {sidebarCollapsed ? (
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          ) : (
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          )}
+        </button>
       </div>
 
       {/* Menu Items */}
@@ -262,23 +326,19 @@ export default function AdminLayout({
                    navigate(item.path);
                    if (isMobile) setMobileMenuVisible(false);
                 }}
+                title={sidebarCollapsed ? item.label : undefined}
                 className={`
-                  flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-all
+                  flex items-center ${sidebarCollapsed ? 'justify-center px-2' : 'gap-3 px-3'} py-2.5 rounded-lg cursor-pointer transition-all
                   ${isActive 
                     ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400 font-medium' 
                     : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-zinc-800'}
                 `}
               >
                   {item.icon}
-                  <span className="text-sm">{item.label}</span>
+                  {!sidebarCollapsed && <span className="text-sm">{item.label}</span>}
               </div>
             );
         })}
-      </div>
-
-      {/* Footer / Version if needed */}
-      <div className="p-4 text-xs text-gray-400 text-center">
-         v{siteConfig.version}
       </div>
     </div>
   );
@@ -300,7 +360,7 @@ export default function AdminLayout({
       )}
 
       {/* Main Content Area */}
-      <div className="flex-1 lg:ml-64 flex flex-col min-w-0">
+      <div className={`flex-1 ${sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'} flex flex-col min-w-0`}>
         {/* Top Header (Desktop) */}
         <div className="hidden lg:flex h-16 bg-white dark:bg-zinc-900 border-b border-gray-200 dark:border-gray-800 px-6 items-center justify-between sticky top-0 z-30">
            {/* Breadcrumbs / Page Title */}
@@ -313,7 +373,15 @@ export default function AdminLayout({
              <Button
                 isIconOnly
                 variant="light"
-                onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                onClick={() => {
+                  const nextTheme = theme === "dark" ? "light" : "dark";
+                  try {
+                    localStorage.setItem('theme-preference', nextTheme);
+                  } catch {
+                    // ignore storage errors
+                  }
+                  setTheme(nextTheme);
+                }}
              >
                 {theme === "dark" ? <SunFilledIcon size={20}/> : <MoonFilledIcon size={20}/>}
              </Button>
@@ -332,10 +400,6 @@ export default function AdminLayout({
                   </div>
                 </DropdownTrigger>
                 <DropdownMenu aria-label="User Actions">
-                  <DropdownItem key="username" className="h-14 gap-2" textValue="Signed in as">
-                    <p className="font-semibold">Signed in as</p>
-                    <p className="font-semibold">{username}</p>
-                  </DropdownItem>
                   <DropdownItem key="password" onPress={onOpen}>修改密码</DropdownItem>
                   <DropdownItem key="logout" className="text-danger" color="danger" onPress={handleLogout}>
                     退出登录

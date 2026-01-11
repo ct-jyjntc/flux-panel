@@ -44,6 +44,9 @@ public class NodeUpdateDto {
     @DecimalMax(value = "100.0", message = "流量倍率不能大于100.0")
     private BigDecimal trafficRatio;
 
+    // 出口隧道协议（tls/wss/tcp/mtls/mwss/mtcp）
+    private String tunnelProtocol;
+
     private Integer http;
     private Integer tls;
     private Integer socks;

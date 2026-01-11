@@ -36,7 +36,7 @@ import {
   getSpeedLimitList,
   resetUserFlow
 } from '@/api';
-import { SearchIcon, EditIcon, DeleteIcon, SettingsIcon } from '@/components/icons';
+import { SearchIcon, EditIcon, DeleteIcon, SettingsIcon, PlusIcon } from '@/components/icons';
 import { parseDate } from "@internationalized/date";
 
 
@@ -443,7 +443,7 @@ export default function UserPage() {
             size="sm"
             color="primary"
             onPress={handleAdd}
-            startContent={<span className="text-lg">+</span>}
+            startContent={<PlusIcon size={16} />}
             className="font-medium"
           >
             新增用户
@@ -551,14 +551,14 @@ export default function UserPage() {
                     <td className="px-6 py-4 align-top text-right">
                       <div className="flex flex-wrap justify-end gap-1 w-[160px]">
                         <button 
-                             className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 flex items-center justify-center transition-colors"
+                             className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 dark:border-gray-700 dark:bg-zinc-900 dark:text-gray-300 dark:hover:bg-zinc-800 flex items-center justify-center transition-colors"
                              onClick={() => handleEdit(user)}
                              title="编辑"
                           >
                              <EditIcon className="w-3.5 h-3.5" />
                         </button>
                         <button 
-                             className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-orange-50 text-gray-600 hover:text-orange-500 flex items-center justify-center transition-colors"
+                             className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-orange-50 text-gray-600 hover:text-orange-500 dark:border-gray-700 dark:bg-zinc-900 dark:text-gray-300 dark:hover:bg-orange-900/20 dark:hover:text-orange-400 flex items-center justify-center transition-colors"
                              onClick={() => handleResetFlow(user)}
                              title="重置流量"
                           >
@@ -567,14 +567,14 @@ export default function UserPage() {
                              </svg>
                         </button>
                          <button 
-                             className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-blue-50 text-gray-600 hover:text-blue-500 flex items-center justify-center transition-colors"
+                             className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-blue-50 text-gray-600 hover:text-blue-500 dark:border-gray-700 dark:bg-zinc-900 dark:text-gray-300 dark:hover:bg-blue-900/20 dark:hover:text-blue-400 flex items-center justify-center transition-colors"
                              onClick={() => handleManageNodes(user)}
                              title="节点权限"
                           >
-                             <SettingsIcon className="w-3.5 h-3.5" />
+                             <SettingsIcon className="w-3.5 h-3.5 translate-y-0.5" />
                         </button>
                         <button 
-                             className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-red-50 text-gray-600 hover:text-red-500 flex items-center justify-center transition-colors"
+                             className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-red-50 text-gray-600 hover:text-red-500 dark:border-gray-700 dark:bg-zinc-900 dark:text-gray-300 dark:hover:bg-red-900/20 dark:hover:text-red-400 flex items-center justify-center transition-colors"
                              onClick={() => handleDelete(user)}
                              title="删除"
                           >

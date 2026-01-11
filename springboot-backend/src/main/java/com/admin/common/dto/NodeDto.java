@@ -40,4 +40,7 @@ public class NodeDto {
     @DecimalMin(value = "0.0", inclusive = true, message = "流量倍率不能小于0.0")
     @DecimalMax(value = "100.0", message = "流量倍率不能大于100.0")
     private BigDecimal trafficRatio;
+
+    // 出口隧道协议（tls/wss/tcp/mtls/mwss/mtcp）
+    private String tunnelProtocol;
 } 

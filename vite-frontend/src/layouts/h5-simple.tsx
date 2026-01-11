@@ -25,7 +25,11 @@ export default function H5SimpleLayout({
   }, [location.pathname]);
 
   const handleBack = () => {
-    navigate('/profile');
+    if (window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+    navigate('/dashboard');
   };
 
   return (

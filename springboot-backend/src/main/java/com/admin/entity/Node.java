@@ -36,6 +36,9 @@ public class Node extends BaseEntity {
 
     private Integer outPort;
 
+    @TableField("tunnel_protocol")
+    private String tunnelProtocol;
+
     private Long ownerId;
 
     private BigDecimal trafficRatio;

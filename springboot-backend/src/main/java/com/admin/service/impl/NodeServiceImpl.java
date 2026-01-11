@@ -33,6 +33,7 @@ import org.springframework.stereotype.Service;
 import javax.annotation.Resource;
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -84,6 +85,11 @@ public class NodeServiceImpl extends ServiceImpl<NodeMapper, Node> implements No
     private static final String ERROR_PORT_ORDER_INVALID = "结束端口不能小于起始端口";
     private static final String ERROR_OUT_PORT_REQUIRED = "出口共享端口不能为空";
     private static final String GOST_NOT_FOUND_MSG = "not found";
+    private static final String ERROR_TUNNEL_PROTOCOL_INVALID = "出口隧道协议不支持";
+    private static final String DEFAULT_TUNNEL_PROTOCOL = "tls";
+    private static final List<String> SUPPORTED_TUNNEL_PROTOCOLS = Arrays.asList(
+            "tls", "wss", "tcp", "mtls", "mwss", "mtcp"
+    );
 
     // ========== 依赖注入 ==========
     
@@ -174,6 +180,7 @@ public class NodeServiceImpl extends ServiceImpl<NodeMapper, Node> implements No
             return R.err(ERROR_OUT_PORT_REQUIRED);
         }
         Integer oldOutPort = node.getOutPort();
+        String oldTunnelProtocol = node.getTunnelProtocol();
 
         //1.1 如果节点在线 且传入更新的 http/tls/socks 任意一项与数据库不一致，则通过 WS 通知节点更新设置
         boolean online = node.getStatus() != null && node.getStatus() == 1;
@@ -200,6 +207,9 @@ public class NodeServiceImpl extends ServiceImpl<NodeMapper, Node> implements No
 
         // 2. 构建更新对象并执行更新
         Node updateNode = buildUpdateNode(nodeUpdateDto);
+        if (nodeUpdateDto.getTunnelProtocol() == null) {
+            updateNode.setTunnelProtocol(oldTunnelProtocol);
+        }
         if (currentUser.getRoleId() == ADMIN_ROLE_ID) {
             if (nodeUpdateDto.getTrafficRatio() != null) {
                 updateNode.setTrafficRatio(nodeUpdateDto.getTrafficRatio());
@@ -210,12 +220,15 @@ public class NodeServiceImpl extends ServiceImpl<NodeMapper, Node> implements No
         boolean result = this.updateById(updateNode);
 
         // 更新隧道入口ip
-        List<Tunnel> inNodeId = tunnelService.list(new QueryWrapper<Tunnel>().eq("in_node_id", updateNode.getId()));
-        if (!inNodeId.isEmpty()) {
-            for (Tunnel tunnel : inNodeId) {
-                tunnel.setInIp(updateNode.getIp());
+        List<Tunnel> inTunnels = tunnelService.list();
+        List<Tunnel> matchedInTunnels = inTunnels.stream()
+                .filter(tunnel -> tunnelUsesInNode(tunnel, updateNode.getId()))
+                .collect(Collectors.toList());
+        if (!matchedInTunnels.isEmpty()) {
+            for (Tunnel tunnel : matchedInTunnels) {
+                tunnel.setInIp(buildInIpForTunnel(tunnel));
             }
-            tunnelService.updateBatchById(inNodeId);
+            tunnelService.updateBatchById(matchedInTunnels);
         }
 
         // 更新服务器出口ip
@@ -232,6 +245,9 @@ public class NodeServiceImpl extends ServiceImpl<NodeMapper, Node> implements No
 
         if (result && !Objects.equals(oldOutPort, updateNode.getOutPort())) {
             syncOutPortForTunnels(updateNode.getId(), updateNode.getOutPort());
+        }
+        if (result && !Objects.equals(oldTunnelProtocol, updateNode.getTunnelProtocol())) {
+            syncTunnelProtocolForTunnels(updateNode.getId(), updateNode.getTunnelProtocol());
         }
 
         return result ? R.ok(SUCCESS_UPDATE_MSG) : R.err(ERROR_UPDATE_MSG);
@@ -371,6 +387,7 @@ public class NodeServiceImpl extends ServiceImpl<NodeMapper, Node> implements No
     private Node buildNewNode(NodeDto nodeDto) {
         Node node = new Node();
         BeanUtils.copyProperties(nodeDto, node);
+        node.setTunnelProtocol(normalizeTunnelProtocol(nodeDto.getTunnelProtocol()));
         
         // 验证端口范围
         validatePortRange(node.getPortSta(), node.getPortEnd());
@@ -403,6 +420,7 @@ public class NodeServiceImpl extends ServiceImpl<NodeMapper, Node> implements No
         node.setPortSta(nodeUpdateDto.getPortSta());
         node.setPortEnd(nodeUpdateDto.getPortEnd());
         node.setOutPort(nodeUpdateDto.getOutPort());
+        node.setTunnelProtocol(normalizeTunnelProtocol(nodeUpdateDto.getTunnelProtocol()));
         node.setHttp(nodeUpdateDto.getHttp());
         node.setTls(nodeUpdateDto.getTls());
         node.setSocks(nodeUpdateDto.getSocks());
@@ -451,6 +469,37 @@ public class NodeServiceImpl extends ServiceImpl<NodeMapper, Node> implements No
         }
     }
 
+    private void syncTunnelProtocolForTunnels(Long nodeId, String tunnelProtocol) {
+        if (nodeId == null || StrUtil.isBlank(tunnelProtocol)) {
+            return;
+        }
+        String normalizedProtocol = normalizeTunnelProtocol(tunnelProtocol);
+        List<Tunnel> outTunnels = tunnelService.list(new QueryWrapper<Tunnel>().eq("type", 2));
+        List<Tunnel> matchedOutTunnels = outTunnels.stream()
+                .filter(tunnel -> tunnelUsesOutNode(tunnel, nodeId))
+                .collect(Collectors.toList());
+        if (matchedOutTunnels.isEmpty()) {
+            return;
+        }
+        for (Tunnel tunnel : matchedOutTunnels) {
+            if (Objects.equals(tunnel.getProtocol(), normalizedProtocol)) {
+                continue;
+            }
+            Tunnel oldTunnel = new Tunnel();
+            BeanUtils.copyProperties(tunnel, oldTunnel);
+            List<Node> outNodes = resolveOutNodesFromTunnel(tunnel);
+            if (outNodes.isEmpty()) {
+                continue;
+            }
+            tunnel.setProtocol(normalizedProtocol);
+            tunnel.setUpdatedTime(System.currentTimeMillis());
+            tunnelService.updateById(tunnel);
+
+            ensureMuxService(tunnel, outNodes);
+            forwardService.rebuildForwardsForTunnelUpdate(oldTunnel, tunnel);
+        }
+    }
+
     private void ensureMuxService(Tunnel tunnel, List<Node> outNodes) {
         if (outNodes == null || outNodes.isEmpty()) {
             return;
@@ -474,6 +523,17 @@ public class NodeServiceImpl extends ServiceImpl<NodeMapper, Node> implements No
         if (outPort < 1 || outPort > 65535) {
             throw new RuntimeException(ERROR_PORT_RANGE_INVALID);
         }
+    }
+
+    private String normalizeTunnelProtocol(String protocol) {
+        if (StrUtil.isBlank(protocol)) {
+            return DEFAULT_TUNNEL_PROTOCOL;
+        }
+        String normalized = protocol.trim().toLowerCase();
+        if (!SUPPORTED_TUNNEL_PROTOCOLS.contains(normalized)) {
+            throw new RuntimeException(ERROR_TUNNEL_PROTOCOL_INVALID);
+        }
+        return normalized;
     }
 
     private boolean tunnelUsesOutNode(Tunnel tunnel, Long nodeId) {
@@ -556,6 +616,49 @@ public class NodeServiceImpl extends ServiceImpl<NodeMapper, Node> implements No
             }
         }
         return nodes;
+    }
+
+    private List<Node> resolveInNodesFromTunnel(Tunnel tunnel) {
+        if (tunnel == null) {
+            return Collections.emptyList();
+        }
+        List<Long> inNodeIds = new ArrayList<>();
+        if (StrUtil.isNotBlank(tunnel.getInNodeIds())) {
+            for (String part : tunnel.getInNodeIds().split(",")) {
+                String trimmed = part.trim();
+                if (!trimmed.isEmpty()) {
+                    try {
+                        inNodeIds.add(Long.parseLong(trimmed));
+                    } catch (NumberFormatException ignored) {
+                    }
+                }
+            }
+        }
+        if (inNodeIds.isEmpty() && tunnel.getInNodeId() != null) {
+            inNodeIds.add(tunnel.getInNodeId());
+        }
+        if (inNodeIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<Node> nodes = new ArrayList<>();
+        for (Long id : new LinkedHashSet<>(inNodeIds)) {
+            Node node = this.getById(id);
+            if (node != null) {
+                nodes.add(node);
+            }
+        }
+        return nodes;
+    }
+
+    private String buildInIpForTunnel(Tunnel tunnel) {
+        List<Node> nodes = resolveInNodesFromTunnel(tunnel);
+        if (nodes.isEmpty()) {
+            return tunnel.getInIp();
+        }
+        return nodes.stream()
+                .map(Node::getIp)
+                .filter(Objects::nonNull)
+                .collect(Collectors.joining(","));
     }
 
     private String buildOutIpForTunnel(Tunnel tunnel) {

@@ -86,6 +86,7 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
     private static final String ERROR_OUT_NODE_MULTI_NOT_SUPPORTED = "暂不支持多个出口节点";
     private static final String ERROR_MUX_PORT_ALLOCATE_FAILED = "多路复用端口已满，无法分配新端口";
     private static final String DEFAULT_OUT_STRATEGY = "fifo";
+    private static final String DEFAULT_TUNNEL_PROTOCOL = "tls";
     private static final Set<String> SUPPORTED_OUT_STRATEGIES = new HashSet<>(Arrays.asList("fifo", "round", "random", "hash"));
     
     /** 使用检查相关消息 */
@@ -175,7 +176,7 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
                 if (outNode.getOutPort() == null) {
                     return R.err("出口共享端口未配置");
                 }
-                R sharedConfigResult = validateSharedOutNodeConfig(outNode.getId(), tunnel.getProtocol(), tunnel.getInterfaceName(), null);
+                R sharedConfigResult = validateSharedOutNodeConfig(outNode.getId(), tunnel.getInterfaceName(), null);
                 if (sharedConfigResult.getCode() != 0) {
                     return sharedConfigResult;
                 }
@@ -352,10 +353,14 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
         }
         Set<Long> removedOutNodeIds = new LinkedHashSet<>(existingOutNodeIds);
         removedOutNodeIds.removeAll(nextOutNodeIds);
+        String resolvedProtocol = existingTunnel.getType() == TUNNEL_TYPE_TUNNEL_FORWARD
+                ? resolveOutNodeProtocol(outNodes)
+                : null;
+
         int up = 0;
         if (!Objects.equals(existingTunnel.getTcpListenAddr(), tunnelUpdateDto.getTcpListenAddr()) ||
                 !Objects.equals(existingTunnel.getUdpListenAddr(), tunnelUpdateDto.getUdpListenAddr()) ||
-                !Objects.equals(existingTunnel.getProtocol(), tunnelUpdateDto.getProtocol()) ||
+                !Objects.equals(existingTunnel.getProtocol(), resolvedProtocol) ||
                 !Objects.equals(existingTunnel.getInterfaceName(), tunnelUpdateDto.getInterfaceName())) {
             up++;
         }
@@ -365,7 +370,7 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
         existingTunnel.setName(tunnelUpdateDto.getName());
         existingTunnel.setTcpListenAddr(tunnelUpdateDto.getTcpListenAddr());
         existingTunnel.setUdpListenAddr(tunnelUpdateDto.getUdpListenAddr());
-        existingTunnel.setProtocol(tunnelUpdateDto.getProtocol());
+        existingTunnel.setProtocol(resolvedProtocol);
         existingTunnel.setInterfaceName(tunnelUpdateDto.getInterfaceName());
         existingTunnel.setFlow(1);
         if (existingTunnel.getType() == TUNNEL_TYPE_TUNNEL_FORWARD) {
@@ -376,7 +381,7 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
                 if (outNode.getOutPort() == null) {
                     return R.err("出口共享端口未配置");
                 }
-                R sharedConfigResult = validateSharedOutNodeConfig(outNode.getId(), existingTunnel.getProtocol(), existingTunnel.getInterfaceName(), existingTunnel.getId());
+                R sharedConfigResult = validateSharedOutNodeConfig(outNode.getId(), existingTunnel.getInterfaceName(), existingTunnel.getId());
                 if (sharedConfigResult.getCode() != 0) {
                     return sharedConfigResult;
                 }
@@ -625,6 +630,17 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
                 .collect(Collectors.joining(","));
     }
 
+    private String resolveOutNodeProtocol(List<Node> outNodes) {
+        if (outNodes == null || outNodes.isEmpty()) {
+            return DEFAULT_TUNNEL_PROTOCOL;
+        }
+        String protocol = outNodes.get(0).getTunnelProtocol();
+        if (StringUtils.isBlank(protocol)) {
+            return DEFAULT_TUNNEL_PROTOCOL;
+        }
+        return protocol.trim().toLowerCase();
+    }
+
     private String normalizeOutStrategy(String strategy) {
         if (StringUtils.isBlank(strategy)) {
             return DEFAULT_OUT_STRATEGY;
@@ -655,9 +671,8 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
         
         // 设置协议类型（仅隧道转发需要）
         if (tunnelDto.getType() == TUNNEL_TYPE_TUNNEL_FORWARD) {
-            // 隧道转发时，设置协议类型，默认为tls
-            String protocol = StrUtil.isNotBlank(tunnelDto.getProtocol()) ? tunnelDto.getProtocol() : "tls";
-            tunnel.setProtocol(protocol);
+            // 隧道转发时协议由出口节点决定
+            tunnel.setProtocol(null);
         } else {
             // 端口转发时，协议类型为null
             tunnel.setProtocol(null);
@@ -800,26 +815,23 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
             }
         }
 
-        // 验证协议类型
-        String protocol = tunnelDto.getProtocol();
-        if (StrUtil.isBlank(protocol)) {
-            return R.err("协议类型必选");
-        }
-
         String normalizedStrategy = normalizeOutStrategy(tunnelDto.getOutStrategy());
         if (normalizedStrategy == null) {
             return R.err("出口负载策略不支持");
         }
 
+        String protocol = resolveOutNodeProtocol(outNodes);
+
         tunnel.setOutNodeIds(joinNodeIds(outNodes.stream().map(Node::getId).collect(Collectors.toList())));
         tunnel.setOutNodeId(outNodes.get(0).getId());
         tunnel.setOutIp(joinOutNodeIps(outNodes));
         tunnel.setOutStrategy(normalizedStrategy);
+        tunnel.setProtocol(protocol);
 
         return R.ok();
     }
 
-    private R validateSharedOutNodeConfig(Long outNodeId, String protocol, String interfaceName, Long excludeTunnelId) {
+    private R validateSharedOutNodeConfig(Long outNodeId, String interfaceName, Long excludeTunnelId) {
         if (outNodeId == null) {
             return R.ok();
         }
@@ -831,9 +843,6 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
             }
             if (!resolveOutNodeIdsFromTunnel(tunnel).contains(outNodeId)) {
                 continue;
-            }
-            if (protocol != null && tunnel.getProtocol() != null && !Objects.equals(protocol, tunnel.getProtocol())) {
-                return R.err("同一出口节点仅支持一种协议");
             }
             String existingInterface = StringUtils.isBlank(tunnel.getInterfaceName()) ? null : tunnel.getInterfaceName().trim();
             if (!Objects.equals(normalizedInterface, existingInterface)) {

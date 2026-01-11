@@ -117,9 +117,12 @@ html, body {
 }
 
 button,
-[role="button"] {
+[role="button"],
+[data-slot="button"],
+[data-slot="trigger"] {
   box-shadow: none !important;
   border-radius: var(--flat-button-radius) !important;
+  cursor: pointer;
 }
 
 button[data-hover="true"],
@@ -129,6 +132,21 @@ button[data-focus-visible="true"],
 [role="button"][data-hover="true"],
 [role="button"][data-pressed="true"],
 [role="button"][data-focus="true"],
-[role="button"][data-focus-visible="true"] {
+[role="button"][data-focus-visible="true"],
+[data-slot="button"][data-hover="true"],
+[data-slot="button"][data-pressed="true"],
+[data-slot="button"][data-focus="true"],
+[data-slot="button"][data-focus-visible="true"],
+[data-slot="trigger"][data-hover="true"],
+[data-slot="trigger"][data-pressed="true"],
+[data-slot="trigger"][data-focus="true"],
+[data-slot="trigger"][data-focus-visible="true"] {
   box-shadow: none !important;
+}
+
+button:disabled,
+[role="button"][aria-disabled="true"],
+[data-slot="button"][aria-disabled="true"],
+[data-slot="trigger"][aria-disabled="true"] {
+  cursor: not-allowed;
 }

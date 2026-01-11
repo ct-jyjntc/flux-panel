@@ -24,7 +24,7 @@ public class TunnelUpdateDto {
 
     private List<Long> outNodeIds;
     
-    @NotBlank
+    // 协议类型（由出口节点决定）
     private String protocol;
 
     // TCP监听地址

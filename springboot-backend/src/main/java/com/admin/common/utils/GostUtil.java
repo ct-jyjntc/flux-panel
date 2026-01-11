@@ -101,6 +101,9 @@ public class GostUtil {
 
         JSONObject handler = new JSONObject();
         handler.put("type", "socks");
+        JSONObject handlerMetadata = new JSONObject();
+        handlerMetadata.put("udp", true);
+        handler.put("metadata", handlerMetadata);
         data.put("handler", handler);
 
         JSONObject listener = new JSONObject();
@@ -132,6 +135,9 @@ public class GostUtil {
 
         JSONObject handler = new JSONObject();
         handler.put("type", "socks");
+        JSONObject handlerMetadata = new JSONObject();
+        handlerMetadata.put("udp", true);
+        handler.put("metadata", handlerMetadata);
         data.put("handler", handler);
 
         JSONObject listener = new JSONObject();
@@ -216,6 +222,11 @@ public class GostUtil {
 
         JSONObject connector = new JSONObject();
         connector.put("type", useSocks ? "socks5" : "relay");
+        if (useSocks) {
+            JSONObject connectorMetadata = new JSONObject();
+            connectorMetadata.put("udp", true);
+            connector.put("metadata", connectorMetadata);
+        }
 
         JSONArray nodes = new JSONArray();
         String[] split = remoteAddr.split(",");
@@ -269,6 +280,11 @@ public class GostUtil {
 
         JSONObject connector = new JSONObject();
         connector.put("type", useSocks ? "socks5" : "relay");
+        if (useSocks) {
+            JSONObject connectorMetadata = new JSONObject();
+            connectorMetadata.put("udp", true);
+            connector.put("metadata", connectorMetadata);
+        }
 
         JSONArray nodes = new JSONArray();
         String[] split = remoteAddr.split(",");

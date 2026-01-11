@@ -335,14 +335,6 @@ export default function AdminLayout({
           </ul>
         </nav>
 
-                {/* 底部版权信息 */}
-        <div className={`py-2 pb-4 mt-auto flex-shrink-0 ${isSidebarCollapsed ? 'px-2' : 'px-4'}`}>
-          {!isSidebarCollapsed && (
-            <div className="text-center text-xs text-gray-400 dark:text-gray-500">
-              v{siteConfig.version}
-            </div>
-          )}
-        </div>
       </aside>
 
       {/* 主内容区域 */}

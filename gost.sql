@@ -63,6 +63,7 @@ CREATE TABLE `node` (
   `owner_id` int(10) DEFAULT NULL,
   `traffic_ratio` decimal(10,1) NOT NULL DEFAULT '1.0',
   `out_port` int(10) DEFAULT NULL,
+  `tunnel_protocol` varchar(20) NOT NULL DEFAULT 'tls',
   `version` varchar(100) DEFAULT NULL,
   `http` int(10) NOT NULL DEFAULT '0',
   `tls` int(10) NOT NULL DEFAULT '0',

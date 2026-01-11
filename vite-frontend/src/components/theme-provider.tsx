@@ -7,9 +7,18 @@ interface ThemeProviderProps {
 
 export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
   const { theme, setTheme } = useTheme();
+  const storageKey = 'theme-preference';
 
   useEffect(() => {
-    // 确保主题与HTML class同步
+    const storedTheme = localStorage.getItem(storageKey);
+    const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    const initialTheme = storedTheme || systemTheme;
+    if (initialTheme !== theme) {
+      setTheme(initialTheme);
+    }
+  }, [setTheme, theme]);
+
+  useEffect(() => {
     const updateThemeClass = (currentTheme: string) => {
       if (currentTheme === 'dark') {
         document.documentElement.classList.add('dark');
@@ -19,26 +28,22 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
         document.documentElement.style.colorScheme = 'light';
       }
     };
-
-    // 始终跟随系统主题
-    const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-    if (systemTheme !== theme) {
-      setTheme(systemTheme);
-    }
-
-    // 监听主题变化
     updateThemeClass(theme);
+  }, [theme]);
 
-    // 监听系统主题变化
+  useEffect(() => {
+    const storedTheme = localStorage.getItem(storageKey);
+    if (storedTheme) {
+      return;
+    }
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     const handleThemeChange = (e: MediaQueryListEvent) => {
       const newTheme = e.matches ? 'dark' : 'light';
       setTheme(newTheme);
     };
-
     mediaQuery.addEventListener('change', handleThemeChange);
     return () => mediaQuery.removeEventListener('change', handleThemeChange);
-  }, [theme, setTheme]);
+  }, [setTheme]);
 
   return <>{children}</>;
 }; 

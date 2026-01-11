@@ -7,6 +7,7 @@ import { Chip } from "@heroui/chip";
 import { Spinner } from "@heroui/spinner";
 import toast from 'react-hot-toast';
 
+import { ActivityIcon } from "@/components/icons";
 
 import { 
   createTunnel, 
@@ -53,7 +54,6 @@ interface TunnelForm {
   inNodeIds: number[];
   outNodeIds: number[];
   outNodeId?: number | null;
-  protocol: string;
   outStrategy: string;
   tcpListenAddr: string;
   udpListenAddr: string;
@@ -105,7 +105,6 @@ export default function TunnelPage() {
     inNodeIds: [],
     outNodeIds: [],
     outNodeId: null,
-    protocol: 'tls',
     outStrategy: 'fifo',
     tcpListenAddr: '[::]',
     udpListenAddr: '[::]',
@@ -212,10 +211,6 @@ export default function TunnelPage() {
       } else if (form.outNodeIds.some((id) => form.inNodeIds.includes(id))) {
         newErrors.outNodeId = '隧道转发模式下，入口和出口不能是同一个节点';
       }
-      
-      if (!form.protocol) {
-        newErrors.protocol = '请选择协议类型';
-      }
     }
     
     setErrors(newErrors);
@@ -231,7 +226,6 @@ export default function TunnelPage() {
       inNodeIds: [],
       outNodeIds: [],
       outNodeId: null,
-      protocol: 'tls',
       outStrategy: 'fifo',
       tcpListenAddr: '[::]',
       udpListenAddr: '[::]',
@@ -255,7 +249,6 @@ export default function TunnelPage() {
       inNodeIds: getTunnelInNodeIds(tunnel),
       outNodeIds,
       outNodeId: outNodeIds[0] ?? null,
-      protocol: tunnel.protocol || 'tls',
       outStrategy: tunnel.outStrategy || 'fifo',
       tcpListenAddr: tunnel.tcpListenAddr || '[::]',
       udpListenAddr: tunnel.udpListenAddr || '[::]',
@@ -303,7 +296,6 @@ export default function TunnelPage() {
       type,
       outNodeIds: type === 1 ? [] : prev.outNodeIds,
       outNodeId: type === 1 ? null : (prev.outNodeIds[0] ?? prev.outNodeId),
-      protocol: type === 1 ? 'tls' : prev.protocol,
       outStrategy: type === 1 ? 'fifo' : prev.outStrategy,
       muxEnabled: type === 1 ? false : true,
       muxPort: type === 1
@@ -578,16 +570,14 @@ export default function TunnelPage() {
                         <td className="px-4 py-3 align-middle text-right w-[160px]">
                             <div className="flex justify-end gap-1">
                                <button 
-                                  className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 flex items-center justify-center transition-colors"
+                                  className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 dark:border-gray-700 dark:bg-zinc-900 dark:text-gray-300 dark:hover:bg-zinc-800 flex items-center justify-center transition-colors"
                                   onClick={() => handleDiagnose(tunnel)} 
                                   title="诊断"
                                 >
-                                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                   </svg>
+                                   <ActivityIcon className="w-3.5 h-3.5" />
                                 </button>
                                 <button 
-                                 className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 flex items-center justify-center transition-colors"
+                                 className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 dark:border-gray-700 dark:bg-zinc-900 dark:text-gray-300 dark:hover:bg-zinc-800 flex items-center justify-center transition-colors"
                                  onClick={() => handleEdit(tunnel)}
                                  title="编辑"
                                 >
@@ -596,7 +586,7 @@ export default function TunnelPage() {
                                    </svg>
                                 </button>
                                 <button 
-                                  className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-red-50 text-gray-600 hover:text-red-500 flex items-center justify-center transition-colors"
+                                  className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-red-50 text-gray-600 hover:text-red-500 dark:border-gray-700 dark:bg-zinc-900 dark:text-gray-300 dark:hover:bg-red-900/20 dark:hover:text-red-400 flex items-center justify-center transition-colors"
                                   onClick={() => handleDelete(tunnel)}
                                   title="删除"
                                 >
@@ -806,34 +796,6 @@ export default function TunnelPage() {
                       <div className="border-t border-gray-100 dark:border-gray-800 pt-4">
                         <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-4">出口配置</h3>
                         <div className="flex flex-col gap-4">
-                            <div className="flex flex-col gap-2">
-                                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">协议类型</label>
-                                <Select
-                                  placeholder="请选择协议类型"
-                                  selectedKeys={[form.protocol]}
-                                  onSelectionChange={(keys) => {
-                                    const selectedKey = Array.from(keys)[0] as string;
-                                    if (selectedKey) {
-                                      setForm(prev => ({ ...prev, protocol: selectedKey }));
-                                    }
-                                  }}
-                                  isInvalid={!!errors.protocol}
-                                  errorMessage={errors.protocol}
-                                  variant="bordered"
-                                   classNames={{
-                                     trigger: "bg-white dark:bg-zinc-900 border-gray-300 dark:border-gray-700 shadow-none hover:border-gray-400 focus:!border-blue-500 rounded-lg",
-                                     value: "text-sm"
-                                  }}
-                                >
-                                  <SelectItem key="tls">TLS</SelectItem>
-                                  <SelectItem key="wss">WSS</SelectItem>
-                                  <SelectItem key="tcp">TCP</SelectItem>
-                                  <SelectItem key="mtls">MTLS</SelectItem>
-                                  <SelectItem key="mwss">MWSS</SelectItem>
-                                  <SelectItem key="mtcp">MTCP</SelectItem>
-                                </Select>
-                            </div>
-
                             <div className="flex flex-col gap-2">
                                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300">出口节点</label>
                                 <Select

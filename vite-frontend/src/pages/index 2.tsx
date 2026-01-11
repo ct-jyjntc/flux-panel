@@ -4,8 +4,6 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from 'react-hot-toast';
 import axios from 'axios';
-import { isWebViewFunc } from '@/utils/panel';
-import { siteConfig } from '@/config/site';
 import { title } from "@/components/primitives";
 import DefaultLayout from "@/layouts/default";
 import { login, LoginData, checkCaptcha } from "@/api";
@@ -52,7 +50,6 @@ export default function IndexPage() {
   const navigate = useNavigate();
   const tacInstanceRef = useRef<any>(null);
   const captchaContainerRef = useRef<HTMLDivElement>(null);
-  const [isWebView, setIsWebView] = useState(false);
   // 清理验证码实例
   useEffect(() => {
     return () => {
@@ -61,10 +58,6 @@ export default function IndexPage() {
         tacInstanceRef.current = null;
       }
     };
-  }, []);
-  // 检测是否在WebView中运行
-  useEffect(() => {
-    setIsWebView(isWebViewFunc());
   }, []);
   // 验证表单
   const validateForm = (): boolean => {
@@ -311,27 +304,7 @@ export default function IndexPage() {
           </div>
         </div>
 
-
-      {/* 版权信息 - 固定在底部，不占据布局空间 */}
       
-               <div className="fixed inset-x-0 bottom-4 text-center py-4">
-               <p className="text-xs text-gray-400 dark:text-gray-500">
-                 Powered by{' '}
-                 <a 
-                   href="https://github.com/bqlpfy/flux-panel" 
-                   target="_blank" 
-                   rel="noopener noreferrer"
-                   className="text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                 >
-                   flux-panel
-                 </a>
-               </p>
-               <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                 v{ isWebView ? siteConfig.app_version : siteConfig.version}
-               </p>
-             </div>
-      
-   
 
         {/* 验证码弹层 */}
         {showCaptcha && (
