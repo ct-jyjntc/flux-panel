@@ -11,6 +11,7 @@ import UserPage from "@/pages/user";
 import LimitPage from "@/pages/limit";
 import ConfigPage from "@/pages/config";
 import { SettingsPage } from "@/pages/settings";
+import ComingSoonPage from "@/pages/coming-soon";
 
 import AdminLayout from "@/layouts/admin";
 import H5Layout from "@/layouts/h5";
@@ -177,6 +178,30 @@ function App() {
         element={
           <ProtectedRoute>
             <TunnelPage />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/store" 
+        element={
+          <ProtectedRoute>
+            <ComingSoonPage />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/orders" 
+        element={
+          <ProtectedRoute>
+            <ComingSoonPage />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/looking-glass" 
+        element={
+          <ProtectedRoute>
+            <ComingSoonPage />
           </ProtectedRoute>
         } 
       />
