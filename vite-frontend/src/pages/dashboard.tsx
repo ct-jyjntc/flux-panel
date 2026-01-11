@@ -290,96 +290,125 @@ export default function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      {/* 响应式统计列表 */}
-      <div className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden divide-y divide-gray-100 dark:divide-zinc-800 mb-6 lg:mb-8">
-        <div className="p-4 lg:p-6 hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">用户名</p>
-              <p className="text-xl font-bold text-gray-900 dark:text-white mt-1">{userInfo.num === 99999 ? '管理员' : '普通用户'}</p>
-            </div>
-            <div className="w-10 h-10 bg-gray-100 dark:bg-zinc-800 rounded-lg flex items-center justify-center flex-shrink-0">
+      {/* 概览统计卡片 */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* 用户信息 */}
+        <div className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-gray-800 rounded-xl p-6 transition-all hover:shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <div className="w-10 h-10 bg-gray-100 dark:bg-zinc-800 rounded-lg flex items-center justify-center">
               <svg className="w-5 h-5 text-gray-600 dark:text-gray-300" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
               </svg>
             </div>
+            <span className="text-xs font-medium px-2 py-1 bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-300 rounded-full">
+              {isAdmin ? '管理员' : '用户'}
+            </span>
+          </div>
+          <div>
+            <p className="text-sm text-gray-500 dark:text-gray-400">当前身份</p>
+            <p className="text-xl font-bold text-gray-900 dark:text-white mt-1">
+              {userInfo.num === 99999 ? '管理员' : '普通用户'}
+            </p>
           </div>
         </div>
 
-        <div className="p-4 lg:p-6 hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">总流量</p>
-              <p className="text-xl font-bold text-gray-900 dark:text-white mt-1">{formatFlow(userInfo.flow, 'gb')}</p>
-            </div>
-            <div className="w-10 h-10 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg flex items-center justify-center flex-shrink-0">
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+        {/* 总流量 */}
+        <div className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-gray-800 rounded-xl p-6 transition-all hover:shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <div className="w-10 h-10 bg-blue-50 dark:bg-blue-900/20 rounded-lg flex items-center justify-center">
+              <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="currentColor" viewBox="0 0 20 20">
                 <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" />
               </svg>
             </div>
           </div>
-        </div>
-
-        <div className="p-4 lg:p-6 hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex-1 min-w-0">
-              <p className="text-sm text-gray-500 dark:text-gray-400">已用流量</p>
-              <p className="text-xl font-bold text-gray-900 dark:text-white mt-1">{formatFlow(calculateUserTotalUsedFlow())}</p>
-              <div className="mt-2">
-                {renderProgressBar(calculateUsagePercentage('flow'), 'sm', userInfo.flow === 99999)}
-                <div className="flex items-center justify-between mt-1.5">
-                  <p className="text-xs text-gray-500">
-                    {userInfo.flow === 99999 ? '无限制' : `${calculateUsagePercentage('flow').toFixed(1)}%`}
-                  </p>
-                  {(userInfo.flowResetTime !== undefined && userInfo.flowResetTime !== null) && (
-                    <div className="text-xs text-gray-400 flex items-center gap-1">
-                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-                      </svg>
-                      <span className="truncate">{formatResetTime(userInfo.flowResetTime)}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-            <div className="w-10 h-10 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded-lg flex items-center justify-center flex-shrink-0">
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M12 7a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0V8.414l-4.293 4.293a1 1 0 01-1.414 0L8 10.414l-4.293 4.293a1 1 0 01-1.414-1.414l5-5a1 1 0 011.414 0L11 10.586 14.586 7H12z" clipRule="evenodd" />
-              </svg>
-            </div>
+          <div>
+            <p className="text-sm text-gray-500 dark:text-gray-400">总流量限制</p>
+            <p className="text-xl font-bold text-gray-900 dark:text-white mt-1">{formatFlow(userInfo.flow, 'gb')}</p>
           </div>
         </div>
 
-        <div className="p-4 lg:p-6 hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">转发配额</p>
-              <p className="text-xl font-bold text-gray-900 dark:text-white mt-1">{formatNumber(userInfo.num || 0)}</p>
-            </div>
-            <div className="w-10 h-10 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 rounded-lg flex items-center justify-center flex-shrink-0">
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+        {/* 转发配额 */}
+        <div className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-gray-800 rounded-xl p-6 transition-all hover:shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <div className="w-10 h-10 bg-purple-50 dark:bg-purple-900/20 rounded-lg flex items-center justify-center">
+              <svg className="w-5 h-5 text-purple-600 dark:text-purple-400" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
               </svg>
             </div>
           </div>
+          <div>
+            <p className="text-sm text-gray-500 dark:text-gray-400">转发规则配额</p>
+            <p className="text-xl font-bold text-gray-900 dark:text-white mt-1">{formatNumber(userInfo.num || 0)}</p>
+          </div>
         </div>
 
-        <div className="p-4 lg:p-6 hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex-1 min-w-0">
-              <p className="text-sm text-gray-500 dark:text-gray-400">已用转发</p>
-              <p className="text-xl font-bold text-gray-900 dark:text-white mt-1">{forwardList.length}</p>
-              <div className="mt-2">
-                {renderProgressBar(calculateUsagePercentage('forwards'), 'sm', userInfo.num === 99999)}
-                <p className="text-xs text-gray-500 mt-1.5 truncate">
-                  {userInfo.num === 99999 ? '无限制' : `${calculateUsagePercentage('forwards').toFixed(1)}%`}
-                </p>
-              </div>
-            </div>
-            <div className="w-10 h-10 bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 rounded-lg flex items-center justify-center flex-shrink-0">
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0 1 1 0 00-1.414 1.414 4 4 0 005.656 0l3-3a4 4 0 00-5.656-5.656l-1.5 1.5a1 1 0 101.414 1.414l1.5-1.5zm-5 5a2 2 0 012.828 0 1 1 0 101.414-1.414 4 4 0 00-5.656 0l-3 3a4 4 0 105.656 5.656l1.5-1.5a1 1 0 10-1.414-1.414l-1.5 1.5a2 2 0 11-2.828-2.828l3-3z" clipRule="evenodd" />
+        {/* 重置时间 */}
+        <div className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-gray-800 rounded-xl p-6 transition-all hover:shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <div className="w-10 h-10 bg-green-50 dark:bg-green-900/20 rounded-lg flex items-center justify-center">
+              <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
               </svg>
+            </div>
+            {(userInfo.flowResetTime !== undefined && userInfo.flowResetTime !== null) && (
+              <span className="text-xs font-medium px-2 py-1 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded-full">
+                {formatResetTime(userInfo.flowResetTime)}
+              </span>
+            )}
+          </div>
+          <div>
+            <p className="text-sm text-gray-500 dark:text-gray-400">流量重置日</p>
+            <p className="text-xl font-bold text-gray-900 dark:text-white mt-1">
+              {(userInfo.flowResetTime !== undefined && userInfo.flowResetTime !== null) ? `每月 ${userInfo.flowResetTime} 日` : '不重置'}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* 使用情况详情 */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* 流量使用详情 */}
+        <div className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-gray-800 rounded-xl p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">流量使用情况</h3>
+            <span className="text-sm text-gray-500">{calculateUsagePercentage('flow').toFixed(1)}%</span>
+          </div>
+          <div className="mb-4">
+            {renderProgressBar(calculateUsagePercentage('flow'), 'md', userInfo.flow === 99999)}
+          </div>
+          <div className="grid grid-cols-2 gap-4 mt-6">
+            <div className="p-3 bg-gray-50 dark:bg-zinc-800/50 rounded-lg">
+              <p className="text-xs text-gray-500 mb-1">已用流量</p>
+              <p className="text-lg font-bold text-gray-900 dark:text-white">{formatFlow(calculateUserTotalUsedFlow())}</p>
+            </div>
+            <div className="p-3 bg-gray-50 dark:bg-zinc-800/50 rounded-lg">
+              <p className="text-xs text-gray-500 mb-1">剩余流量</p>
+              <p className="text-lg font-bold text-gray-900 dark:text-white">
+                {userInfo.flow === 99999 ? '无限' : formatFlow((userInfo.flow * 1024 * 1024 * 1024) - calculateUserTotalUsedFlow())}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* 转发使用详情 */}
+        <div className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-gray-800 rounded-xl p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">转发规则使用</h3>
+            <span className="text-sm text-gray-500">{calculateUsagePercentage('forwards').toFixed(1)}%</span>
+          </div>
+          <div className="mb-4">
+            {renderProgressBar(calculateUsagePercentage('forwards'), 'md', userInfo.num === 99999)}
+          </div>
+          <div className="grid grid-cols-2 gap-4 mt-6">
+            <div className="p-3 bg-gray-50 dark:bg-zinc-800/50 rounded-lg">
+              <p className="text-xs text-gray-500 mb-1">已用规则</p>
+              <p className="text-lg font-bold text-gray-900 dark:text-white">{forwardList.length}</p>
+            </div>
+            <div className="p-3 bg-gray-50 dark:bg-zinc-800/50 rounded-lg">
+              <p className="text-xs text-gray-500 mb-1">剩余配额</p>
+              <p className="text-lg font-bold text-gray-900 dark:text-white">
+                {userInfo.num === 99999 ? '无限' : (userInfo.num - forwardList.length)}
+              </p>
             </div>
           </div>
         </div>
@@ -484,18 +513,33 @@ export default function DashboardPage() {
               <p className="text-gray-500 dark:text-gray-400">暂无节点权限</p>
             </div>
           ) : (
-            <div className="divide-y divide-gray-100 dark:divide-zinc-800">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-6 bg-gray-50/50 dark:bg-zinc-800/10">
               {userNodes.map((node) => (
-                <div key={node.id} className="p-4 lg:p-6 hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors">
-                  <h3 className="font-semibold text-gray-900 dark:text-white">{node.nodeName}</h3>
-                  <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 flex flex-col sm:flex-row sm:gap-6 gap-2">
-                    <div className="flex items-center gap-1">
-                      <span className="opacity-70">入口IP：</span>
-                      <span className="font-mono bg-gray-50 dark:bg-zinc-800 px-1.5 py-0.5 rounded border border-gray-100 dark:border-zinc-700/50">{node.ip}</span>
+                <div key={node.id} className="p-4 bg-white dark:bg-zinc-800 border border-gray-100 dark:border-zinc-700/50 rounded-xl hover:shadow-sm transition-all group">
+                  <div className="flex items-start justify-between mb-3">
+                    <h3 className="font-semibold text-gray-900 dark:text-white truncate pr-2" title={node.nodeName}>
+                      {node.nodeName}
+                    </h3>
+                    <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center flex-shrink-0">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
+                      </svg>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <span className="opacity-70">服务器IP：</span>
-                      <span className="font-mono bg-gray-50 dark:bg-zinc-800 px-1.5 py-0.5 rounded border border-gray-100 dark:border-zinc-700/50">{node.serverIp}</span>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <div className="flex flex-col gap-1">
+                      <span className="text-xs text-gray-500 dark:text-gray-400">入口地址</span>
+                      <div className="px-2 py-1 bg-gray-50 dark:bg-zinc-900 rounded-md border border-gray-100 dark:border-zinc-700 text-xs font-mono text-gray-600 dark:text-gray-300 break-all">
+                        {node.ip}
+                      </div>
+                    </div>
+                    
+                    <div className="flex flex-col gap-1">
+                      <span className="text-xs text-gray-500 dark:text-gray-400">服务器地址</span>
+                      <div className="px-2 py-1 bg-gray-50 dark:bg-zinc-900 rounded-md border border-gray-100 dark:border-zinc-700 text-xs font-mono text-gray-600 dark:text-gray-300 break-all">
+                        {node.serverIp}
+                      </div>
                     </div>
                   </div>
                 </div>
