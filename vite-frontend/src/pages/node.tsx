@@ -9,6 +9,7 @@ import { Select, SelectItem } from "@heroui/select";
 import { Spinner } from "@heroui/spinner";
 import toast from 'react-hot-toast';
 import axios from 'axios';
+import { getCachedConfigs } from '@/config/site';
 
 
 import { 
@@ -63,6 +64,50 @@ interface NodeForm {
   socks: number; // 0 关 1 开
 }
 
+const NODE_MONITOR_VISIBLE_KEY = 'node_monitor_visible_fields';
+const NODE_VISIBILITY_FIELDS = [
+  'name',
+  'inIp',
+  'portRange',
+  'ratio',
+  'version',
+  'status',
+  'uptime',
+  'cpu',
+  'memory',
+  'speed',
+  'traffic'
+] as const;
+type NodeVisibilityKey = typeof NODE_VISIBILITY_FIELDS[number];
+
+const DEFAULT_NODE_VISIBILITY: Record<NodeVisibilityKey, boolean> = {
+  name: true,
+  inIp: true,
+  portRange: true,
+  ratio: true,
+  version: true,
+  status: true,
+  uptime: true,
+  cpu: true,
+  memory: true,
+  speed: true,
+  traffic: true
+};
+
+const NODE_VISIBILITY_LEGACY_KEYS: Record<NodeVisibilityKey, string> = {
+  name: 'node_monitor_show_name',
+  inIp: 'node_monitor_show_in_ip',
+  portRange: 'node_monitor_show_port_range',
+  ratio: 'node_monitor_show_ratio',
+  version: 'node_monitor_show_version',
+  status: 'node_monitor_show_status',
+  uptime: 'node_monitor_show_uptime',
+  cpu: 'node_monitor_show_cpu',
+  memory: 'node_monitor_show_memory',
+  speed: 'node_monitor_show_speed',
+  traffic: 'node_monitor_show_traffic'
+};
+
 export default function NodePage() {
   const [nodeList, setNodeList] = useState<Node[]>([]);
   const [loading, setLoading] = useState(false);
@@ -78,6 +123,7 @@ export default function NodePage() {
   const [nodeToDelete, setNodeToDelete] = useState<Node | null>(null);
   const [protocolDisabled, setProtocolDisabled] = useState(false);
   const [protocolDisabledReason, setProtocolDisabledReason] = useState('');
+  const [nodeVisibility, setNodeVisibility] = useState(DEFAULT_NODE_VISIBILITY);
   const [form, setForm] = useState<NodeForm>({
     id: null,
     name: '',
@@ -113,12 +159,86 @@ export default function NodePage() {
     const storedUserId = localStorage.getItem('user_id');
     setCurrentUserId(storedUserId ? Number(storedUserId) : null);
     loadNodes();
+    loadNodeVisibility(adminFlag);
     initWebSocket();
     
     return () => {
       closeWebSocket();
     };
   }, []);
+
+  useEffect(() => {
+    const handleConfigUpdated = (event: Event) => {
+      if (isAdmin) {
+        return;
+      }
+      const detail = (event as CustomEvent).detail as { changedKeys?: string[] } | undefined;
+      const changedKeys = detail?.changedKeys || [];
+      const shouldReload = changedKeys.some(
+        (key) => key === NODE_MONITOR_VISIBLE_KEY || Object.values(NODE_VISIBILITY_LEGACY_KEYS).includes(key)
+      );
+      if (shouldReload) {
+        loadNodeVisibility(false);
+      }
+    };
+
+    window.addEventListener('configUpdated', handleConfigUpdated);
+    return () => window.removeEventListener('configUpdated', handleConfigUpdated);
+  }, [isAdmin]);
+
+  const buildVisibilityFromList = (values: string[], allowEmpty: boolean) => {
+    const visibility = { ...DEFAULT_NODE_VISIBILITY };
+    if (values.length === 0 && allowEmpty) {
+      (Object.keys(visibility) as NodeVisibilityKey[]).forEach((key) => {
+        visibility[key] = false;
+      });
+      return visibility;
+    }
+    if (values.length === 0) {
+      return visibility;
+    }
+    const valueSet = new Set(values);
+    (Object.keys(visibility) as NodeVisibilityKey[]).forEach((key) => {
+      visibility[key] = valueSet.has(key);
+    });
+    return visibility;
+  };
+
+  const resolveNodeVisibility = (configs: Record<string, string> = {}) => {
+    if (Object.prototype.hasOwnProperty.call(configs, NODE_MONITOR_VISIBLE_KEY)) {
+      const rawValue = configs[NODE_MONITOR_VISIBLE_KEY] ?? '';
+      const values = rawValue
+        .split(',')
+        .map((value) => value.trim())
+        .filter((value) => value.length > 0);
+      return buildVisibilityFromList(values, rawValue.trim().length === 0);
+    }
+
+    let hasLegacy = false;
+    const visibility = { ...DEFAULT_NODE_VISIBILITY };
+    NODE_VISIBILITY_FIELDS.forEach((key) => {
+      const legacyKey = NODE_VISIBILITY_LEGACY_KEYS[key];
+      if (legacyKey && Object.prototype.hasOwnProperty.call(configs, legacyKey)) {
+        hasLegacy = true;
+        visibility[key] = configs[legacyKey] === 'true';
+      }
+    });
+
+    return hasLegacy ? visibility : DEFAULT_NODE_VISIBILITY;
+  };
+
+  const loadNodeVisibility = async (adminFlag: boolean) => {
+    if (adminFlag) {
+      setNodeVisibility(DEFAULT_NODE_VISIBILITY);
+      return;
+    }
+    try {
+      const configs = await getCachedConfigs();
+      setNodeVisibility(resolveNodeVisibility(configs));
+    } catch (error) {
+      setNodeVisibility(DEFAULT_NODE_VISIBILITY);
+    }
+  };
 
   // 加载节点列表
   const loadNodes = async () => {
@@ -669,118 +789,140 @@ export default function NodePage() {
              <table className="w-full text-left text-sm">
                 <thead className="bg-gray-50 dark:bg-zinc-800/50 text-gray-500 font-medium border-b border-gray-100 dark:border-gray-800">
                     <tr>
-                       <th className="px-4 py-3">节点名称</th>
-                       <th className="px-4 py-3">入口IP</th>
-                       <th className="px-4 py-3">端口范围</th>
-                       <th className="px-4 py-3">倍率</th>
-                       <th className="px-4 py-3">版本</th>
-                       <th className="px-4 py-3">状态</th>
-                       <th className="px-4 py-3">在线时长</th>
-                       <th className="px-4 py-3">CPU</th>
-                       <th className="px-4 py-3">内存</th>
-                       <th className="px-4 py-3">实时速率</th>
-                       <th className="px-4 py-3">总流量</th>
+                       {(isAdmin || nodeVisibility.name) && <th className="px-4 py-3">节点名称</th>}
+                       {(isAdmin || nodeVisibility.inIp) && <th className="px-4 py-3">入口IP</th>}
+                       {(isAdmin || nodeVisibility.portRange) && <th className="px-4 py-3">端口范围</th>}
+                       {(isAdmin || nodeVisibility.ratio) && <th className="px-4 py-3">倍率</th>}
+                       {(isAdmin || nodeVisibility.version) && <th className="px-4 py-3">版本</th>}
+                       {(isAdmin || nodeVisibility.status) && <th className="px-4 py-3">状态</th>}
+                       {(isAdmin || nodeVisibility.uptime) && <th className="px-4 py-3">在线时长</th>}
+                       {(isAdmin || nodeVisibility.cpu) && <th className="px-4 py-3">CPU</th>}
+                       {(isAdmin || nodeVisibility.memory) && <th className="px-4 py-3">内存</th>}
+                       {(isAdmin || nodeVisibility.speed) && <th className="px-4 py-3">实时速率</th>}
+                       {(isAdmin || nodeVisibility.traffic) && <th className="px-4 py-3">总流量</th>}
                        <th className="px-4 py-3 text-right">操作</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-zinc-800">
                   {nodeList.map((node) => (
                       <tr key={node.id} className="border-b border-gray-100 dark:border-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors">
-                        <td className="px-4 py-3 align-middle">
-                           <div className="flex flex-col">
-                              <span className="font-medium text-gray-900 dark:text-gray-100">{node.name}</span>
-                              <span className="text-xs text-gray-400">{node.serverIp}</span>
-                           </div>
-                        </td>
-                        <td className="px-4 py-3 align-middle">
-                           <div className="text-xs font-mono text-gray-600 dark:text-gray-400">
-                             {node.ip ? (
-                               node.ip.split(',').length > 1 ? (
-                                 <span title={node.ip.split(',')[0].trim()} className="border-b border-dotted border-gray-300">
-                                   {node.ip.split(',')[0].trim()} +{node.ip.split(',').length - 1}
-                                 </span>
-                               ) : (
-                                 <span title={node.ip.trim()}>{node.ip.trim()}</span>
-                               )
+                        {(isAdmin || nodeVisibility.name) && (
+                          <td className="px-4 py-3 align-middle">
+                             <div className="flex flex-col">
+                                <span className="font-medium text-gray-900 dark:text-gray-100">{node.name}</span>
+                                <span className="text-xs text-gray-400">{node.serverIp}</span>
+                             </div>
+                          </td>
+                        )}
+                        {(isAdmin || nodeVisibility.inIp) && (
+                          <td className="px-4 py-3 align-middle">
+                             <div className="text-xs font-mono text-gray-600 dark:text-gray-400">
+                               {node.ip ? (
+                                 node.ip.split(',').length > 1 ? (
+                                   <span title={node.ip.split(',')[0].trim()} className="border-b border-dotted border-gray-300">
+                                     {node.ip.split(',')[0].trim()} +{node.ip.split(',').length - 1}
+                                   </span>
+                                 ) : (
+                                   <span title={node.ip.trim()}>{node.ip.trim()}</span>
+                                 )
+                               ) : '-'}
+                             </div>
+                          </td>
+                        )}
+                        {(isAdmin || nodeVisibility.portRange) && (
+                          <td className="px-4 py-3 align-middle">
+                            <div className="flex flex-col gap-0.5 text-xs text-gray-600 dark:text-gray-400 font-mono">
+                               <span>{node.portSta}-{node.portEnd}</span>
+                               <span className="text-gray-400">出口: {node.outPort ?? '-'}</span>
+                            </div>
+                          </td>
+                        )}
+                        {(isAdmin || nodeVisibility.ratio) && (
+                          <td className="px-4 py-3 align-middle">
+                             <span className="px-2 py-0.5 rounded text-xs bg-gray-100 dark:bg-zinc-800 text-gray-600 border border-gray-200 dark:border-gray-700">
+                               {typeof node.trafficRatio === 'number' ? `${node.trafficRatio}x` : '-'}
+                             </span>
+                          </td>
+                        )}
+                        {(isAdmin || nodeVisibility.version) && (
+                          <td className="px-4 py-3 align-middle">
+                             <span className="text-xs text-gray-500">{node.version || '未知'}</span>
+                          </td>
+                        )}
+                        {(isAdmin || nodeVisibility.status) && (
+                          <td className="px-4 py-3 align-middle">
+                             <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${
+                                node.connectionStatus === 'online' 
+                                  ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-900/50' 
+                                  : 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-900/50'
+                             }`}>
+                               <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${
+                                  node.connectionStatus === 'online' ? 'bg-green-500' : 'bg-red-500'
+                               }`}></span>
+                               {node.connectionStatus === 'online' ? '在线' : '离线'}
+                             </span>
+                          </td>
+                        )}
+                        {(isAdmin || nodeVisibility.uptime) && (
+                          <td className="px-4 py-3 align-middle text-xs text-gray-600 dark:text-gray-400">
+                             {node.connectionStatus === 'online' && node.systemInfo 
+                                ? formatUptime(node.systemInfo.uptime)
+                                : '-'
+                             }
+                          </td>
+                        )}
+                        {(isAdmin || nodeVisibility.cpu) && (
+                          <td className="px-4 py-3 align-middle">
+                             {node.connectionStatus === 'online' && node.systemInfo ? (
+                               <div className="flex items-center gap-2">
+                                  <div className="w-16 h-1.5 bg-gray-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                                     <div className="h-full bg-blue-500 rounded-full transition-all duration-500" style={{ width: `${Math.min(node.systemInfo.cpuUsage, 100)}%` }}></div>
+                                  </div>
+                                  <span className="text-xs text-gray-500 w-8">{node.systemInfo.cpuUsage.toFixed(0)}%</span>
+                               </div>
                              ) : '-'}
-                           </div>
-                        </td>
-                        <td className="px-4 py-3 align-middle">
-                          <div className="flex flex-col gap-0.5 text-xs text-gray-600 dark:text-gray-400 font-mono">
-                             <span>{node.portSta}-{node.portEnd}</span>
-                             <span className="text-gray-400">出口: {node.outPort ?? '-'}</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 align-middle">
-                           <span className="px-2 py-0.5 rounded text-xs bg-gray-100 dark:bg-zinc-800 text-gray-600 border border-gray-200 dark:border-gray-700">
-                             {typeof node.trafficRatio === 'number' ? `${node.trafficRatio}x` : '-'}
-                           </span>
-                        </td>
-                        <td className="px-4 py-3 align-middle">
-                           <span className="text-xs text-gray-500">{node.version || '未知'}</span>
-                        </td>
-                        <td className="px-4 py-3 align-middle">
-                           <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${
-                              node.connectionStatus === 'online' 
-                                ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-900/50' 
-                                : 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-900/50'
-                           }`}>
-                             <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${
-                                node.connectionStatus === 'online' ? 'bg-green-500' : 'bg-red-500'
-                             }`}></span>
-                             {node.connectionStatus === 'online' ? '在线' : '离线'}
-                           </span>
-                        </td>
-                        <td className="px-4 py-3 align-middle text-xs text-gray-600 dark:text-gray-400">
-                           {node.connectionStatus === 'online' && node.systemInfo 
-                              ? formatUptime(node.systemInfo.uptime)
-                              : '-'
-                           }
-                        </td>
-                        <td className="px-4 py-3 align-middle">
-                           {node.connectionStatus === 'online' && node.systemInfo ? (
-                             <div className="flex items-center gap-2">
-                                <div className="w-16 h-1.5 bg-gray-100 dark:bg-zinc-800 rounded-full overflow-hidden">
-                                   <div className="h-full bg-blue-500 rounded-full transition-all duration-500" style={{ width: `${Math.min(node.systemInfo.cpuUsage, 100)}%` }}></div>
-                                </div>
-                                <span className="text-xs text-gray-500 w-8">{node.systemInfo.cpuUsage.toFixed(0)}%</span>
+                          </td>
+                        )}
+                        {(isAdmin || nodeVisibility.memory) && (
+                          <td className="px-4 py-3 align-middle">
+                             {node.connectionStatus === 'online' && node.systemInfo ? (
+                               <div className="flex items-center gap-2">
+                                  <div className="w-16 h-1.5 bg-gray-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                                     <div className="h-full bg-purple-500 rounded-full transition-all duration-500" style={{ width: `${Math.min(node.systemInfo.memoryUsage, 100)}%` }}></div>
+                                  </div>
+                                  <span className="text-xs text-gray-500 w-8">{node.systemInfo.memoryUsage.toFixed(0)}%</span>
+                               </div>
+                             ) : '-'}
+                          </td>
+                        )}
+                        {(isAdmin || nodeVisibility.speed) && (
+                          <td className="px-4 py-3 align-middle">
+                             <div className="flex flex-col text-xs font-mono text-gray-600 dark:text-gray-400">
+                               <div className="flex items-center gap-1">
+                                  <span className="text-green-500">↑</span>
+                                  {node.connectionStatus === 'online' && node.systemInfo ? formatSpeed(node.systemInfo.uploadSpeed) : '-'}
+                               </div>
+                               <div className="flex items-center gap-1">
+                                  <span className="text-blue-500">↓</span>
+                                  {node.connectionStatus === 'online' && node.systemInfo ? formatSpeed(node.systemInfo.downloadSpeed) : '-'}
+                               </div>
                              </div>
-                           ) : '-'}
-                        </td>
-                        <td className="px-4 py-3 align-middle">
-                           {node.connectionStatus === 'online' && node.systemInfo ? (
-                             <div className="flex items-center gap-2">
-                                <div className="w-16 h-1.5 bg-gray-100 dark:bg-zinc-800 rounded-full overflow-hidden">
-                                   <div className="h-full bg-purple-500 rounded-full transition-all duration-500" style={{ width: `${Math.min(node.systemInfo.memoryUsage, 100)}%` }}></div>
-                                </div>
-                                <span className="text-xs text-gray-500 w-8">{node.systemInfo.memoryUsage.toFixed(0)}%</span>
+                          </td>
+                        )}
+                        {(isAdmin || nodeVisibility.traffic) && (
+                          <td className="px-4 py-3 align-middle">
+                             <div className="flex flex-col text-xs font-mono text-gray-600 dark:text-gray-400">
+                               <div className="flex items-center gap-1">
+                                  <span className="text-green-500">↑</span>
+                                  {node.connectionStatus === 'online' && node.systemInfo ? formatTraffic(node.systemInfo.uploadTraffic) : '-'}
+                               </div>
+                               <div className="flex items-center gap-1">
+                                  <span className="text-blue-500">↓</span>
+                                  {node.connectionStatus === 'online' && node.systemInfo ? formatTraffic(node.systemInfo.downloadTraffic) : '-'}
+                               </div>
                              </div>
-                           ) : '-'}
-                        </td>
-                        <td className="px-4 py-3 align-middle">
-                           <div className="flex flex-col text-xs font-mono text-gray-600 dark:text-gray-400">
-                             <div className="flex items-center gap-1">
-                                <span className="text-green-500">↑</span>
-                                {node.connectionStatus === 'online' && node.systemInfo ? formatSpeed(node.systemInfo.uploadSpeed) : '-'}
-                             </div>
-                             <div className="flex items-center gap-1">
-                                <span className="text-blue-500">↓</span>
-                                {node.connectionStatus === 'online' && node.systemInfo ? formatSpeed(node.systemInfo.downloadSpeed) : '-'}
-                             </div>
-                           </div>
-                        </td>
-                        <td className="px-4 py-3 align-middle">
-                           <div className="flex flex-col text-xs font-mono text-gray-600 dark:text-gray-400">
-                             <div className="flex items-center gap-1">
-                                <span className="text-green-500">↑</span>
-                                {node.connectionStatus === 'online' && node.systemInfo ? formatTraffic(node.systemInfo.uploadTraffic) : '-'}
-                             </div>
-                             <div className="flex items-center gap-1">
-                                <span className="text-blue-500">↓</span>
-                                {node.connectionStatus === 'online' && node.systemInfo ? formatTraffic(node.systemInfo.downloadTraffic) : '-'}
-                             </div>
-                           </div>
-                        </td>
+                          </td>
+                        )}
                         <td className="px-4 py-3 align-middle text-right w-[140px]">
                             <div className="flex justify-end gap-1">
                               {isAdmin || (currentUserId !== null && node.ownerId === currentUserId) ? (

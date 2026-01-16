@@ -32,11 +32,69 @@ interface ConfigItem {
   label: string;
   placeholder?: string;
   description?: string;
-  type: 'input' | 'switch' | 'select';
+  type: 'input' | 'switch' | 'select' | 'multi-select';
   options?: { label: string; value: string; description?: string }[];
   dependsOn?: string; // 依赖的配置项key
   dependsValue?: string; // 依赖的配置项值
 }
+
+const NODE_MONITOR_VISIBLE_KEY = 'node_monitor_visible_fields';
+const NODE_MONITOR_FIELDS = [
+  { key: 'name', label: '节点名称' },
+  { key: 'inIp', label: '入口IP' },
+  { key: 'portRange', label: '端口范围' },
+  { key: 'ratio', label: '倍率' },
+  { key: 'version', label: '版本' },
+  { key: 'status', label: '状态' },
+  { key: 'uptime', label: '在线时长' },
+  { key: 'cpu', label: 'CPU' },
+  { key: 'memory', label: '内存' },
+  { key: 'speed', label: '实时速率' },
+  { key: 'traffic', label: '总流量' }
+];
+const NODE_MONITOR_DEFAULT_VALUE = NODE_MONITOR_FIELDS.map((field) => field.key).join(',');
+const NODE_MONITOR_DEFAULTS: Record<string, string> = {
+  [NODE_MONITOR_VISIBLE_KEY]: NODE_MONITOR_DEFAULT_VALUE
+};
+const NODE_MONITOR_LEGACY_KEYS: Record<string, string> = {
+  name: 'node_monitor_show_name',
+  inIp: 'node_monitor_show_in_ip',
+  portRange: 'node_monitor_show_port_range',
+  ratio: 'node_monitor_show_ratio',
+  version: 'node_monitor_show_version',
+  status: 'node_monitor_show_status',
+  uptime: 'node_monitor_show_uptime',
+  cpu: 'node_monitor_show_cpu',
+  memory: 'node_monitor_show_memory',
+  speed: 'node_monitor_show_speed',
+  traffic: 'node_monitor_show_traffic'
+};
+
+const resolveNodeMonitorVisibleFields = (configMap: Record<string, string>): string => {
+  if (Object.prototype.hasOwnProperty.call(configMap, NODE_MONITOR_VISIBLE_KEY)) {
+    return configMap[NODE_MONITOR_VISIBLE_KEY] ?? '';
+  }
+
+  let hasLegacy = false;
+  const selected: string[] = [];
+  NODE_MONITOR_FIELDS.forEach((field) => {
+    const legacyKey = NODE_MONITOR_LEGACY_KEYS[field.key];
+    if (legacyKey && Object.prototype.hasOwnProperty.call(configMap, legacyKey)) {
+      hasLegacy = true;
+      if (configMap[legacyKey] === 'true') {
+        selected.push(field.key);
+      }
+      return;
+    }
+    selected.push(field.key);
+  });
+
+  if (hasLegacy) {
+    return selected.join(',');
+  }
+
+  return NODE_MONITOR_DEFAULT_VALUE;
+};
 
 // 网站配置项定义
 const CONFIG_ITEMS: ConfigItem[] = [
@@ -94,6 +152,16 @@ const CONFIG_ITEMS: ConfigItem[] = [
         description: '拖动滑块完成图片拼接' 
       }
     ]
+  },
+  {
+    key: NODE_MONITOR_VISIBLE_KEY,
+    label: '节点监控 - 可见字段',
+    description: '选择普通用户在节点监控中可查看的信息',
+    type: 'multi-select',
+    options: NODE_MONITOR_FIELDS.map((field) => ({
+      label: field.label,
+      value: field.key
+    }))
   }
 ];
 
@@ -101,20 +169,33 @@ const CONFIG_ITEMS: ConfigItem[] = [
 const getInitialConfigs = (): Record<string, string> => {
   if (typeof window === 'undefined') return {};
   
-  const configKeys = ['app_name', 'captcha_enabled', 'captcha_type', 'ip'];
-  const initialConfigs: Record<string, string> = {};
+  const configKeys = [
+    'app_name',
+    'captcha_enabled',
+    'captcha_type',
+    'ip',
+    NODE_MONITOR_VISIBLE_KEY,
+    ...Object.values(NODE_MONITOR_LEGACY_KEYS)
+  ];
+  const cachedConfigs: Record<string, string> = {};
+  const initialConfigs: Record<string, string> = { ...NODE_MONITOR_DEFAULTS };
   
   try {
     configKeys.forEach(key => {
       const cachedValue = localStorage.getItem('vite_config_' + key);
-      if (cachedValue) {
-        initialConfigs[key] = cachedValue;
+      if (cachedValue !== null) {
+        cachedConfigs[key] = cachedValue;
       }
     });
   } catch (error) {
   }
-  
-  return initialConfigs;
+
+  const resolvedVisibleFields = resolveNodeMonitorVisibleFields(cachedConfigs);
+  return {
+    ...initialConfigs,
+    ...cachedConfigs,
+    [NODE_MONITOR_VISIBLE_KEY]: resolvedVisibleFields
+  };
 };
 
 export default function ConfigPage() {
@@ -147,12 +228,18 @@ export default function ConfigPage() {
     
     try {
       const configData = await getCachedConfigs();
+      const resolvedVisibleFields = resolveNodeMonitorVisibleFields(configData);
+      const mergedConfigData = {
+        ...NODE_MONITOR_DEFAULTS,
+        ...configData,
+        [NODE_MONITOR_VISIBLE_KEY]: resolvedVisibleFields
+      };
       
       // 只有在数据有变化时才更新
-      const hasDataChanged = JSON.stringify(configData) !== JSON.stringify(configsToCompare);
+      const hasDataChanged = JSON.stringify(mergedConfigData) !== JSON.stringify(configsToCompare);
       if (hasDataChanged) {
-        setConfigs(configData);
-        setOriginalConfigs({ ...configData });
+        setConfigs(mergedConfigData);
+        setOriginalConfigs({ ...mergedConfigData });
         setHasChanges(false);
       } else {
       }
@@ -310,6 +397,37 @@ export default function ConfigPage() {
             )) || []}
           </Select>
         );
+      case 'multi-select': {
+        const rawValue = configs[item.key] || '';
+        const selectedValues = rawValue
+          .split(',')
+          .map((value) => value.trim())
+          .filter((value) => value.length > 0);
+
+        return (
+          <Select
+            selectionMode="multiple"
+            selectedKeys={new Set(selectedValues)}
+            onSelectionChange={(keys) => {
+              const values = Array.from(keys).map((value) => value.toString()).sort();
+              handleConfigChange(item.key, values.join(','));
+            }}
+            placeholder="请选择可见字段"
+            variant="bordered"
+            size="sm"
+            classNames={{
+              trigger: `bg-white dark:bg-zinc-900 border-gray-300 dark:border-gray-700 shadow-none hover:border-gray-400 focus-within:!border-blue-500 rounded-lg ${isChanged ? "!border-orange-400" : ""}`,
+              value: "text-sm"
+            }}
+          >
+            {item.options?.map((option) => (
+              <SelectItem key={option.value} description={option.description}>
+                {option.label}
+              </SelectItem>
+            )) || []}
+          </Select>
+        );
+      }
 
       default:
         return null;

@@ -73,7 +73,7 @@ export const getCachedConfig = async (key: string): Promise<string | null> => {
   }
 
   const response = await getConfigByName(key);
-  if (response.code === 0 && response.data?.value) {
+  if (response.code === 0 && response.data && response.data.value !== undefined) {
     const value = response.data.value;
     configCache.set(key, value);
     return value;
@@ -85,7 +85,21 @@ export const getCachedConfig = async (key: string): Promise<string | null> => {
 // 获取所有配置（优先从缓存）
 export const getCachedConfigs = async (): Promise<Record<string, string>> => {
   // 尝试从缓存获取所有配置
-  const configKeys = ['app_name'];
+  const configKeys = [
+    'app_name',
+    'node_monitor_visible_fields',
+    'node_monitor_show_name',
+    'node_monitor_show_in_ip',
+    'node_monitor_show_port_range',
+    'node_monitor_show_ratio',
+    'node_monitor_show_version',
+    'node_monitor_show_status',
+    'node_monitor_show_uptime',
+    'node_monitor_show_cpu',
+    'node_monitor_show_memory',
+    'node_monitor_show_speed',
+    'node_monitor_show_traffic'
+  ];
   const cachedConfigs: Record<string, string> = {};
   let hasCachedData = false;
 
