@@ -207,6 +207,10 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
             if (StringUtils.isNotBlank(computedInIp)) {
                 forward.setInIp(computedInIp);
             }
+            String computedInNodeName = buildInNodeNameForTunnel(tunnel, nodeMap);
+            if (StringUtils.isNotBlank(computedInNodeName)) {
+                forward.setInNodeName(computedInNodeName);
+            }
         }
 
         return R.ok(forwardList);
@@ -1018,6 +1022,31 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
             return tunnel.getInIp();
         }
         return String.join(",", ips);
+    }
+
+    private String buildInNodeNameForTunnel(Tunnel tunnel, Map<Long, Node> nodeMap) {
+        if (tunnel == null) {
+            return null;
+        }
+        Set<Long> inNodeIds = new LinkedHashSet<>();
+        collectNodeIds(tunnel.getInNodeIds(), inNodeIds);
+        if (inNodeIds.isEmpty() && tunnel.getInNodeId() != null) {
+            inNodeIds.add(tunnel.getInNodeId());
+        }
+        if (inNodeIds.isEmpty()) {
+            return null;
+        }
+        List<String> names = new ArrayList<>();
+        for (Long nodeId : inNodeIds) {
+            Node node = nodeMap != null ? nodeMap.get(nodeId) : nodeService.getById(nodeId);
+            if (node != null && StringUtils.isNotBlank(node.getName())) {
+                names.add(node.getName());
+            }
+        }
+        if (names.isEmpty()) {
+            return null;
+        }
+        return String.join(",", names);
     }
 
     private List<Node> resolveInNodes(Tunnel tunnel) {

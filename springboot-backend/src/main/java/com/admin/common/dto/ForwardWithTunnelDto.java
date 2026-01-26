@@ -62,6 +62,11 @@ public class ForwardWithTunnelDto {
      */
     private String inIp;
 
+    /**
+     * 入口节点名称（多个用逗号分隔）
+     */
+    private String inNodeName;
+
     private String userName;
 
 

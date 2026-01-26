@@ -42,8 +42,3 @@ jwt-secret: ${JWT_SECRET}
 log-dir: ${LOG_DIR}
 
 
-captcha:
-  init-default-resource: true
-  secondary:
-    enabled: true
-    expire: 120000

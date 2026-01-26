@@ -58,6 +58,7 @@ interface Forward {
   tunnelId: number;
   tunnelName: string;
   inIp: string;
+  inNodeName?: string;
   inPort: number;
   remoteAddr: string;
   interfaceName?: string;
@@ -93,6 +94,7 @@ interface ForwardForm {
 interface AddressItem {
   id: number;
   address: string;
+  label?: string;
   copying: boolean;
 }
 
@@ -612,24 +614,24 @@ export default function ForwardPage() {
 
 
   // 显示地址列表弹窗
-  const showAddressModal = (addressString: string, port: number | null, title: string) => {
+  const showAddressModal = (addressString: string, port: number | null, title: string, nameString?: string) => {
     if (!addressString) return;
     
     let addresses: string[];
+    let labels: string[] = [];
     if (port !== null) {
       // 入口地址处理
       const ips = addressString.split(',').map(ip => ip.trim()).filter(ip => ip);
+      const names = nameString ? nameString.split(',').map(name => name.trim()).filter(name => name) : [];
       if (ips.length <= 1) {
         copyToClipboard(formatInAddress(addressString, port), title);
         return;
       }
-      addresses = ips.map(ip => {
-        if (ip.includes(':') && !ip.startsWith('[')) {
-          return `[${ip}]:${port}`;
-        } else {
-          return `${ip}:${port}`;
-        }
+      addresses = ips.map((ip) => {
+        const ipPort = ip.includes(':') && !ip.startsWith('[') ? `[${ip}]:${port}` : `${ip}:${port}`;
+        return ipPort;
       });
+      labels = names;
     } else {
       // 远程地址处理
       addresses = addressString.split(',').map(addr => addr.trim()).filter(addr => addr);
@@ -642,6 +644,7 @@ export default function ForwardPage() {
     setAddressList(addresses.map((address, index) => ({
       id: index,
       address,
+      label: labels[index],
       copying: false
     })));
     setAddressModalTitle(`${title} (${addresses.length}个)`);
@@ -1056,6 +1059,9 @@ export default function ForwardPage() {
     // Address processing
     const inIps = forward.inIp ? forward.inIp.split(',').map(ip => ip.trim()).filter(Boolean) : [];
     const hasMultiple = inIps.length > 1;
+    const inNames = forward.inNodeName ? forward.inNodeName.split(',').map(name => name.trim()).filter(Boolean) : [];
+    const hasMultipleNames = inNames.length > 1;
+    const primaryName = inNames[0] || '';
     const primaryIp = inIps[0] || '';
     const formattedPrimaryIp = primaryIp && primaryIp.includes(':') && !primaryIp.startsWith('[')
       ? `[${primaryIp}]`
@@ -1063,7 +1069,6 @@ export default function ForwardPage() {
     const inAddrDisplay = primaryIp
       ? (forward.inPort ? `${formattedPrimaryIp}:${forward.inPort}` : formattedPrimaryIp)
       : (forward.inIp || '未分配');
-    const inPortDisplay = forward.inPort || '自动';
 
     return (
       <tr ref={setNodeRef} style={style} className="border-b border-gray-100 dark:border-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors group">
@@ -1117,24 +1122,39 @@ export default function ForwardPage() {
            <div className="flex flex-col gap-1">
              <div className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
                <span className="bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400 px-1.5 py-0.5 rounded text-xs border border-orange-200 dark:border-orange-900/50">入口</span>
-               <span>{inAddrDisplay}</span>
-               {hasMultiple && (
-                 <span
-                   className="bg-red-50 text-red-500 dark:bg-red-900/20 dark:text-red-400 px-1 rounded text-[10px] border border-red-100 dark:border-red-900/50 cursor-pointer"
-                   onClick={() => showAddressModal(forward.inIp, forward.inPort, forward.name)}
-                 >
-                   +{inIps.length - 1}
-                 </span>
+                {primaryName ? (
+                  <>
+                    <span className="font-medium text-gray-900 dark:text-gray-100" title={inNames.join(', ')}>
+                      {primaryName}
+                    </span>
+                    {(hasMultipleNames || hasMultiple) && (
+                      <span
+                        className="bg-orange-50 text-orange-500 dark:bg-orange-900/20 dark:text-orange-400 px-1 rounded text-[10px] border border-orange-100 dark:border-orange-900/50 cursor-pointer"
+                        onClick={() => showAddressModal(forward.inIp, forward.inPort, forward.name, forward.inNodeName)}
+                      >
+                        +{(hasMultipleNames ? inNames.length : inIps.length) - 1}
+                      </span>
+                    )}
+                  </>
+                ) : (
+                 <>
+                   <span>{inAddrDisplay}</span>
+                   {hasMultiple && (
+                     <span
+                       className="bg-red-50 text-red-500 dark:bg-red-900/20 dark:text-red-400 px-1 rounded text-[10px] border border-red-100 dark:border-red-900/50 cursor-pointer"
+                        onClick={() => showAddressModal(forward.inIp, forward.inPort, forward.name, forward.inNodeName)}
+                     >
+                       +{inIps.length - 1}
+                     </span>
+                   )}
+                 </>
                )}
              </div>
-              <div className="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
-                <span className="bg-gray-100 dark:bg-zinc-800 px-1 rounded text-[10px]">端口: {inPortDisplay}</span>
-                 {hasMultiple && (
-                   <span className="text-blue-500 cursor-pointer" onClick={() => showAddressModal(forward.inIp, forward.inPort, forward.name)}>
-                     {inIps.length}个地址
-                   </span>
-                 )}
-              </div>
+              {primaryName && (
+                <div className="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
+                  <span>{inAddrDisplay}</span>
+                </div>
+              )}
            </div>
         </td>
 
@@ -1705,26 +1725,37 @@ example.com:443`}
           }}
         >
           <ModalContent>
-            <ModalHeader className="text-base">{addressModalTitle}</ModalHeader>
-            <ModalBody className="pb-6">
-              <div className="mb-4 text-right">
-                <Button size="sm" onClick={copyAllAddresses}>
-                  复制
+            <ModalHeader className="flex items-center justify-between gap-3">
+              <span className="text-base">{addressModalTitle}</span>
+              {addressList.length > 1 && (
+                <Button size="sm" variant="light" onClick={copyAllAddresses} className="h-7 px-2">
+                  复制全部
                 </Button>
-              </div>
-              
-              <div className="space-y-2 max-h-60 overflow-y-auto">
+              )}
+            </ModalHeader>
+            <ModalBody className="pb-6">
+              <div className="space-y-2 max-h-60 overflow-y-auto pt-1">
                 {addressList.map((item) => (
-                  <div key={item.id} className="flex justify-between items-center p-3 border border-default-200 dark:border-default-100 rounded-lg">
-                    <code className="text-sm flex-1 mr-3 text-foreground">{item.address}</code>
-                    <Button
-                      size="sm"
-                      variant="light"
-                      isLoading={item.copying}
-                      onClick={() => copyAddress(item)}
-                    >
-                      复制
-                    </Button>
+                  <div
+                    key={item.id}
+                    className={`relative border border-default-200 dark:border-default-100 rounded-lg px-3 ${item.label ? "pt-4 pb-2" : "py-2"}`}
+                  >
+                    {item.label && (
+                      <span className="absolute -top-2.5 left-3 px-2 text-[10px] leading-4 text-gray-500 bg-white dark:bg-[#18181b] z-10">
+                        {item.label}
+                      </span>
+                    )}
+                    <div className="flex items-center justify-between gap-3">
+                      <code className="text-sm text-foreground">{item.address}</code>
+                      <Button
+                        size="sm"
+                        variant="light"
+                        isLoading={item.copying}
+                        onClick={() => copyAddress(item)}
+                      >
+                        复制
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>

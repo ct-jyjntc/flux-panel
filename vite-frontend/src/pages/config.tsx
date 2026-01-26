@@ -113,47 +113,6 @@ const CONFIG_ITEMS: ConfigItem[] = [
     type: 'input'
   },
   {
-    key: 'captcha_enabled',
-    label: '启用验证码',
-    description: '开启后，用户登录时需要完成验证码验证',
-    type: 'switch'
-  },
-  {
-    key: 'captcha_type',
-    label: '验证码类型',
-    description: '选择验证码的显示类型，不同类型有不同的安全级别',
-    type: 'select',
-    dependsOn: 'captcha_enabled',
-    dependsValue: 'true',
-    options: [
-      { 
-        label: '随机类型', 
-        value: 'RANDOM', 
-        description: '系统随机选择验证码类型' 
-      },
-      { 
-        label: '滑块验证码', 
-        value: 'SLIDER', 
-        description: '拖动滑块完成拼图验证' 
-      },
-      { 
-        label: '文字点选验证码', 
-        value: 'WORD_IMAGE_CLICK', 
-        description: '按顺序点击指定文字' 
-      },
-      { 
-        label: '旋转验证码', 
-        value: 'ROTATE', 
-        description: '旋转图片到正确角度' 
-      },
-      { 
-        label: '拼图验证码', 
-        value: 'CONCAT', 
-        description: '拖动滑块完成图片拼接' 
-      }
-    ]
-  },
-  {
     key: NODE_MONITOR_VISIBLE_KEY,
     label: '节点监控 - 可见字段',
     description: '选择普通用户在节点监控中可查看的信息',
@@ -171,8 +130,6 @@ const getInitialConfigs = (): Record<string, string> => {
   
   const configKeys = [
     'app_name',
-    'captcha_enabled',
-    'captcha_type',
     'ip',
     NODE_MONITOR_VISIBLE_KEY,
     ...Object.values(NODE_MONITOR_LEGACY_KEYS)
@@ -265,13 +222,6 @@ export default function ConfigPage() {
   // 处理配置项变更
   const handleConfigChange = (key: string, value: string) => {
     let newConfigs = { ...configs, [key]: value };
-    
-    // 特殊处理：启用验证码时，如果验证码类型未设置，默认为随机
-    if (key === 'captcha_enabled' && value === 'true') {
-      if (!newConfigs.captcha_type) {
-        newConfigs.captcha_type = 'RANDOM';
-      }
-    }
     
     setConfigs(newConfigs);
     

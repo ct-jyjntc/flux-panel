@@ -1,7 +1,5 @@
 package com.admin.service.impl;
 
-import cloud.tianai.captcha.application.ImageCaptchaApplication;
-import cloud.tianai.captcha.spring.plugins.secondary.SecondaryVerificationApplication;
 import cn.hutool.core.map.MapUtil;
 import cn.hutool.core.util.StrUtil;
 import com.admin.common.dto.*;
@@ -17,7 +15,6 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
@@ -114,19 +111,13 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     private SpeedLimitService speedLimitService;
 
     @Resource
-    ViteConfigService viteConfigService;
-
-    @Resource
     StatisticsFlowService statisticsFlowService;
-
-    @Resource
-    private ImageCaptchaApplication application;
 
     // ========== 公共接口实现 ==========
 
     /**
      * 用户登录
-     * 验证验证码、用户名密码，检查账户状态，生成JWT令牌
+     * 验证用户名密码，检查账户状态，生成JWT令牌
      * 
      * @param loginDto 登录数据传输对象
      * @return 登录结果响应，包含令牌和用户信息
@@ -134,27 +125,17 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     @Override
     public R login(LoginDto loginDto) {
 
-        // 1. 验证验证码
-        ViteConfig viteConfig = viteConfigService.getOne(new QueryWrapper<ViteConfig>().eq("name", "captcha_enabled"));
-        if (viteConfig != null && Objects.equals(viteConfig.getValue(), "true")) {
-            if (StringUtils.isBlank(loginDto.getCaptchaId())) return R.err("验证码校验失败");
-            boolean valid = ((SecondaryVerificationApplication) application).secondaryVerification(loginDto.getCaptchaId());
-            if (!valid)  return R.err("验证码校验失败");
-        }
-
-
-
-        // 2. 验证用户凭据
+        // 1. 验证用户凭据
         LoginValidationResult validationResult = validateUserCredentials(loginDto);
         if (validationResult.isHasError()) {
             return R.err(validationResult.getErrorMessage());
         }
 
-        // 3. 生成令牌并返回用户信息
+        // 2. 生成令牌并返回用户信息
         User user = validationResult.getUser();
         String token = JwtUtil.generateToken(user);
         
-        // 4. 检查是否使用默认账号密码
+        // 3. 检查是否使用默认账号密码
         boolean requirePasswordChange = isDefaultCredentials(loginDto.getUsername(), loginDto.getPassword());
         
         return R.ok(MapUtil.builder()

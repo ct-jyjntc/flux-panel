@@ -56,36 +56,6 @@ html, body {
 }
 
 
-/* 验证码弹层动画 */
-.captcha-modal-enter {
-  animation: captchaModalIn 0.3s ease-out forwards;
-}
-
-@keyframes captchaModalIn {
-  from {
-    opacity: 0;
-    transform: scale(0.9) translateY(-20px);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-  }
-}
-
-/* 验证码弹层背景渐入 */
-.captcha-backdrop-enter {
-  animation: backdropFadeIn 0.3s ease-out forwards;
-}
-
-@keyframes backdropFadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
 /* Flat input styles (HeroUI inputs/selects) */
 :root {
   --flat-input-border: #e5e7eb;
@@ -149,4 +119,15 @@ button:disabled,
 [data-slot="button"][aria-disabled="true"],
 [data-slot="trigger"][aria-disabled="true"] {
   cursor: not-allowed;
+}
+
+/* Hide modal close buttons (click outside to dismiss) */
+button[data-slot="closeButton"] {
+  display: none !important;
+}
+
+button[aria-label="Close"],
+[data-slot="close"],
+[data-slot="close-button"] {
+  display: none !important;
 }

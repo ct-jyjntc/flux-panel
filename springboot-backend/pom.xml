@@ -121,12 +121,6 @@
             <scope>test</scope>
         </dependency>
 
-        <!-- tianai-captcha Spring Boot Starter -->
-        <dependency>
-            <groupId>cloud.tianai.captcha</groupId>
-            <artifactId>tianai-captcha-springboot-starter</artifactId>
-            <version>1.5.2</version>
-        </dependency>
     </dependencies>
     <dependencyManagement>
         <dependencies>
