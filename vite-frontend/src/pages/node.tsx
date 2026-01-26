@@ -1059,7 +1059,7 @@ export default function NodePage() {
                     <div className="text-xs text-gray-400">支持多个IP，每行一个地址，用于展示给用户连接。</div>
                 </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 gap-4">
                   <div className="flex flex-col gap-2">
                       <label className="text-sm font-medium text-gray-700 dark:text-gray-300">起始端口</label>
                       <Input
