@@ -1493,7 +1493,7 @@ export default function ForwardPage() {
       </div>
 
         {/* 新增/编辑模态框 */}
-        <Modal 
+        <Modal hideCloseButton 
           isOpen={modalOpen} 
           onOpenChange={setModalOpen}
           size="lg"
@@ -1664,7 +1664,7 @@ example.com:443`}
         </Modal>
 
         {/* 删除确认模态框 */}
-        <Modal 
+        <Modal hideCloseButton 
           isOpen={deleteModalOpen}
           onOpenChange={setDeleteModalOpen}
           size="2xl"
@@ -1711,7 +1711,7 @@ example.com:443`}
         </Modal>
 
         {/* 地址列表弹窗 */}
-        <Modal 
+        <Modal hideCloseButton 
           isOpen={addressModalOpen} 
           onClose={() => setAddressModalOpen(false)} 
           size="lg" 
@@ -1725,16 +1725,16 @@ example.com:443`}
           }}
         >
           <ModalContent>
-            <ModalHeader className="flex items-center justify-between gap-3">
+            <ModalHeader className="flex items-center gap-3">
               <span className="text-base">{addressModalTitle}</span>
               {addressList.length > 1 && (
-                <Button size="sm" variant="light" onClick={copyAllAddresses} className="h-7 px-2">
+                <Button size="sm" variant="light" onClick={copyAllAddresses} className="h-7 px-2 text-xs">
                   复制全部
                 </Button>
               )}
             </ModalHeader>
             <ModalBody className="pb-6">
-              <div className="space-y-2 max-h-60 overflow-y-auto pt-1">
+              <div className="space-y-3 max-h-60 overflow-y-auto pt-3">
                 {addressList.map((item) => (
                   <div
                     key={item.id}
@@ -1764,7 +1764,7 @@ example.com:443`}
         </Modal>
 
         {/* 导出数据模态框 */}
-        <Modal 
+        <Modal hideCloseButton 
           isOpen={exportModalOpen} 
           onClose={() => {
             setExportModalOpen(false);
@@ -1898,7 +1898,7 @@ example.com:443`}
         </Modal>
 
         {/* 导入模态框 */}
-        <Modal 
+        <Modal hideCloseButton 
           isOpen={importModalOpen} 
           onOpenChange={setImportModalOpen} 
           size="2xl"
@@ -2045,7 +2045,7 @@ example.com:443`}
         </Modal>
 
         {/* 批量删除确认 */}
-        <Modal
+        <Modal hideCloseButton
           isOpen={bulkDeleteModalOpen}
           onOpenChange={setBulkDeleteModalOpen}
           size="md"
@@ -2092,7 +2092,7 @@ example.com:443`}
         </Modal>
 
         {/* 批量更换隧道 */}
-        <Modal
+        <Modal hideCloseButton
           isOpen={bulkUpdateModalOpen}
           onOpenChange={setBulkUpdateModalOpen}
           size="md"
@@ -2155,7 +2155,7 @@ example.com:443`}
         </Modal>
 
         {/* 诊断结果模态框 */}
-        <Modal 
+        <Modal hideCloseButton 
           isOpen={diagnosisModalOpen}
           onOpenChange={setDiagnosisModalOpen}
           size="2xl"

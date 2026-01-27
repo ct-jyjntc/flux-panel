@@ -141,7 +141,7 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
         List<Long> outNodeIds = resolveOutNodeIds(tunnelDto.getOutNodeIds(), tunnelDto.getOutNodeId());
         NodeValidationResult outNodeValidation = null;
         if (tunnelDto.getType() == TUNNEL_TYPE_TUNNEL_FORWARD) {
-            outNodeValidation = validateOutNodes(outNodeIds);
+            outNodeValidation = validateOutNodes(outNodeIds, true);
             if (outNodeValidation.isHasError()) {
                 return R.err(outNodeValidation.getErrorMessage());
             }
@@ -302,7 +302,7 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
             if (nextOutNodeIds.isEmpty()) {
                 return R.err(ERROR_OUT_NODE_REQUIRED);
             }
-            outNodeValidation = validateOutNodes(nextOutNodeIds);
+            outNodeValidation = validateOutNodes(nextOutNodeIds, true);
             if (outNodeValidation.isHasError()) {
                 return R.err(outNodeValidation.getErrorMessage());
             }
@@ -356,6 +356,9 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
         String resolvedProtocol = existingTunnel.getType() == TUNNEL_TYPE_TUNNEL_FORWARD
                 ? resolveOutNodeProtocol(outNodes)
                 : null;
+        if (existingTunnel.getType() == TUNNEL_TYPE_TUNNEL_FORWARD && resolvedProtocol == null) {
+            return R.err("出口节点隧道协议不一致");
+        }
 
         int up = 0;
         if (!Objects.equals(existingTunnel.getTcpListenAddr(), tunnelUpdateDto.getTcpListenAddr()) ||
@@ -569,23 +572,32 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
     }
 
     private NodeValidationResult validateOutNodes(List<Long> outNodeIds) {
+        return validateOutNodes(outNodeIds, false);
+    }
+
+    private NodeValidationResult validateOutNodes(List<Long> outNodeIds, boolean allowPartialOffline) {
         if (outNodeIds == null || outNodeIds.isEmpty()) {
             return NodeValidationResult.error(ERROR_OUT_NODE_REQUIRED);
         }
-        if (outNodeIds.size() > 1) {
-            return NodeValidationResult.error(ERROR_OUT_NODE_MULTI_NOT_SUPPORTED);
-        }
         List<Node> nodes = new ArrayList<>();
         Set<Long> uniqueIds = new LinkedHashSet<>(outNodeIds);
+        boolean hasOnline = false;
         for (Long nodeId : uniqueIds) {
             Node outNode = nodeService.getById(nodeId);
             if (outNode == null) {
                 return NodeValidationResult.error(ERROR_OUT_NODE_NOT_FOUND);
             }
             if (outNode.getStatus() != NODE_STATUS_ONLINE) {
-                return NodeValidationResult.error(ERROR_OUT_NODE_OFFLINE);
+                if (!allowPartialOffline) {
+                    return NodeValidationResult.error(ERROR_OUT_NODE_OFFLINE);
+                }
+            } else {
+                hasOnline = true;
             }
             nodes.add(outNode);
+        }
+        if (allowPartialOffline && !hasOnline) {
+            return NodeValidationResult.error(ERROR_OUT_NODE_OFFLINE);
         }
         return NodeValidationResult.success(nodes);
     }
@@ -634,7 +646,23 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
         if (outNodes == null || outNodes.isEmpty()) {
             return DEFAULT_TUNNEL_PROTOCOL;
         }
-        String protocol = outNodes.get(0).getTunnelProtocol();
+        String base = normalizeTunnelProtocol(outNodes.get(0).getTunnelProtocol());
+        if (base == null) {
+            return null;
+        }
+        for (Node node : outNodes) {
+            String next = normalizeTunnelProtocol(node != null ? node.getTunnelProtocol() : null);
+            if (next == null) {
+                return null;
+            }
+            if (!Objects.equals(base, next)) {
+                return null;
+            }
+        }
+        return base;
+    }
+
+    private String normalizeTunnelProtocol(String protocol) {
         if (StringUtils.isBlank(protocol)) {
             return DEFAULT_TUNNEL_PROTOCOL;
         }
@@ -802,10 +830,6 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
         if (outNodes == null || outNodes.isEmpty()) {
             return R.err(ERROR_OUT_NODE_REQUIRED);
         }
-        if (outNodes.size() > 1) {
-            return R.err(ERROR_OUT_NODE_MULTI_NOT_SUPPORTED);
-        }
-
         // 验证入口和出口不能是同一个节点
         if (inNodeIds != null) {
             for (Node outNode : outNodes) {
@@ -821,6 +845,9 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
         }
 
         String protocol = resolveOutNodeProtocol(outNodes);
+        if (protocol == null) {
+            return R.err("出口节点隧道协议不一致");
+        }
 
         tunnel.setOutNodeIds(joinNodeIds(outNodes.stream().map(Node::getId).collect(Collectors.toList())));
         tunnel.setOutNodeId(outNodes.get(0).getId());
@@ -984,7 +1011,15 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
         if (outNodes.isEmpty()) {
             return R.err(ERROR_OUT_NODE_NOT_FOUND);
         }
+        boolean hasOnline = false;
         for (Node outNode : outNodes) {
+            if (outNode == null) {
+                continue;
+            }
+            if (outNode.getStatus() == null || outNode.getStatus() != NODE_STATUS_ONLINE) {
+                continue;
+            }
+            hasOnline = true;
             if (outNode.getOutPort() == null) {
                 return R.err("出口共享端口未配置");
             }
@@ -996,6 +1031,9 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
             if (!isGostOperationSuccess(updateResult)) {
                 return R.err(updateResult.getMsg());
             }
+        }
+        if (!hasOnline) {
+            return R.err(ERROR_OUT_NODE_OFFLINE);
         }
         return R.ok();
     }
@@ -1172,10 +1210,7 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
         if (outNodeIds.isEmpty() && tunnel.getOutNodeId() != null) {
             outNodeIds.add(tunnel.getOutNodeId());
         }
-        if (outNodeIds.size() > 1) {
-            return Collections.singletonList(outNodeIds.get(0));
-        }
-        return outNodeIds;
+        return new ArrayList<>(new LinkedHashSet<>(outNodeIds));
     }
 
     private List<Node> resolveOutNodesFromTunnel(Tunnel tunnel) {
@@ -1191,6 +1226,35 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
                 return Collections.emptyList();
             }
             nodes.add(node);
+        }
+        return nodes;
+    }
+
+    private List<Long> resolveActiveOutNodeIdsFromTunnel(Tunnel tunnel) {
+        if (tunnel == null) {
+            return Collections.emptyList();
+        }
+        if (tunnel.getOutNodeId() != null) {
+            return Collections.singletonList(tunnel.getOutNodeId());
+        }
+        List<Long> outNodeIds = resolveOutNodeIdsFromTunnel(tunnel);
+        if (outNodeIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return Collections.singletonList(outNodeIds.get(0));
+    }
+
+    private List<Node> resolveActiveOutNodesFromTunnel(Tunnel tunnel) {
+        List<Long> outNodeIds = resolveActiveOutNodeIdsFromTunnel(tunnel);
+        if (outNodeIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<Node> nodes = new ArrayList<>();
+        for (Long nodeId : outNodeIds) {
+            Node node = nodeService.getNodeById(nodeId);
+            if (node != null) {
+                nodes.add(node);
+            }
         }
         return nodes;
     }
@@ -1247,7 +1311,7 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
 
         List<Node> outNodes = Collections.emptyList();
         if (tunnel.getType() == TUNNEL_TYPE_TUNNEL_FORWARD) {
-            outNodes = resolveOutNodesFromTunnel(tunnel);
+            outNodes = resolveActiveOutNodesFromTunnel(tunnel);
             if (outNodes.isEmpty()) {
                 return R.err(ERROR_OUT_NODE_NOT_FOUND);
             }

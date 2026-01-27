@@ -416,7 +416,7 @@ export default function AdminLayout({
       </div>
 
        {/* 修改密码模态框 */}
-       <Modal isOpen={isOpen} onOpenChange={onOpenChange}>
+       <Modal hideCloseButton isOpen={isOpen} onOpenChange={onOpenChange}>
         <ModalContent>
           {(onClose) => (
             <>

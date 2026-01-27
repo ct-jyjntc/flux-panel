@@ -601,7 +601,7 @@ export default function UserPage() {
 
 
       {/* 用户表单模态框 */}
-      <Modal
+      <Modal hideCloseButton
         isOpen={isUserModalOpen}
         onClose={onUserModalClose}
         size="2xl"
@@ -801,7 +801,7 @@ export default function UserPage() {
       </Modal>
 
       {/* 节点权限管理模态框 */}
-      <Modal
+      <Modal hideCloseButton
         isOpen={isNodeModalOpen}
         onClose={onNodeModalClose}
         size="3xl"
@@ -936,7 +936,7 @@ export default function UserPage() {
       </Modal>
 
       {/* 删除确认对话框 */}
-      <Modal
+      <Modal hideCloseButton
         isOpen={isDeleteModalOpen}
         onClose={onDeleteModalClose}
         size="md"
@@ -989,7 +989,7 @@ export default function UserPage() {
       </Modal>
 
       {/* 删除节点权限确认对话框 */}
-      <Modal
+      <Modal hideCloseButton
         isOpen={isDeleteNodeModalOpen}
         onClose={onDeleteNodeModalClose}
         size="md"
@@ -1042,7 +1042,7 @@ export default function UserPage() {
       </Modal>
 
       {/* 重置流量确认对话框 */}
-      <Modal
+      <Modal hideCloseButton
         isOpen={isResetFlowModalOpen}
         onClose={onResetFlowModalClose}
         size="md"

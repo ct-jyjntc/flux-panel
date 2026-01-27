@@ -538,11 +538,12 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
         } else {
             // 隧道转发：入口TCP ping出口，出口TCP ping目标
             List<Node> outNodes = resolveOutNodes(tunnel);
-            if (outNodes.isEmpty()) {
+            List<Node> activeOutNodes = resolveActiveOutNodes(tunnel, outNodes);
+            if (activeOutNodes.isEmpty()) {
                 return R.err("出口节点不存在");
             }
 
-            for (Node outNode : outNodes) {
+            for (Node outNode : activeOutNodes) {
                 int outPort = resolveOutNodePort(tunnel, forward, outNode);
                 if (outPort <= 0) {
                     return R.err("出口端口未配置");
@@ -1108,6 +1109,21 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
         return nodes;
     }
 
+    private List<Node> resolveActiveOutNodes(Tunnel tunnel, List<Node> outNodes) {
+        if (outNodes == null || outNodes.isEmpty()) {
+            return Collections.emptyList();
+        }
+        Long activeId = tunnel != null ? tunnel.getOutNodeId() : null;
+        if (activeId != null) {
+            for (Node node : outNodes) {
+                if (node != null && Objects.equals(node.getId(), activeId)) {
+                    return Collections.singletonList(node);
+                }
+            }
+        }
+        return Collections.singletonList(outNodes.get(0));
+    }
+
     /**
      * 检查用户权限和限制
      */
@@ -1302,6 +1318,7 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
         }
         boolean muxEnabled = Boolean.TRUE.equals(tunnel.getMuxEnabled());
         List<Node> outNodes = nodeInfo.getOutNodes() != null ? nodeInfo.getOutNodes() : Collections.emptyList();
+        List<Node> activeOutNodes = resolveActiveOutNodes(tunnel, outNodes);
 
         // 隧道转发需要创建链和远程服务
         if (tunnel.getType() == TUNNEL_TYPE_TUNNEL_FORWARD) {
@@ -1312,24 +1329,24 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
                 }
             }
             for (Node inNode : inNodes) {
-                R chainResult = createChainService(inNode, serviceName, outNodes, forward.getOutPort(), tunnel.getProtocol(), tunnel.getInterfaceName(), muxEnabled, tunnel.getOutStrategy());
+                R chainResult = createChainService(inNode, serviceName, activeOutNodes, forward.getOutPort(), tunnel.getProtocol(), tunnel.getInterfaceName(), muxEnabled, tunnel.getOutStrategy());
                 if (chainResult.getCode() != 0) {
                     for (Node cleanupNode : inNodes) {
                         GostUtil.DeleteChains(cleanupNode.getId(), serviceName);
                     }
                     if (!muxEnabled) {
-                        deleteRemoteServices(outNodes, serviceName);
+                        deleteRemoteServices(activeOutNodes, serviceName);
                     }
                     return chainResult;
                 }
             }
             if (!muxEnabled) {
-                R remoteResult = createRemoteServices(outNodes, serviceName, forward, tunnel.getProtocol(), forward.getInterfaceName());
+                R remoteResult = createRemoteServices(activeOutNodes, serviceName, forward, tunnel.getProtocol(), forward.getInterfaceName());
                 if (remoteResult.getCode() != 0) {
                     for (Node cleanupNode : inNodes) {
                         GostUtil.DeleteChains(cleanupNode.getId(), serviceName);
                     }
-                    deleteRemoteServices(outNodes, serviceName);
+                    deleteRemoteServices(activeOutNodes, serviceName);
                     return remoteResult;
                 }
             }
@@ -1348,7 +1365,7 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
                     GostUtil.DeleteChains(cleanupNode.getId(), serviceName);
                 }
                 if (!muxEnabled) {
-                    deleteRemoteServices(outNodes, serviceName);
+                    deleteRemoteServices(activeOutNodes, serviceName);
                 }
                 return serviceResult;
             }
@@ -1368,6 +1385,7 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
         }
         boolean muxEnabled = Boolean.TRUE.equals(tunnel.getMuxEnabled());
         List<Node> outNodes = nodeInfo.getOutNodes() != null ? nodeInfo.getOutNodes() : Collections.emptyList();
+        List<Node> activeOutNodes = resolveActiveOutNodes(tunnel, outNodes);
 
         // 隧道转发需要更新链和远程服务
         if (tunnel.getType() == TUNNEL_TYPE_TUNNEL_FORWARD) {
@@ -1379,14 +1397,14 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
                 }
             }
             for (Node inNode : inNodes) {
-                R chainResult = updateChainService(inNode, serviceName, outNodes, forward.getOutPort(), tunnel.getProtocol(), tunnel.getInterfaceName(), muxEnabled, tunnel.getOutStrategy());
+                R chainResult = updateChainService(inNode, serviceName, activeOutNodes, forward.getOutPort(), tunnel.getProtocol(), tunnel.getInterfaceName(), muxEnabled, tunnel.getOutStrategy());
                 if (chainResult.getCode() != 0) {
                     updateForwardStatusToError(forward);
                     return chainResult;
                 }
             }
             if (!muxEnabled) {
-                R remoteResult = updateRemoteServices(outNodes, serviceName, forward, tunnel.getProtocol(), forward.getInterfaceName());
+                R remoteResult = updateRemoteServices(activeOutNodes, serviceName, forward, tunnel.getProtocol(), forward.getInterfaceName());
                 if (remoteResult.getCode() != 0) {
                     updateForwardStatusToError(forward);
                     return remoteResult;
@@ -1562,7 +1580,15 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
         if (outNodes == null || outNodes.isEmpty()) {
             return R.err("出口节点不存在");
         }
+        boolean hasOnline = false;
         for (Node outNode : outNodes) {
+            if (outNode == null) {
+                continue;
+            }
+            if (outNode.getStatus() == null || outNode.getStatus() != NODE_STATUS_ONLINE) {
+                continue;
+            }
+            hasOnline = true;
             if (outNode.getOutPort() == null) {
                 return R.err("出口共享端口未配置");
             }
@@ -1574,6 +1600,9 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
             if (!isGostOperationSuccess(updateResult)) {
                 return R.err(updateResult.getMsg());
             }
+        }
+        if (!hasOnline) {
+            return R.err("出口节点当前离线，请确保节点正常运行");
         }
         return R.ok();
     }
@@ -2098,7 +2127,8 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
 
         List<Node> newInNodes = resolveInNodes(newTunnel);
         List<Node> onlineInNodes = filterOnlineNodes(newInNodes);
-        List<Node> newOutNodes = newTunnel.getType() == TUNNEL_TYPE_TUNNEL_FORWARD ? resolveOutNodes(newTunnel) : Collections.emptyList();
+        List<Node> allOutNodes = newTunnel.getType() == TUNNEL_TYPE_TUNNEL_FORWARD ? resolveOutNodes(newTunnel) : Collections.emptyList();
+        List<Node> activeOutNodes = newTunnel.getType() == TUNNEL_TYPE_TUNNEL_FORWARD ? resolveActiveOutNodes(newTunnel, allOutNodes) : Collections.emptyList();
 
         List<Node> oldInNodes = resolveInNodes(oldTunnel);
         List<Node> oldOutNodes = oldTunnel.getType() == TUNNEL_TYPE_TUNNEL_FORWARD ? resolveOutNodes(oldTunnel) : Collections.emptyList();
@@ -2121,7 +2151,7 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
         }
 
         if (newTunnel.getType() == TUNNEL_TYPE_TUNNEL_FORWARD && newMuxEnabled) {
-            R muxResult = ensureMuxService(newOutNodes, newTunnel, newTunnel.getInterfaceName());
+            R muxResult = ensureMuxService(allOutNodes, newTunnel, newTunnel.getInterfaceName());
             if (muxResult.getCode() != 0) {
                 for (Forward forward : forwards) {
                     updateForwardStatusToError(forward);
@@ -2132,8 +2162,8 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
 
         Integer muxPort = null;
         if (newTunnel.getType() == TUNNEL_TYPE_TUNNEL_FORWARD && newMuxEnabled) {
-            if (!newOutNodes.isEmpty() && newOutNodes.get(0).getOutPort() != null) {
-                muxPort = newOutNodes.get(0).getOutPort();
+            if (!activeOutNodes.isEmpty() && activeOutNodes.get(0).getOutPort() != null) {
+                muxPort = activeOutNodes.get(0).getOutPort();
             } else {
                 muxPort = newTunnel.getMuxPort();
             }
@@ -2174,7 +2204,7 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
                     if (inNode == null || inNode.getId() == null) {
                         continue;
                     }
-                    R chainResult = createChainService(inNode, serviceName, newOutNodes, forward.getOutPort(), newTunnel.getProtocol(), newTunnel.getInterfaceName(), newMuxEnabled, newTunnel.getOutStrategy());
+                    R chainResult = createChainService(inNode, serviceName, activeOutNodes, forward.getOutPort(), newTunnel.getProtocol(), newTunnel.getInterfaceName(), newMuxEnabled, newTunnel.getOutStrategy());
                     if (chainResult.getCode() != 0) {
                         for (Node cleanupNode : onlineInNodes) {
                             if (cleanupNode == null || cleanupNode.getId() == null) {
@@ -2183,7 +2213,7 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
                             GostUtil.DeleteChains(cleanupNode.getId(), serviceName);
                         }
                         if (!newMuxEnabled) {
-                            deleteRemoteServices(newOutNodes, serviceName);
+                            deleteRemoteServices(activeOutNodes, serviceName);
                         }
                         failedForwardIds.add(forward.getId());
                         break;
@@ -2202,7 +2232,7 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
                 if (serviceName == null) {
                     continue;
                 }
-                for (Node outNode : newOutNodes) {
+                for (Node outNode : activeOutNodes) {
                     if (outNode == null || outNode.getId() == null) {
                         continue;
                     }
@@ -2215,7 +2245,7 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
             sendServiceBatches(remotePayloads, failedForwardIds, "出口服务");
             Set<Long> remoteFailures = new HashSet<>(failedForwardIds);
             remoteFailures.removeAll(failedBeforeRemote);
-            cleanupForwardResources(remoteFailures, serviceNames, onlineInNodes, newOutNodes, newMuxEnabled, false, true);
+            cleanupForwardResources(remoteFailures, serviceNames, onlineInNodes, activeOutNodes, newMuxEnabled, false, true);
         }
 
         Map<Long, List<ServicePayload>> mainPayloads = new LinkedHashMap<>();
@@ -2244,7 +2274,7 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
         sendServiceBatches(mainPayloads, failedForwardIds, "入口服务");
         Set<Long> mainFailures = new HashSet<>(failedForwardIds);
         mainFailures.removeAll(failedBeforeMain);
-        cleanupForwardResources(mainFailures, serviceNames, onlineInNodes, newOutNodes, newMuxEnabled, true, newTunnel.getType() == TUNNEL_TYPE_TUNNEL_FORWARD);
+        cleanupForwardResources(mainFailures, serviceNames, onlineInNodes, activeOutNodes, newMuxEnabled, true, newTunnel.getType() == TUNNEL_TYPE_TUNNEL_FORWARD);
 
         for (Forward forward : forwards) {
             if (failedForwardIds.contains(forward.getId())) {

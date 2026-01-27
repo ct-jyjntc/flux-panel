@@ -986,7 +986,7 @@ export default function NodePage() {
         </div>
 
         {/* 新增/编辑节点对话框 */}
-        <Modal 
+        <Modal hideCloseButton 
           isOpen={dialogVisible} 
           onClose={() => setDialogVisible(false)}
           size="2xl"
@@ -1059,7 +1059,7 @@ export default function NodePage() {
                     <div className="text-xs text-gray-400">支持多个IP，每行一个地址，用于展示给用户连接。</div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="flex flex-col gap-2">
                       <label className="text-sm font-medium text-gray-700 dark:text-gray-300">起始端口</label>
                       <Input
@@ -1286,7 +1286,7 @@ export default function NodePage() {
         </Modal>
 
         {/* 删除确认模态框 */}
-        <Modal 
+        <Modal hideCloseButton 
           isOpen={deleteModalOpen}
           onOpenChange={setDeleteModalOpen}
           size="md"
@@ -1332,7 +1332,7 @@ export default function NodePage() {
         </Modal>
 
         {/* 安装命令模态框 */}
-        <Modal 
+        <Modal hideCloseButton 
           isOpen={installCommandModal} 
           onClose={() => setInstallCommandModal(false)}
           size="2xl"

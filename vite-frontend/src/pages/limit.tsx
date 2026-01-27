@@ -278,7 +278,7 @@ export default function LimitPage() {
         </div>
 
         {/* 新增/编辑模态框 */}
-        <Modal 
+        <Modal hideCloseButton 
           isOpen={modalOpen}
           onOpenChange={setModalOpen}
           size="md"
@@ -362,7 +362,7 @@ export default function LimitPage() {
         </Modal>
 
         {/* 删除确认模态框 */}
-        <Modal 
+        <Modal hideCloseButton 
           isOpen={deleteModalOpen}
           onOpenChange={setDeleteModalOpen}
           size="md"

@@ -175,9 +175,45 @@ export default function TunnelPage() {
         .split(',')
         .map((id) => parseInt(id.trim(), 10))
         .filter((id) => !Number.isNaN(id));
-      if (parsed.length > 0) return [parsed[0]];
+      if (parsed.length > 0) return parsed;
     }
     return tunnel.outNodeId ? [tunnel.outNodeId] : [];
+  };
+
+  const normalizeSelectionOrder = (prevOrder: number[], selectedIds: number[]) => {
+    const selectedSet = new Set(selectedIds);
+    const ordered = prevOrder.filter((id) => selectedSet.has(id));
+    selectedIds.forEach((id) => {
+      if (!ordered.includes(id)) {
+        ordered.push(id);
+      }
+    });
+    return ordered;
+  };
+
+  const getNodeName = (nodeId: number) => nodes.find((node) => node.id === nodeId)?.name || `节点${nodeId}`;
+
+  const renderOutNodeOrder = (outNodeIds: number[]) => {
+    if (!outNodeIds.length) return null;
+    return (
+      <div className="flex flex-wrap gap-2">
+        {outNodeIds.map((id, index) => (
+          <span
+            key={id}
+            className={`inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs border ${
+              index === 0
+                ? "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-200 dark:border-blue-800"
+                : "bg-gray-50 text-gray-600 border-gray-200 dark:bg-zinc-800 dark:text-gray-300 dark:border-gray-700"
+            }`}
+          >
+            <span className="font-semibold">{index + 1}</span>
+            <span>{index === 0 ? "主" : `备${index}`}</span>
+            <span className="text-gray-500">·</span>
+            <span>{getNodeName(id)}</span>
+          </span>
+        ))}
+      </div>
+    );
   };
 
   // 表单验证
@@ -206,8 +242,6 @@ export default function TunnelPage() {
     if (form.type === 2) {
       if (!form.outNodeIds.length) {
         newErrors.outNodeId = '请选择出口节点';
-      } else if (form.outNodeIds.length > 1) {
-        newErrors.outNodeId = '出口节点仅支持一个';
       } else if (form.outNodeIds.some((id) => form.inNodeIds.includes(id))) {
         newErrors.outNodeId = '隧道转发模式下，入口和出口不能是同一个节点';
       }
@@ -563,7 +597,14 @@ export default function TunnelPage() {
                         </td>
                         <td className="px-4 py-3 align-middle">
                            <div className="flex flex-col gap-0.5">
-                              <span className="text-gray-700 dark:text-gray-300">{outNodeName}</span>
+                              <div className="flex flex-col gap-1">
+                                <span className="text-gray-700 dark:text-gray-300">{outNodeName}</span>
+                                {tunnel.type === 2 && outNodeIds.length > 0 && (
+                                  <div className="text-xs text-gray-500">
+                                    顺序：{outNodeIds.map((id, idx) => `${idx + 1}.${getNodeName(id)}`).join(" / ")}
+                                  </div>
+                                )}
+                              </div>
                               <span className="text-xs text-gray-400 font-mono">{outIp}</span>
                            </div>
                         </td>
@@ -614,7 +655,7 @@ export default function TunnelPage() {
         </div>
 
         {/* 新增/编辑模态框 */}
-        <Modal 
+        <Modal hideCloseButton 
           isOpen={modalOpen} 
           onOpenChange={setModalOpen}
           size="2xl"
@@ -800,19 +841,25 @@ export default function TunnelPage() {
                                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300">出口节点</label>
                                 <Select
                                   placeholder="请选择出口节点"
-                                  selectedKeys={form.outNodeIds.length ? [form.outNodeIds[0].toString()] : []}
+                                  selectionMode="multiple"
+                                  selectedKeys={form.outNodeIds.map((id) => id.toString())}
                                   onSelectionChange={(keys) => {
-                                    const selectedKey = Array.from(keys)[0] as string;
-                                    const selectedId = Number.parseInt(selectedKey, 10);
-                                    const selected = Number.isNaN(selectedId) ? [] : [selectedId];
-                                    const firstOutNode = selected.length > 0
-                                      ? outNodeOptions.find((node) => node.id === selected[0])
-                                      : null;
+                                    const selected = Array.from(keys)
+                                      .map((key) => Number.parseInt(String(key), 10))
+                                      .filter((id) => !Number.isNaN(id));
                                     setForm(prev => ({ 
                                       ...prev, 
-                                      outNodeIds: selected,
-                                      outNodeId: selected[0] ?? null,
-                                      muxPort: firstOutNode?.outPort ?? null
+                                      ...(function () {
+                                        const ordered = normalizeSelectionOrder(prev.outNodeIds, selected);
+                                        const firstOutNode = ordered.length > 0
+                                          ? outNodeOptions.find((node) => node.id === ordered[0])
+                                          : null;
+                                        return {
+                                          outNodeIds: ordered,
+                                          outNodeId: ordered[0] ?? null,
+                                          muxPort: firstOutNode?.outPort ?? null
+                                        };
+                                      })()
                                     }));
                                   }}
                                   isInvalid={!!errors.outNodeId}
@@ -849,6 +896,14 @@ export default function TunnelPage() {
                                   ))}
 
                                 </Select>
+                                {form.outNodeIds.length > 0 && (
+                                  <div className="text-xs text-gray-500 mt-1">
+                                    故障转移顺序（先选为主）：
+                                    <div className="mt-2">
+                                      {renderOutNodeOrder(form.outNodeIds)}
+                                    </div>
+                                  </div>
+                                )}
                             </div>
 
                             <div className="flex flex-col gap-2">
@@ -896,7 +951,7 @@ export default function TunnelPage() {
         </Modal>
 
         {/* 删除确认模态框 */}
-        <Modal 
+        <Modal hideCloseButton 
           isOpen={deleteModalOpen}
           onOpenChange={setDeleteModalOpen}
           size="md"
@@ -942,7 +997,7 @@ export default function TunnelPage() {
         </Modal>
 
         {/* 诊断结果模态框 */}
-        <Modal 
+        <Modal hideCloseButton 
           isOpen={diagnosisModalOpen}
           onOpenChange={setDiagnosisModalOpen}
           size="2xl"
