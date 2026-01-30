@@ -54,7 +54,8 @@ public class NodeController extends BaseController {
     @PostMapping("/install")
     public R getInstallCommand(@RequestBody Map<String, Object> params) {
         Long id = Long.valueOf(params.get("id").toString());
-        return nodeService.getInstallCommand(id);
+        String region = params.get("region") != null ? params.get("region").toString() : null;
+        return nodeService.getInstallCommand(id, region);
     }
 
     @LogAnnotation

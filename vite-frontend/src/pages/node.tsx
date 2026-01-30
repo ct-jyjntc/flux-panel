@@ -144,6 +144,9 @@ export default function NodePage() {
   const [installCommandModal, setInstallCommandModal] = useState(false);
   const [installCommand, setInstallCommand] = useState('');
   const [currentNodeName, setCurrentNodeName] = useState('');
+  const [connectModalOpen, setConnectModalOpen] = useState(false);
+  const [connectNode, setConnectNode] = useState<Node | null>(null);
+  const [connectLoading, setConnectLoading] = useState<'cn' | 'oversea' | null>(null);
   const [showNodeAdvanced, setShowNodeAdvanced] = useState(false);
   
   const websocketRef = useRef<WebSocket | null>(null);
@@ -623,20 +626,24 @@ export default function NodePage() {
 
   // 复制安装命令
   const handleCopyInstallCommand = async (node: Node) => {
-    setNodeList(prev => prev.map(n => 
-      n.id === node.id ? { ...n, copyLoading: true } : n
-    ));
-    
+    setConnectNode(node);
+    setConnectModalOpen(true);
+  };
+
+  const handleRegionConnect = async (region: 'cn' | 'oversea') => {
+    if (!connectNode) return;
+    setConnectLoading(region);
     try {
-      const res = await getNodeInstallCommand(node.id);
+      const res = await getNodeInstallCommand(connectNode.id, region);
       if (res.code === 0 && res.data) {
         try {
           await navigator.clipboard.writeText(res.data);
           toast.success('安装命令已复制到剪贴板');
+          setConnectModalOpen(false);
         } catch (copyError) {
           // 复制失败，显示安装命令模态框
           setInstallCommand(res.data);
-          setCurrentNodeName(node.name);
+          setCurrentNodeName(connectNode.name);
           setInstallCommandModal(true);
         }
       } else {
@@ -645,9 +652,7 @@ export default function NodePage() {
     } catch (error) {
       toast.error('获取安装命令失败');
     } finally {
-      setNodeList(prev => prev.map(n => 
-        n.id === node.id ? { ...n, copyLoading: false } : n
-      ));
+      setConnectLoading(null);
     }
   };
 
@@ -930,16 +935,11 @@ export default function NodePage() {
                                   <button 
                                     className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-green-50 text-gray-600 hover:text-green-600 dark:border-gray-700 dark:bg-zinc-900 dark:text-gray-300 dark:hover:bg-green-900/20 dark:hover:text-green-400 flex items-center justify-center transition-colors"
                                     onClick={() => handleCopyInstallCommand(node)} 
-                                    title="复制安装命令"
-                                    disabled={node.copyLoading}
+                                    title="对接节点"
                                   >
-                                     {node.copyLoading ? (
-                                       <Spinner size="sm" color="current" />
-                                     ) : (
-                                       <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                       </svg>
-                                     )}
+                                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                     </svg>
                                   </button>
                                   <button 
                                    className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 dark:border-gray-700 dark:bg-zinc-900 dark:text-gray-300 dark:hover:bg-zinc-800 flex items-center justify-center transition-colors"
@@ -1392,6 +1392,60 @@ export default function NodePage() {
                 关闭
               </Button>
             </ModalFooter>
+          </ModalContent>
+        </Modal>
+
+        {/* 对接选择模态框 */}
+        <Modal hideCloseButton
+          isOpen={connectModalOpen}
+          onOpenChange={setConnectModalOpen}
+          size="md"
+          placement="center"
+          scrollBehavior="outside"
+          backdrop="blur"
+          classNames={{
+            base: "bg-white dark:bg-[#18181b] border border-gray-100 dark:border-gray-800 shadow-xl rounded-xl",
+            header: "border-b border-gray-100 dark:border-gray-800 pb-4",
+            body: "py-6",
+            footer: "border-t border-gray-100 dark:border-gray-800 pt-4"
+          }}
+        >
+          <ModalContent>
+            {(onClose) => (
+              <>
+                <ModalHeader className="flex flex-col gap-1">
+                  <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                    选择对接方式{connectNode ? ` - ${connectNode.name}` : ''}
+                  </h2>
+                  <p className="text-xs text-gray-500">将根据选择生成对应的安装命令</p>
+                </ModalHeader>
+                <ModalBody>
+                  <div className="grid grid-cols-1 gap-3">
+                    <Button
+                      color="primary"
+                      variant="flat"
+                      isLoading={connectLoading === 'cn'}
+                      onPress={() => handleRegionConnect('cn')}
+                    >
+                      国内对接
+                    </Button>
+                    <Button
+                      color="primary"
+                      variant="bordered"
+                      isLoading={connectLoading === 'oversea'}
+                      onPress={() => handleRegionConnect('oversea')}
+                    >
+                      海外对接
+                    </Button>
+                  </div>
+                </ModalBody>
+                <ModalFooter>
+                  <Button size="sm" variant="light" onPress={onClose}>
+                    取消
+                  </Button>
+                </ModalFooter>
+              </>
+            )}
           </ModalContent>
         </Modal>
       </div>

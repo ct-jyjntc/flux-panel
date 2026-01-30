@@ -87,6 +87,9 @@ export const getCachedConfigs = async (): Promise<Record<string, string>> => {
   // 尝试从缓存获取所有配置
   const configKeys = [
     'app_name',
+    'ip',
+    'ip_cn',
+    'ip_oversea',
     'node_monitor_visible_fields',
     'node_monitor_show_name',
     'node_monitor_show_in_ip',

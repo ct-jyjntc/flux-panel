@@ -359,13 +359,37 @@ public class FlowController extends BaseController {
     private BigDecimal calculateNodeTrafficRatio(Tunnel tunnel, Node reportingNode) {
         BigDecimal inRatio = getNodeTrafficRatio(reportingNode);
         if (tunnel.getType() != null && tunnel.getType() == 2) {
-            BigDecimal outRatio = BigDecimal.ZERO;
-            for (Node outNode : resolveOutNodes(tunnel)) {
-                outRatio = outRatio.add(getNodeTrafficRatio(outNode));
-            }
+            Node activeOutNode = resolveActiveOutNode(tunnel);
+            BigDecimal outRatio = getNodeTrafficRatio(activeOutNode);
             return inRatio.add(outRatio);
         }
         return inRatio;
+    }
+
+    private Node resolveActiveOutNode(Tunnel tunnel) {
+        if (tunnel == null) {
+            return null;
+        }
+        if (tunnel.getOutNodeId() != null) {
+            return nodeService.getNodeById(tunnel.getOutNodeId());
+        }
+        List<Long> outNodeIds = new ArrayList<>();
+        if (tunnel.getOutNodeIds() != null && !tunnel.getOutNodeIds().trim().isEmpty()) {
+            String[] parts = tunnel.getOutNodeIds().split(",");
+            for (String part : parts) {
+                String trimmed = part.trim();
+                if (!trimmed.isEmpty()) {
+                    try {
+                        outNodeIds.add(Long.parseLong(trimmed));
+                    } catch (NumberFormatException ignored) {
+                    }
+                }
+            }
+        }
+        if (outNodeIds.isEmpty()) {
+            return null;
+        }
+        return nodeService.getNodeById(outNodeIds.get(0));
     }
 
     private BigDecimal getNodeTrafficRatio(Node node) {

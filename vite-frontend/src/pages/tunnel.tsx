@@ -561,7 +561,6 @@ export default function TunnelPage() {
                     const typeDisplay = getTypeDisplay(tunnel.type);
                     const inNodeIds = getTunnelInNodeIds(tunnel);
                     const outNodeIds = tunnel.type === 1 ? inNodeIds : getTunnelOutNodeIds(tunnel);
-                    const outNodeName = getNodeNames(outNodeIds);
                     const outIp = tunnel.type === 1 ? getDisplayIp(tunnel.inIp) : getDisplayIp(tunnel.outIp);
 
 
@@ -597,14 +596,11 @@ export default function TunnelPage() {
                         </td>
                         <td className="px-4 py-3 align-middle">
                            <div className="flex flex-col gap-0.5">
-                              <div className="flex flex-col gap-1">
-                                <span className="text-gray-700 dark:text-gray-300">{outNodeName}</span>
-                                {tunnel.type === 2 && outNodeIds.length > 0 && (
-                                  <div className="text-xs text-gray-500">
-                                    顺序：{outNodeIds.map((id, idx) => `${idx + 1}.${getNodeName(id)}`).join(" / ")}
-                                  </div>
-                                )}
-                              </div>
+                              {tunnel.type === 2 && outNodeIds.length > 0 && (
+                                <div className="text-xs text-gray-500">
+                                  顺序：{outNodeIds.map((id, idx) => `${idx + 1}.${getNodeName(id)}`).join(" / ")}
+                                </div>
+                              )}
                               <span className="text-xs text-gray-400 font-mono">{outIp}</span>
                            </div>
                         </td>

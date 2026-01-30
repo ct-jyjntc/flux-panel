@@ -99,10 +99,24 @@ const resolveNodeMonitorVisibleFields = (configMap: Record<string, string>): str
 // 网站配置项定义
 const CONFIG_ITEMS: ConfigItem[] = [
   {
+    key: 'ip_cn',
+    label: '面板后端地址（国内）',
+    placeholder: '请输入国内面板后端IP:PORT',
+    description: '用于国内节点对接，格式“ip:port”。留空将尝试使用默认后端地址。',
+    type: 'input'
+  },
+  {
+    key: 'ip_oversea',
+    label: '面板后端地址（海外）',
+    placeholder: '请输入海外面板后端IP:PORT',
+    description: '用于海外节点对接，格式“ip:port”。留空将尝试使用默认后端地址。',
+    type: 'input'
+  },
+  {
     key: 'ip',
-    label: '面板后端地址',
+    label: '面板后端地址（默认）',
     placeholder: '请输入面板后端IP:PORT',
-    description: '格式“ip:port”,用于对接节点时使用,ip是你安装面板服务器的公网ip,端口是安装脚本内输入的后端端口。不要套CDN,不支持https,通讯数据有加密',
+    description: '默认/兼容旧配置。若国内/海外地址未配置，则使用此地址。格式“ip:port”。',
     type: 'input'
   },
   {
@@ -130,6 +144,8 @@ const getInitialConfigs = (): Record<string, string> => {
   
   const configKeys = [
     'app_name',
+    'ip_cn',
+    'ip_oversea',
     'ip',
     NODE_MONITOR_VISIBLE_KEY,
     ...Object.values(NODE_MONITOR_LEGACY_KEYS)

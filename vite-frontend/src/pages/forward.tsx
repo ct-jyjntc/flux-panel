@@ -1712,7 +1712,7 @@ example.com:443`}
 
         {/* 地址列表弹窗 */}
         <Modal hideCloseButton 
-          isOpen={addressModalOpen} 
+          isOpen={addressModalOpen}
           onClose={() => setAddressModalOpen(false)} 
           size="lg" 
           scrollBehavior="outside" 
@@ -1765,7 +1765,7 @@ example.com:443`}
 
         {/* 导出数据模态框 */}
         <Modal hideCloseButton 
-          isOpen={exportModalOpen} 
+          isOpen={exportModalOpen}
           onClose={() => {
             setExportModalOpen(false);
             setSelectedTunnelForExport(null);
@@ -1899,7 +1899,7 @@ example.com:443`}
 
         {/* 导入模态框 */}
         <Modal hideCloseButton 
-          isOpen={importModalOpen} 
+          isOpen={importModalOpen}
           onOpenChange={setImportModalOpen} 
           size="2xl"
           scrollBehavior="outside"

@@ -737,7 +737,7 @@ public class NodeServiceImpl extends ServiceImpl<NodeMapper, Node> implements No
      * @return 包含安装命令的响应对象
      */
     @Override
-    public R getInstallCommand(Long id) {
+    public R getInstallCommand(Long id, String region) {
         // 1. 验证节点是否存在
         Node node = this.getById(id);
         if (node == null) {
@@ -749,7 +749,7 @@ public class NodeServiceImpl extends ServiceImpl<NodeMapper, Node> implements No
         }
 
         // 2. 构建安装命令
-        return buildInstallCommand(node);
+        return buildInstallCommand(node, region);
     }
 
     /**
@@ -758,9 +758,11 @@ public class NodeServiceImpl extends ServiceImpl<NodeMapper, Node> implements No
      * @param node 节点对象
      * @return 格式化的安装命令
      */
-    private R buildInstallCommand(Node node) {
-        ViteConfig viteConfig = viteConfigService.getOne(new QueryWrapper<ViteConfig>().eq("name", "ip"));
-        if (viteConfig == null) return R.err("请先前往网站配置中设置ip");
+    private R buildInstallCommand(Node node, String region) {
+        String serverAddr = resolveServerAddress(region);
+        if (StrUtil.isBlank(serverAddr)) {
+            return R.err("请先前往网站配置中设置面板后端地址");
+        }
 
         StringBuilder command = new StringBuilder();
         
@@ -769,7 +771,7 @@ public class NodeServiceImpl extends ServiceImpl<NodeMapper, Node> implements No
                .append(" -o ./install.sh && chmod +x ./install.sh && ");
         
         // 处理服务器地址，如果是IPv6需要添加方括号
-        String processedServerAddr = processServerAddress(viteConfig.getValue());
+        String processedServerAddr = processServerAddress(serverAddr);
         
         // 第二部分：执行安装脚本（去掉-u参数）
         command.append("./install.sh")
@@ -777,6 +779,48 @@ public class NodeServiceImpl extends ServiceImpl<NodeMapper, Node> implements No
                .append(" -s ").append(node.getSecret());    // 节点密钥
         
         return R.ok(command.toString());
+    }
+
+    private String resolveServerAddress(String region) {
+        String regionKey = null;
+        if (StrUtil.isNotBlank(region)) {
+            String normalized = region.trim().toLowerCase();
+            if (normalized.contains("cn") || normalized.contains("china") || normalized.contains("domestic")) {
+                regionKey = "ip_cn";
+            } else if (normalized.contains("oversea") || normalized.contains("overseas") || normalized.contains("global")) {
+                regionKey = "ip_oversea";
+            }
+        }
+        if (regionKey != null) {
+            String value = getConfigValue(regionKey);
+            if (StrUtil.isNotBlank(value)) {
+                return value;
+            }
+        }
+        String legacy = getConfigValue("ip");
+        if (StrUtil.isNotBlank(legacy)) {
+            return legacy;
+        }
+        if (regionKey == null || "ip_cn".equals(regionKey)) {
+            String fallback = getConfigValue("ip_oversea");
+            if (StrUtil.isNotBlank(fallback)) {
+                return fallback;
+            }
+        } else {
+            String fallback = getConfigValue("ip_cn");
+            if (StrUtil.isNotBlank(fallback)) {
+                return fallback;
+            }
+        }
+        return null;
+    }
+
+    private String getConfigValue(String name) {
+        ViteConfig viteConfig = viteConfigService.getOne(new QueryWrapper<ViteConfig>().eq("name", name));
+        if (viteConfig == null) {
+            return null;
+        }
+        return viteConfig.getValue();
     }
 
     /**
