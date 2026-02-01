@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Button } from "@heroui/button";
 import { Input } from "@heroui/input";
 import { Textarea } from "@heroui/input";
@@ -114,6 +114,257 @@ interface DiagnosisResult {
   }>;
 }
 
+// 格式化流量 (移到组件外部避免重新创建)
+const formatFlow = (value: number, unit: 'bytes' | 'gb' = 'bytes'): string => {
+  if (unit === 'gb') {
+    return `${value} GB`;
+  }
+  if (value === 0) return '0 B';
+  if (value < 1024) return value + ' B';
+  if (value < 1024 * 1024) return (value / 1024).toFixed(2) + ' KB';
+  if (value < 1024 * 1024 * 1024) return (value / (1024 * 1024)).toFixed(2) + ' MB';
+  return (value / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+};
+
+// 获取状态显示 (移到组件外部避免重新创建)
+const getStatusDisplay = (status: number) => {
+  switch (status) {
+    case 1:
+      return { color: 'success', text: '正常' };
+    case 0:
+      return { color: 'warning', text: '暂停' };
+    case -1:
+      return { color: 'danger', text: '异常' };
+    default:
+      return { color: 'default', text: '未知' };
+  }
+};
+
+// SortableForwardRow 的 Props 接口
+interface SortableForwardRowProps {
+  forward: Forward;
+  isSelected: boolean;
+  onSelectionChange: (id: string, checked: boolean) => void;
+  onShowAddressModal: (addressString: string, port: number | null, title: string, nameString?: string) => void;
+  onServiceToggle: (forward: Forward) => void;
+  onDiagnose: (forward: Forward) => void;
+  onEdit: (forward: Forward) => void;
+  onDelete: (forward: Forward) => void;
+}
+
+// 将 SortableForwardRow 移到组件外部，避免每次渲染时重新创建
+const SortableForwardRow = React.memo(({ 
+  forward, 
+  isSelected,
+  onSelectionChange,
+  onShowAddressModal,
+  onServiceToggle,
+  onDiagnose,
+  onEdit,
+  onDelete
+}: SortableForwardRowProps) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: forward.id });
+  
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.6 : 1,
+  };
+  const statusDisplay = getStatusDisplay(forward.status);
+  
+  // Address processing
+  const inIps = forward.inIp ? forward.inIp.split(',').map(ip => ip.trim()).filter(Boolean) : [];
+  const hasMultiple = inIps.length > 1;
+  const inNames = forward.inNodeName ? forward.inNodeName.split(',').map(name => name.trim()).filter(Boolean) : [];
+  const hasMultipleNames = inNames.length > 1;
+  const primaryName = inNames[0] || '';
+  const primaryIp = inIps[0] || '';
+  const formattedPrimaryIp = primaryIp && primaryIp.includes(':') && !primaryIp.startsWith('[')
+    ? `[${primaryIp}]`
+    : primaryIp;
+  const inAddrDisplay = primaryIp
+    ? (forward.inPort ? `${formattedPrimaryIp}:${forward.inPort}` : formattedPrimaryIp)
+    : (forward.inIp || '未分配');
+
+  return (
+    <tr ref={setNodeRef} style={style} className="border-b border-gray-100 dark:border-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors group">
+      <td className="w-12 px-4 py-4 align-middle">
+        <Checkbox
+          aria-label={`Select ${forward.name}`}
+          isSelected={isSelected}
+          onValueChange={(checked) => onSelectionChange(forward.id.toString(), checked)}
+        />
+      </td>
+      
+      {/* Name */}
+      <td className="px-4 py-3 align-middle">
+        <div className="flex flex-col">
+          <div className="flex items-center gap-2">
+            <button
+              ref={setActivatorNodeRef}
+              {...attributes}
+              {...listeners}
+              type="button"
+              className="inline-flex items-center justify-center w-6 h-6 rounded border border-gray-200 text-gray-400 hover:text-gray-600 hover:border-gray-300 dark:border-gray-700 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:border-gray-600 cursor-grab active:cursor-grabbing"
+              title="拖拽排序"
+            >
+              <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                <circle cx="5" cy="4" r="1.2" />
+                <circle cx="11" cy="4" r="1.2" />
+                <circle cx="5" cy="8" r="1.2" />
+                <circle cx="11" cy="8" r="1.2" />
+                <circle cx="5" cy="12" r="1.2" />
+                <circle cx="11" cy="12" r="1.2" />
+              </svg>
+            </button>
+            <span className="font-medium text-sm text-gray-900 dark:text-gray-100 flex items-center gap-2">
+              {forward.name}
+              <span className="text-xs text-gray-400 font-normal">(#{forward.id})</span>
+            </span>
+          </div>
+        </div>
+      </td>
+
+      {/* Ingress */}
+      <td className="px-4 py-3 align-middle">
+         <div className="flex flex-col gap-1">
+           <div className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+             <span className="bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400 px-1.5 py-0.5 rounded text-xs border border-orange-200 dark:border-orange-900/50">入口</span>
+              {primaryName ? (
+                <>
+                  <span className="font-medium text-gray-900 dark:text-gray-100" title={inNames.join(', ')}>
+                    {primaryName}
+                  </span>
+                  {(hasMultipleNames || hasMultiple) && (
+                    <span
+                      className="bg-orange-50 text-orange-500 dark:bg-orange-900/20 dark:text-orange-400 px-1 rounded text-[10px] border border-orange-100 dark:border-orange-900/50 cursor-pointer"
+                      onClick={() => onShowAddressModal(forward.inIp, forward.inPort, forward.name, forward.inNodeName)}
+                    >
+                      +{(hasMultipleNames ? inNames.length : inIps.length) - 1}
+                    </span>
+                  )}
+                </>
+              ) : (
+               <>
+                 <span>{inAddrDisplay}</span>
+                 {hasMultiple && (
+                   <span
+                     className="bg-red-50 text-red-500 dark:bg-red-900/20 dark:text-red-400 px-1 rounded text-[10px] border border-red-100 dark:border-red-900/50 cursor-pointer"
+                      onClick={() => onShowAddressModal(forward.inIp, forward.inPort, forward.name, forward.inNodeName)}
+                   >
+                     +{inIps.length - 1}
+                   </span>
+                 )}
+               </>
+             )}
+           </div>
+            {primaryName && (
+              <div className="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
+                <span>{inAddrDisplay}</span>
+              </div>
+            )}
+         </div>
+      </td>
+
+      {/* Egress */}
+      <td className="px-4 py-3 align-middle">
+         <div className="flex flex-col gap-1">
+           <div className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+              <span className="bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400 px-1.5 py-0.5 rounded text-xs border border-green-200 dark:border-green-900/50">目标</span>
+              <button
+                type="button"
+                className="truncate max-w-[200px] text-left hover:text-blue-600 dark:hover:text-blue-400 cursor-copy"
+                title="点击复制目标地址"
+                onClick={() => onShowAddressModal(forward.remoteAddr, null, "目标地址")}
+              >
+                 {forward.remoteAddr}
+              </button>
+           </div>
+           <div className="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
+              <span className="bg-green-50 dark:bg-green-900/10 text-green-600 dark:text-green-400 px-1 rounded text-[10px]">倍率 1.0</span>
+              <span className="truncate max-w-[150px]">{forward.tunnelName}</span>
+           </div>
+         </div>
+      </td>
+
+      {/* Traffic */}
+      <td className="px-4 py-3 align-middle">
+        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+          {formatFlow((forward.inFlow || 0) + (forward.outFlow || 0))}
+        </span>
+      </td>
+
+      {/* Status */}
+      <td className="px-4 py-3 align-middle">
+         <span className={`text-sm ${forward.status === 1 ? 'text-green-600 dark:text-green-400' : 'text-gray-500'}`}>
+           {statusDisplay.text}
+         </span>
+      </td>
+
+      {/* Actions */}
+      <td className="px-4 py-3 align-middle text-right w-[180px]">
+        <div className="flex justify-end gap-1">
+          {/* Start/Stop */}
+          <button 
+            className={`w-7 h-7 rounded border bg-white dark:bg-zinc-900 flex items-center justify-center transition-colors ${forward.serviceRunning 
+              ? 'border-gray-200 text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-zinc-800' 
+              : 'border-gray-200 text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-zinc-800'}`}
+            onClick={() => onServiceToggle(forward)}
+            title={forward.serviceRunning ? "暂停" : "启动"}
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              {forward.serviceRunning ? (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              ) : (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3L19 12L5 21V3Z" />
+              )}
+            </svg>
+          </button>
+
+          {/* Diagnose */}
+          <button 
+            className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 dark:border-gray-700 dark:bg-zinc-900 dark:text-gray-300 dark:hover:bg-zinc-800 flex items-center justify-center transition-colors" 
+            onClick={() => onDiagnose(forward)} 
+            title="诊断"
+          >
+            <ActivityIcon className="w-3.5 h-3.5" />
+          </button>
+
+           {/* Edit */}
+           <button 
+             className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 dark:border-gray-700 dark:bg-zinc-900 dark:text-gray-300 dark:hover:bg-zinc-800 flex items-center justify-center transition-colors" 
+             onClick={() => onEdit(forward)} 
+             title="编辑"
+            >
+             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+             </svg>
+          </button>
+          
+          {/* Delete */}
+          <button 
+            className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-red-50 text-gray-600 hover:text-red-500 dark:border-gray-700 dark:bg-zinc-900 dark:text-gray-300 dark:hover:bg-red-900/20 dark:hover:text-red-400 flex items-center justify-center transition-colors" 
+            onClick={() => onDelete(forward)} 
+            title="删除"
+          >
+             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+             </svg>
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+});
+
 // 添加分组接口
 export default function ForwardPage() {
   const [loading, setLoading] = useState(true);
@@ -182,7 +433,7 @@ export default function ForwardPage() {
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
 
   useEffect(() => {
-    loadData();
+    loadData(true);
   }, []);
 
   useEffect(() => {
@@ -190,7 +441,7 @@ export default function ForwardPage() {
   }, [filterTunnelId, searchKeyword, pageSize]);
 
   // 加载所有数据
-  const loadData = async (lod = true) => {
+  const loadData = async (lod = false) => {
     setLoading(lod);
     try {
       const [forwardsRes, tunnelsRes, userRes] = await Promise.all([
@@ -567,18 +818,6 @@ export default function ForwardPage() {
     return { text: '😵 很差', color: 'danger' };
   };
 
-  // 格式化流量
-  const formatFlow = (value: number, unit: 'bytes' | 'gb' = 'bytes'): string => {
-    if (unit === 'gb') {
-      return `${value} GB`;
-    }
-    if (value === 0) return '0 B';
-    if (value < 1024) return value + ' B';
-    if (value < 1024 * 1024) return (value / 1024).toFixed(2) + ' KB';
-    if (value < 1024 * 1024 * 1024) return (value / (1024 * 1024)).toFixed(2) + ' MB';
-    return (value / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
-  };
-
   const formatExpireTime = (expTime?: string | number) => {
     if (!expTime) {
       return '永久有效';
@@ -880,20 +1119,6 @@ export default function ForwardPage() {
     }
   };
 
-  // 获取状态显示
-  const getStatusDisplay = (status: number) => {
-    switch (status) {
-      case 1:
-        return { color: 'success', text: '正常' };
-      case 0:
-        return { color: 'warning', text: '暂停' };
-      case -1:
-        return { color: 'danger', text: '异常' };
-      default:
-        return { color: 'default', text: '未知' };
-    }
-  };
-
   // 根据排序顺序获取转发列表
   const getSortedForwards = (): Forward[] => {
     // 确保 forwards 数组存在且有效
@@ -1055,218 +1280,18 @@ export default function ForwardPage() {
     }
   };
 
-  const SortableForwardRow = ({ forward }: { forward: Forward }) => {
-    const {
-      attributes,
-      listeners,
-      setNodeRef,
-      setActivatorNodeRef,
-      transform,
-      transition,
-      isDragging,
-    } = useSortable({ id: forward.id });
-    
-    // Hide drag styles as we removed the handle column for cleaner look (kept functional if needed via row drag?)
-    // Actually we keep it simple.
-    const style = {
-      transform: CSS.Transform.toString(transform),
-      transition,
-      opacity: isDragging ? 0.6 : 1,
-    };
-    const statusDisplay = getStatusDisplay(forward.status);
-    
-    // Address processing
-    const inIps = forward.inIp ? forward.inIp.split(',').map(ip => ip.trim()).filter(Boolean) : [];
-    const hasMultiple = inIps.length > 1;
-    const inNames = forward.inNodeName ? forward.inNodeName.split(',').map(name => name.trim()).filter(Boolean) : [];
-    const hasMultipleNames = inNames.length > 1;
-    const primaryName = inNames[0] || '';
-    const primaryIp = inIps[0] || '';
-    const formattedPrimaryIp = primaryIp && primaryIp.includes(':') && !primaryIp.startsWith('[')
-      ? `[${primaryIp}]`
-      : primaryIp;
-    const inAddrDisplay = primaryIp
-      ? (forward.inPort ? `${formattedPrimaryIp}:${forward.inPort}` : formattedPrimaryIp)
-      : (forward.inIp || '未分配');
-
-    return (
-      <tr ref={setNodeRef} style={style} className="border-b border-gray-100 dark:border-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors group">
-        <td className="w-12 px-4 py-4 align-middle">
-          <Checkbox
-            aria-label={`Select ${forward.name}`}
-            isSelected={selectedForwardKeys.has(forward.id.toString())}
-            onValueChange={(checked) => {
-              const nextKeys = new Set(selectedForwardKeys);
-              if (checked) {
-                nextKeys.add(forward.id.toString());
-              } else {
-                nextKeys.delete(forward.id.toString());
-              }
-              setSelectedForwardKeys(nextKeys);
-            }}
-          />
-        </td>
-        
-        {/* Name */}
-        <td className="px-4 py-3 align-middle">
-          <div className="flex flex-col">
-            <div className="flex items-center gap-2">
-              <button
-                ref={setActivatorNodeRef}
-                {...attributes}
-                {...listeners}
-                type="button"
-                className="inline-flex items-center justify-center w-6 h-6 rounded border border-gray-200 text-gray-400 hover:text-gray-600 hover:border-gray-300 dark:border-gray-700 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:border-gray-600 cursor-grab active:cursor-grabbing"
-                title="拖拽排序"
-              >
-                <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-                  <circle cx="5" cy="4" r="1.2" />
-                  <circle cx="11" cy="4" r="1.2" />
-                  <circle cx="5" cy="8" r="1.2" />
-                  <circle cx="11" cy="8" r="1.2" />
-                  <circle cx="5" cy="12" r="1.2" />
-                  <circle cx="11" cy="12" r="1.2" />
-                </svg>
-              </button>
-              <span className="font-medium text-sm text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                {forward.name}
-                <span className="text-xs text-gray-400 font-normal">(#{forward.id})</span>
-              </span>
-            </div>
-          </div>
-        </td>
-
-        {/* Ingress */}
-        <td className="px-4 py-3 align-middle">
-           <div className="flex flex-col gap-1">
-             <div className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-               <span className="bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400 px-1.5 py-0.5 rounded text-xs border border-orange-200 dark:border-orange-900/50">入口</span>
-                {primaryName ? (
-                  <>
-                    <span className="font-medium text-gray-900 dark:text-gray-100" title={inNames.join(', ')}>
-                      {primaryName}
-                    </span>
-                    {(hasMultipleNames || hasMultiple) && (
-                      <span
-                        className="bg-orange-50 text-orange-500 dark:bg-orange-900/20 dark:text-orange-400 px-1 rounded text-[10px] border border-orange-100 dark:border-orange-900/50 cursor-pointer"
-                        onClick={() => showAddressModal(forward.inIp, forward.inPort, forward.name, forward.inNodeName)}
-                      >
-                        +{(hasMultipleNames ? inNames.length : inIps.length) - 1}
-                      </span>
-                    )}
-                  </>
-                ) : (
-                 <>
-                   <span>{inAddrDisplay}</span>
-                   {hasMultiple && (
-                     <span
-                       className="bg-red-50 text-red-500 dark:bg-red-900/20 dark:text-red-400 px-1 rounded text-[10px] border border-red-100 dark:border-red-900/50 cursor-pointer"
-                        onClick={() => showAddressModal(forward.inIp, forward.inPort, forward.name, forward.inNodeName)}
-                     >
-                       +{inIps.length - 1}
-                     </span>
-                   )}
-                 </>
-               )}
-             </div>
-              {primaryName && (
-                <div className="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
-                  <span>{inAddrDisplay}</span>
-                </div>
-              )}
-           </div>
-        </td>
-
-        {/* Egress */}
-        <td className="px-4 py-3 align-middle">
-           <div className="flex flex-col gap-1">
-             <div className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                <span className="bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400 px-1.5 py-0.5 rounded text-xs border border-green-200 dark:border-green-900/50">目标</span>
-                <button
-                  type="button"
-                  className="truncate max-w-[200px] text-left hover:text-blue-600 dark:hover:text-blue-400 cursor-copy"
-                  title="点击复制目标地址"
-                  onClick={() => showAddressModal(forward.remoteAddr, null, "目标地址")}
-                >
-                   {forward.remoteAddr}
-                </button>
-             </div>
-             <div className="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
-                <span className="bg-green-50 dark:bg-green-900/10 text-green-600 dark:text-green-400 px-1 rounded text-[10px]">倍率 1.0</span>
-                <span className="truncate max-w-[150px]">{forward.tunnelName}</span>
-             </div>
-           </div>
-        </td>
-
-        {/* Traffic */}
-        <td className="px-4 py-3 align-middle">
-          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-            {formatFlow((forward.inFlow || 0) + (forward.outFlow || 0))}
-          </span>
-        </td>
-
-        {/* Status */}
-        <td className="px-4 py-3 align-middle">
-           <span className={`text-sm ${forward.status === 1 ? 'text-green-600 dark:text-green-400' : 'text-gray-500'}`}>
-             {statusDisplay.text}
-           </span>
-        </td>
-
-        {/* Actions */}
-        <td className="px-4 py-3 align-middle text-right w-[180px]">
-          <div className="flex justify-end gap-1">
-            {/* Start/Stop */}
-            <button 
-              className={`w-7 h-7 rounded border bg-white dark:bg-zinc-900 flex items-center justify-center transition-colors ${forward.serviceRunning 
-                ? 'border-gray-200 text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-zinc-800' 
-                : 'border-gray-200 text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-zinc-800'}`}
-              onClick={() => handleServiceToggle(forward)}
-              title={forward.serviceRunning ? "暂停" : "启动"}
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                {forward.serviceRunning ? (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                ) : (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3L19 12L5 21V3Z" />
-                )}
-              </svg>
-            </button>
-
-            {/* Diagnose */}
-            <button 
-              className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 dark:border-gray-700 dark:bg-zinc-900 dark:text-gray-300 dark:hover:bg-zinc-800 flex items-center justify-center transition-colors" 
-              onClick={() => handleDiagnose(forward)} 
-              title="诊断"
-            >
-              <ActivityIcon className="w-3.5 h-3.5" />
-            </button>
-
-             {/* Edit */}
-             <button 
-               className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 dark:border-gray-700 dark:bg-zinc-900 dark:text-gray-300 dark:hover:bg-zinc-800 flex items-center justify-center transition-colors" 
-               onClick={() => handleEdit(forward)} 
-               title="编辑"
-              >
-               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-               </svg>
-            </button>
-            
-            {/* Delete */}
-            <button 
-              className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-red-50 text-gray-600 hover:text-red-500 dark:border-gray-700 dark:bg-zinc-900 dark:text-gray-300 dark:hover:bg-red-900/20 dark:hover:text-red-400 flex items-center justify-center transition-colors" 
-              onClick={() => handleDelete(forward)} 
-              title="删除"
-            >
-               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-               </svg>
-            </button>
-          </div>
-        </td>
-      </tr>
-    );
-  };
+  // 使用 useCallback 包装回调函数，避免每次渲染时创建新函数
+  const handleSelectionChange = useCallback((id: string, checked: boolean) => {
+    setSelectedForwardKeys(prev => {
+      const nextKeys = new Set(prev);
+      if (checked) {
+        nextKeys.add(id);
+      } else {
+        nextKeys.delete(id);
+      }
+      return nextKeys;
+    });
+  }, []);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -1533,7 +1558,17 @@ export default function ForwardPage() {
                   </thead>
                   <tbody className="divide-y divide-gray-100 dark:divide-zinc-800">
                       {paginatedForwards.map((forward) => (
-                        <SortableForwardRow key={forward.id} forward={forward} />
+                        <SortableForwardRow 
+                          key={forward.id} 
+                          forward={forward}
+                          isSelected={selectedForwardKeys.has(forward.id.toString())}
+                          onSelectionChange={handleSelectionChange}
+                          onShowAddressModal={showAddressModal}
+                          onServiceToggle={handleServiceToggle}
+                          onDiagnose={handleDiagnose}
+                          onEdit={handleEdit}
+                          onDelete={handleDelete}
+                        />
                       ))}
                   </tbody>
                </table>
