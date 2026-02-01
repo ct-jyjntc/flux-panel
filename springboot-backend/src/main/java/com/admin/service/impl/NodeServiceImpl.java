@@ -752,6 +752,23 @@ public class NodeServiceImpl extends ServiceImpl<NodeMapper, Node> implements No
         return buildInstallCommand(node, region);
     }
 
+    @Override
+    public R forceSyncConfig(Long id) {
+        Node node = this.getById(id);
+        if (node == null) {
+            return R.err(ERROR_NODE_NOT_FOUND);
+        }
+        UserInfo currentUser = getCurrentUserInfo();
+        if (currentUser.getRoleId() != ADMIN_ROLE_ID) {
+            return R.err("无权限操作该节点");
+        }
+        GostDto result = WebSocketServer.send_msg(id, new JSONObject(), "ReportConfig");
+        if (result == null || !"OK".equals(result.getMsg())) {
+            return R.err(result != null ? result.getMsg() : "节点无响应");
+        }
+        return R.ok("已触发节点配置同步");
+    }
+
     /**
      * 构建节点安装命令
      * 

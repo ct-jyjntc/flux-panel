@@ -1002,15 +1002,15 @@ export default function TunnelPage() {
           scrollBehavior="outside"
           classNames={{
             base: "bg-white dark:bg-[#18181b] border border-gray-100 dark:border-gray-800 shadow-xl rounded-xl",
-            header: "border-b border-gray-100 dark:border-gray-800 pb-4",
+            header: "border-b border-gray-100 dark:border-gray-800 pb-3",
             body: "py-0",
-            footer: "border-t border-gray-100 dark:border-gray-800 pt-4"
+            footer: "border-t border-gray-100 dark:border-gray-800 pt-3"
           }}
         >
           <ModalContent>
             {(onClose) => (
               <>
-                <ModalHeader className="flex items-center justify-between gap-3 bg-gray-50/50 dark:bg-zinc-800/50 p-6">
+                <ModalHeader className="flex items-center justify-between gap-3 bg-gray-50/50 dark:bg-zinc-800/50 p-4">
                   <div className="min-w-0">
                     <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">隧道诊断结果</h2>
                     {currentDiagnosisTunnel && (
@@ -1032,20 +1032,20 @@ export default function TunnelPage() {
                     </div>
                   ) : diagnosisResult ? (
                     <div className="bg-white dark:bg-zinc-900">
-                      <div className="grid grid-cols-[1fr_80px_80px_80px_80px] bg-gray-50 dark:bg-zinc-800/50 text-xs font-semibold text-gray-500 border-b border-gray-100 dark:border-gray-800 px-6 py-2">
+                      <div className="grid grid-cols-[1fr_80px_80px_80px_80px] bg-[rgb(var(--md-surface-container-high))] text-xs font-semibold text-[rgb(var(--md-on-surface-variant))] border-b border-[rgb(var(--md-outline-variant))] px-4 py-2">
                         <div>路径</div>
                         <div className="text-center">状态</div>
                         <div className="text-center">延迟(ms)</div>
                         <div className="text-center">丢包率</div>
                         <div className="text-center">质量</div>
                       </div>
-                      <div className="divide-y divide-gray-100 dark:divide-zinc-800">
+                      <div className="divide-y divide-[rgb(var(--md-outline-variant))]">
                         {diagnosisResult.results.map((result, index) => {
                           const quality = getQualityDisplay(result.averageTime, result.packetLoss);
                           const targetAddress = `${result.targetIp}${result.targetPort ? ':' + result.targetPort : ''}`;
 
                           return (
-                            <div key={index} className="grid grid-cols-[1fr_80px_80px_80px_80px] px-6 py-4 items-center hover:bg-gray-50 dark:hover:bg-zinc-800/30 transition-colors">
+                            <div key={index} className="grid grid-cols-[1fr_80px_80px_80px_80px] px-4 py-3 items-center hover:bg-[rgb(var(--md-surface-container-high))] transition-colors">
                               <div className="min-w-0 pr-4">
                                 <div className="flex items-center gap-2 mb-1">
                                     <span className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{result.nodeName}</span>
@@ -1099,7 +1099,7 @@ export default function TunnelPage() {
                     </div>
                   )}
                 </ModalBody>
-                <ModalFooter className="p-6">
+                <ModalFooter className="p-4">
                   <Button size="sm" variant="light" onPress={onClose}>
                     关闭
                   </Button>

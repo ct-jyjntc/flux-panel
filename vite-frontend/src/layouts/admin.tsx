@@ -55,14 +55,14 @@ export default function AdminLayout({
     }
   });
   const [sidebarWidth, setSidebarWidth] = useState(() => {
-    if (typeof window === 'undefined') return 288;
+    if (typeof window === 'undefined') return 240;
     try {
       const saved = localStorage.getItem('sidebar-width');
-      const value = saved ? parseInt(saved, 10) : 288;
-      if (Number.isNaN(value)) return 288;
+      const value = saved ? parseInt(saved, 10) : 240;
+      if (Number.isNaN(value)) return 240;
       return Math.min(Math.max(value, 240), 420);
     } catch {
-      return 288;
+      return 240;
     }
   });
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);

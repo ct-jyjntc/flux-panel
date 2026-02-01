@@ -188,6 +188,14 @@ func sendConfigReport(ctx context.Context) (bool, error) {
 	}
 }
 
+// ReportConfigNow 立即上报配置（用于手动触发）
+func ReportConfigNow() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	_, err := sendConfigReport(ctx)
+	return err
+}
+
 // StartConfigReporter 启动配置定时上报器（每10分钟上报一次）
 func StartConfigReporter(ctx context.Context) {
 	if configReportURL == "" {

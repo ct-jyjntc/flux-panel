@@ -386,9 +386,12 @@ export default function ConfigPage() {
             placeholder="请选择配置项"
             variant="bordered"
             size="sm"
+            className="w-full max-w-full min-w-0"
             classNames={{
-                trigger: `shadow-none ${isChanged ? "!border-orange-400" : ""}`,
-                value: "text-sm"
+                trigger: `shadow-none w-full max-w-full min-w-0 overflow-hidden ${isChanged ? "!border-orange-400" : ""}`,
+                value: "text-sm truncate w-full",
+                innerWrapper: "flex-nowrap w-full overflow-hidden",
+                mainWrapper: "w-full max-w-full min-w-0"
             }}
           >
             {item.options?.map((option) => (
@@ -419,9 +422,12 @@ export default function ConfigPage() {
             placeholder="请选择可见字段"
             variant="bordered"
             size="sm"
+            className="w-full max-w-full min-w-0"
             classNames={{
-              trigger: `shadow-none ${isChanged ? "!border-orange-400" : ""}`,
-              value: "text-sm"
+              trigger: `shadow-none w-full max-w-full min-w-0 overflow-hidden ${isChanged ? "!border-orange-400" : ""}`,
+              value: "text-sm truncate w-full",
+              innerWrapper: "flex-nowrap w-full overflow-hidden",
+              mainWrapper: "w-full max-w-full min-w-0"
             }}
           >
             {item.options?.map((option) => (
@@ -492,7 +498,7 @@ export default function ConfigPage() {
                                </p>
                              )}
                           </div>
-                          <div className="md:w-2/3">
+                          <div className="md:w-2/3 min-w-0">
                              {renderConfigItem(item)}
                           </div>
                        </div>

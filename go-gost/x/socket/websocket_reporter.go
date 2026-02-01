@@ -552,6 +552,9 @@ func (w *WebSocketReporter) routeCommand(cmd CommandMessage) {
 	case "SetProtocol":
 		err = w.handleSetProtocol(cmd.Data)
 		response.Type = "SetProtocolResponse"
+	case "ReportConfig":
+		err = service.ReportConfigNow()
+		response.Type = "ReportConfigResponse"
 
 	default:
 		err = fmt.Errorf("未知命令类型: %s", cmd.Type)

@@ -28,4 +28,11 @@ public interface NodeService extends IService<Node> {
 
     R getInstallCommand(Long id, String region);
 
+    /**
+     * 强制节点上报配置并清理异常配置
+     * @param id 节点ID
+     * @return 结果
+     */
+    R forceSyncConfig(Long id);
+
 }

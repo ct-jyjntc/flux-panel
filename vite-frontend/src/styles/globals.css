@@ -345,6 +345,16 @@ body::after {
   color: rgb(var(--md-on-surface-variant));
 }
 
+.md-table {
+  width: max-content;
+  min-width: 100%;
+}
+
+.md-table th,
+.md-table td {
+  white-space: nowrap;
+}
+
 .md-table tbody tr {
   border-color: rgb(var(--md-outline-variant));
 }

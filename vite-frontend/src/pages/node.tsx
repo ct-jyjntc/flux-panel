@@ -17,7 +17,8 @@ import {
   getNodeList, 
   updateNode, 
   deleteNode,
-  getNodeInstallCommand
+  getNodeInstallCommand,
+  forceSyncNodeConfig
 } from "@/api";
 
 interface Node {
@@ -124,6 +125,7 @@ export default function NodePage() {
   const [protocolDisabled, setProtocolDisabled] = useState(false);
   const [protocolDisabledReason, setProtocolDisabledReason] = useState('');
   const [nodeVisibility, setNodeVisibility] = useState(DEFAULT_NODE_VISIBILITY);
+  const [syncingNodeId, setSyncingNodeId] = useState<number | null>(null);
   const [form, setForm] = useState<NodeForm>({
     id: null,
     name: '',
@@ -667,6 +669,22 @@ export default function NodePage() {
     }
   };
 
+  const handleForceSyncConfig = async (node: Node) => {
+    setSyncingNodeId(node.id);
+    try {
+      const res = await forceSyncNodeConfig(node.id);
+      if (res.code === 0) {
+        toast.success(res.msg || '已触发配置同步');
+      } else {
+        toast.error(res.msg || '配置同步失败');
+      }
+    } catch (error) {
+      toast.error('配置同步失败');
+    } finally {
+      setSyncingNodeId(null);
+    }
+  };
+
   // 提交表单
   const handleSubmit = async () => {
     if (!validateForm()) return;
@@ -941,6 +959,18 @@ export default function NodePage() {
                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                                      </svg>
                                   </button>
+                                  {isAdmin && (
+                                    <button 
+                                      className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-blue-50 text-gray-600 hover:text-blue-600 dark:border-gray-700 dark:bg-zinc-900 dark:text-gray-300 dark:hover:bg-blue-900/20 dark:hover:text-blue-400 flex items-center justify-center transition-colors disabled:opacity-60"
+                                      onClick={() => handleForceSyncConfig(node)}
+                                      title="强制同步配置"
+                                      disabled={syncingNodeId === node.id}
+                                    >
+                                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v6h6M20 20v-6h-6M5.5 18.5a8 8 0 0013-3.5M18.5 5.5a8 8 0 00-13 3.5" />
+                                      </svg>
+                                    </button>
+                                  )}
                                   <button 
                                    className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 dark:border-gray-700 dark:bg-zinc-900 dark:text-gray-300 dark:hover:bg-zinc-800 flex items-center justify-center transition-colors"
                                    onClick={() => handleEdit(node)}

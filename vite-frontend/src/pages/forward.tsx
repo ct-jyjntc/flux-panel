@@ -122,6 +122,8 @@ export default function ForwardPage() {
   const [tunnels, setTunnels] = useState<Tunnel[]>([]);
   const [filterTunnelId, setFilterTunnelId] = useState<string>("all");
   const [searchKeyword, setSearchKeyword] = useState('');
+  const [pageSize, setPageSize] = useState<number>(20);
+  const [currentPage, setCurrentPage] = useState<number>(1);
   
   // 拖拽排序相关状态
   const [forwardOrder, setForwardOrder] = useState<number[]>([]);
@@ -182,6 +184,10 @@ export default function ForwardPage() {
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterTunnelId, searchKeyword, pageSize]);
 
   // 加载所有数据
   const loadData = async (lod = true) => {
@@ -959,9 +965,22 @@ export default function ForwardPage() {
     return sortedForwards;
   };
 
+  const sortedForwards = getSortedForwards();
+  const totalItems = sortedForwards.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const pageStartIndex = (safeCurrentPage - 1) * pageSize;
+  const paginatedForwards = sortedForwards.slice(pageStartIndex, pageStartIndex + pageSize);
+
+  useEffect(() => {
+    if (currentPage !== safeCurrentPage) {
+      setCurrentPage(safeCurrentPage);
+    }
+  }, [currentPage, safeCurrentPage]);
+
   const selectedForwardIds = Array.from(selectedForwardKeys).map(key => Number(key)).filter(id => !Number.isNaN(id));
   const selectedForwardCount = selectedForwardIds.length;
-  const visibleForwardIds = getSortedForwards().map(forward => forward.id);
+  const visibleForwardIds = paginatedForwards.map(forward => forward.id);
   const allVisibleSelected = visibleForwardIds.length > 0 &&
     visibleForwardIds.every(id => selectedForwardKeys.has(id.toString()));
   const currentUserId = JwtUtil.getUserIdFromToken();
@@ -1258,7 +1277,7 @@ export default function ForwardPage() {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
-    const visibleIds = getSortedForwards().map((forward) => forward.id);
+    const visibleIds = paginatedForwards.map((forward) => forward.id);
     const oldIndex = visibleIds.indexOf(Number(active.id));
     const newIndex = visibleIds.indexOf(Number(over.id));
     if (oldIndex === -1 || newIndex === -1) return;
@@ -1421,13 +1440,53 @@ export default function ForwardPage() {
             
              <div className="flex items-center gap-3">
                  <div className="text-xs text-gray-400">
-                   共 {forwards.length} 条
+                   共 {totalItems} 条
                  </div>
-                 {/* Pagination Placeholders */}
-                 <div className="flex gap-1">
-                    <button className="w-6 h-6 flex items-center justify-center rounded border border-gray-200 text-xs hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-zinc-800">&lt;</button>
-                    <button className="w-6 h-6 flex items-center justify-center rounded bg-blue-50 text-blue-600 text-xs font-bold border border-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-900/50">1</button>
-                    <button className="w-6 h-6 flex items-center justify-center rounded border border-gray-200 text-xs hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-zinc-800">&gt;</button>
+                 <Select
+                   size="sm"
+                   className="w-[110px]"
+                   selectedKeys={[pageSize.toString()]}
+                   onSelectionChange={(keys) => {
+                     const selectedKey = Array.from(keys)[0] as string;
+                     if (selectedKey) {
+                       const nextSize = Number(selectedKey);
+                       if (!Number.isNaN(nextSize)) {
+                         setPageSize(nextSize);
+                       }
+                     }
+                   }}
+                   classNames={{
+                     trigger: "bg-white dark:bg-zinc-800 border-none shadow-none",
+                     value: "text-sm"
+                   }}
+                 >
+                   {[10, 20, 50, 100].map((size) => (
+                     <SelectItem key={size.toString()} textValue={size.toString()}>
+                       {size} / 页
+                     </SelectItem>
+                   ))}
+                 </Select>
+                 <div className="flex gap-1 items-center">
+                    <button
+                      className="w-6 h-6 flex items-center justify-center rounded border border-gray-200 text-xs hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed dark:border-gray-700 dark:text-gray-300 dark:hover:bg-zinc-800"
+                      onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                      disabled={safeCurrentPage <= 1}
+                    >
+                      &lt;
+                    </button>
+                    <button className="w-8 h-6 flex items-center justify-center rounded bg-blue-50 text-blue-600 text-xs font-bold border border-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-900/50">
+                      {safeCurrentPage}
+                    </button>
+                    <button
+                      className="w-6 h-6 flex items-center justify-center rounded border border-gray-200 text-xs hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed dark:border-gray-700 dark:text-gray-300 dark:hover:bg-zinc-800"
+                      onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                      disabled={safeCurrentPage >= totalPages}
+                    >
+                      &gt;
+                    </button>
+                    <span className="text-xs text-gray-400 ml-1">
+                      / {totalPages}
+                    </span>
                  </div>
              </div>
          </div>
@@ -1435,7 +1494,7 @@ export default function ForwardPage() {
 
       {/* 2. Content Table */}
       <div className="md-card overflow-hidden min-h-[400px]">
-          {getSortedForwards().length > 0 ? (
+          {totalItems > 0 ? (
             <div className="overflow-x-auto">
                <DndContext
               sensors={sensors}
@@ -1443,7 +1502,7 @@ export default function ForwardPage() {
               onDragEnd={handleDragEnd}
             >
               <SortableContext
-                items={getSortedForwards().map((forward) => forward.id)}
+                items={paginatedForwards.map((forward) => forward.id)}
                 strategy={verticalListSortingStrategy}
               >
                <table className="w-full text-left text-sm md-table">
@@ -1473,7 +1532,7 @@ export default function ForwardPage() {
                      </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 dark:divide-zinc-800">
-                      {getSortedForwards().map((forward) => (
+                      {paginatedForwards.map((forward) => (
                         <SortableForwardRow key={forward.id} forward={forward} />
                       ))}
                   </tbody>
@@ -2164,15 +2223,15 @@ example.com:443`}
           placement="center"
           classNames={{
             base: "bg-white dark:bg-[#18181b] border border-gray-100 dark:border-gray-800 shadow-xl rounded-xl",
-            header: "border-b border-gray-100 dark:border-gray-800 pb-4",
+            header: "border-b border-gray-100 dark:border-gray-800 pb-3",
             body: "py-0",
-            footer: "border-t border-gray-100 dark:border-gray-800 pt-4"
+            footer: "border-t border-gray-100 dark:border-gray-800 pt-3"
           }}
         >
           <ModalContent>
             {(onClose) => (
               <>
-                <ModalHeader className="flex items-center justify-between gap-3 bg-gray-50/50 dark:bg-zinc-800/50 p-6">
+                <ModalHeader className="flex items-center justify-between gap-3 bg-gray-50/50 dark:bg-zinc-800/50 p-4">
                   <div className="min-w-0">
                     <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">转发诊断结果</h2>
                     {currentDiagnosisForward && (
@@ -2194,20 +2253,20 @@ example.com:443`}
                     </div>
                   ) : diagnosisResult ? (
                     <div className="bg-white dark:bg-zinc-900">
-                      <div className="grid grid-cols-[1fr_80px_80px_80px_80px] bg-gray-50 dark:bg-zinc-800/50 text-xs font-semibold text-gray-500 border-b border-gray-100 dark:border-gray-800 px-6 py-2">
+                      <div className="grid grid-cols-[1fr_80px_80px_80px_80px] bg-[rgb(var(--md-surface-container-high))] text-xs font-semibold text-[rgb(var(--md-on-surface-variant))] border-b border-[rgb(var(--md-outline-variant))] px-4 py-2">
                         <div>路径</div>
                         <div className="text-center">状态</div>
                         <div className="text-center">延迟(ms)</div>
                         <div className="text-center">丢包率</div>
                         <div className="text-center">质量</div>
                       </div>
-                      <div className="divide-y divide-gray-100 dark:divide-zinc-800">
+                      <div className="divide-y divide-[rgb(var(--md-outline-variant))]">
                         {diagnosisResult.results.map((result, index) => {
                           const quality = getQualityDisplay(result.averageTime, result.packetLoss);
                           const targetAddress = `${result.targetIp}${result.targetPort ? ':' + result.targetPort : ''}`;
 
                           return (
-                            <div key={index} className="grid grid-cols-[1fr_80px_80px_80px_80px] px-6 py-4 items-center hover:bg-gray-50 dark:hover:bg-zinc-800/30 transition-colors">
+                            <div key={index} className="grid grid-cols-[1fr_80px_80px_80px_80px] px-4 py-3 items-center hover:bg-[rgb(var(--md-surface-container-high))] transition-colors">
                               <div className="min-w-0 pr-4">
                                 <div className="flex items-center gap-2 mb-1">
                                     <span className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{result.nodeName}</span>
@@ -2261,7 +2320,7 @@ example.com:443`}
                     </div>
                   )}
                 </ModalBody>
-                <ModalFooter className="p-6">
+                <ModalFooter className="p-4">
                   <Button size="sm" variant="light" onPress={onClose}>
                     关闭
                   </Button>

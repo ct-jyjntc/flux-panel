@@ -80,4 +80,12 @@ public class NodeController extends BaseController {
         return userNodeService.removeUserNode(id);
     }
 
+    @LogAnnotation
+    @RequireRole
+    @PostMapping("/force-sync-config")
+    public R forceSyncConfig(@RequestBody Map<String, Object> params) {
+        Long id = Long.valueOf(params.get("id").toString());
+        return nodeService.forceSyncConfig(id);
+    }
+
 }
