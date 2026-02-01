@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import toast from 'react-hot-toast';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 
 import { getUserPackageInfo } from "@/api";
@@ -426,16 +426,16 @@ export default function DashboardPage() {
             <div className="space-y-4">
               <div className="h-64 lg:h-80 w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={processFlowChartData()}>
+                  <BarChart data={processFlowChartData()}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" className="dark:stroke-zinc-800" />
-                    <XAxis 
-                      dataKey="time" 
+                    <XAxis
+                      dataKey="time"
                       tick={{ fontSize: 12, fill: '#6B7280' }}
                       tickLine={false}
                       axisLine={false}
                       dy={10}
                     />
-                    <YAxis 
+                    <YAxis
                       tick={{ fontSize: 12, fill: '#6B7280' }}
                       tickLine={false}
                       axisLine={false}
@@ -448,14 +448,14 @@ export default function DashboardPage() {
                         return `${(value / (1024 * 1024 * 1024)).toFixed(1)}G`;
                       }}
                     />
-                    <Tooltip 
+                    <Tooltip
                       content={({ active, payload, label }) => {
                         if (active && payload && payload.length) {
                           return (
                             <div className="bg-white dark:bg-zinc-800 border border-gray-100 dark:border-zinc-700/50 rounded-xl shadow-lg p-3">
                               <p className="font-medium text-gray-900 dark:text-white mb-1">{`时间: ${label}`}</p>
                               <p className="text-primary text-sm">
-                                {`流量: ${formatFlow(payload[0]?.value as number || 0)}`}
+                                {`流量: ${formatFlow((payload[0]?.value as number) || 0)}`}
                               </p>
                             </div>
                           );
@@ -463,15 +463,8 @@ export default function DashboardPage() {
                         return null;
                       }}
                     />
-                    <Line
-                      type="monotone"
-                      dataKey="flow"
-                      stroke="#8b5cf6"
-                      strokeWidth={3}
-                      dot={false}
-                      activeDot={{ r: 4, stroke: '#8b5cf6', strokeWidth: 2, fill: '#fff' }}
-                    />
-                  </LineChart>
+                    <Bar dataKey="flow" fill="#3b82f6" radius={[6, 6, 0, 0]} maxBarSize={24} />
+                  </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>
