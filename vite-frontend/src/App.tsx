@@ -73,7 +73,7 @@ const ProtectedRoute = ({ children, useSimpleLayout = false, skipLayout = false 
 
   if (!authenticated) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-white dark:bg-black">
+      <div className="flex items-center justify-center min-h-screen md-app">
         <div className="text-lg text-gray-700 dark:text-gray-200"></div>
       </div>
     );
@@ -112,7 +112,7 @@ const LoginRoute = () => {
   
   if (authenticated) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-black">
+      <div className="flex items-center justify-center min-h-screen md-app">
         <div className="text-lg text-gray-700 dark:text-gray-200"></div>
       </div>
     );

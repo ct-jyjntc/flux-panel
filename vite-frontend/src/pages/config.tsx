@@ -70,6 +70,28 @@ const NODE_MONITOR_LEGACY_KEYS: Record<string, string> = {
   traffic: 'node_monitor_show_traffic'
 };
 
+const SIDEBAR_VISIBLE_KEY = 'sidebar_visible_items';
+const SIDEBAR_ITEMS = [
+  { key: '/dashboard', label: '主页' },
+  { key: '/forward', label: '转发规则' },
+  { key: '/tunnel', label: '隧道管理' },
+  { key: '/node', label: '节点状态' },
+  { key: '/store', label: '商城' },
+  { key: '/orders', label: '我的订单' },
+  { key: '/looking-glass', label: 'LookingGlass' }
+];
+const SIDEBAR_DEFAULT_VALUE = SIDEBAR_ITEMS.map((item) => item.key).join(',');
+const SIDEBAR_DEFAULTS: Record<string, string> = {
+  [SIDEBAR_VISIBLE_KEY]: SIDEBAR_DEFAULT_VALUE
+};
+
+const resolveSidebarVisibleItems = (configMap: Record<string, string>): string => {
+  if (Object.prototype.hasOwnProperty.call(configMap, SIDEBAR_VISIBLE_KEY)) {
+    return configMap[SIDEBAR_VISIBLE_KEY] ?? '';
+  }
+  return SIDEBAR_DEFAULT_VALUE;
+};
+
 const resolveNodeMonitorVisibleFields = (configMap: Record<string, string>): string => {
   if (Object.prototype.hasOwnProperty.call(configMap, NODE_MONITOR_VISIBLE_KEY)) {
     return configMap[NODE_MONITOR_VISIBLE_KEY] ?? '';
@@ -135,6 +157,16 @@ const CONFIG_ITEMS: ConfigItem[] = [
       label: field.label,
       value: field.key
     }))
+  },
+  {
+    key: SIDEBAR_VISIBLE_KEY,
+    label: '侧边栏 - 可见菜单',
+    description: '选择普通用户在侧边栏可见的菜单项目',
+    type: 'multi-select',
+    options: SIDEBAR_ITEMS.map((item) => ({
+      label: item.label,
+      value: item.key
+    }))
   }
 ];
 
@@ -147,11 +179,12 @@ const getInitialConfigs = (): Record<string, string> => {
     'ip_cn',
     'ip_oversea',
     'ip',
+    SIDEBAR_VISIBLE_KEY,
     NODE_MONITOR_VISIBLE_KEY,
     ...Object.values(NODE_MONITOR_LEGACY_KEYS)
   ];
   const cachedConfigs: Record<string, string> = {};
-  const initialConfigs: Record<string, string> = { ...NODE_MONITOR_DEFAULTS };
+  const initialConfigs: Record<string, string> = { ...NODE_MONITOR_DEFAULTS, ...SIDEBAR_DEFAULTS };
   
   try {
     configKeys.forEach(key => {
@@ -164,10 +197,12 @@ const getInitialConfigs = (): Record<string, string> => {
   }
 
   const resolvedVisibleFields = resolveNodeMonitorVisibleFields(cachedConfigs);
+  const resolvedSidebarItems = resolveSidebarVisibleItems(cachedConfigs);
   return {
     ...initialConfigs,
     ...cachedConfigs,
-    [NODE_MONITOR_VISIBLE_KEY]: resolvedVisibleFields
+    [NODE_MONITOR_VISIBLE_KEY]: resolvedVisibleFields,
+    [SIDEBAR_VISIBLE_KEY]: resolvedSidebarItems
   };
 };
 
@@ -202,10 +237,13 @@ export default function ConfigPage() {
     try {
       const configData = await getCachedConfigs();
       const resolvedVisibleFields = resolveNodeMonitorVisibleFields(configData);
+      const resolvedSidebarItems = resolveSidebarVisibleItems(configData);
       const mergedConfigData = {
         ...NODE_MONITOR_DEFAULTS,
+        ...SIDEBAR_DEFAULTS,
         ...configData,
-        [NODE_MONITOR_VISIBLE_KEY]: resolvedVisibleFields
+        [NODE_MONITOR_VISIBLE_KEY]: resolvedVisibleFields,
+        [SIDEBAR_VISIBLE_KEY]: resolvedSidebarItems
       };
       
       // 只有在数据有变化时才更新
@@ -312,7 +350,7 @@ export default function ConfigPage() {
             variant="bordered"
             size="sm"
             classNames={{
-                inputWrapper: `bg-white dark:bg-zinc-900 border-gray-300 dark:border-gray-700 shadow-none hover:border-gray-400 focus-within:!border-blue-500 rounded-lg ${isChanged ? "!border-orange-400" : ""}`,
+                inputWrapper: `shadow-none ${isChanged ? "!border-orange-400" : ""}`,
                 input: "text-sm",
             }}
           />
@@ -349,7 +387,7 @@ export default function ConfigPage() {
             variant="bordered"
             size="sm"
             classNames={{
-                trigger: `bg-white dark:bg-zinc-900 border-gray-300 dark:border-gray-700 shadow-none hover:border-gray-400 focus-within:!border-blue-500 rounded-lg ${isChanged ? "!border-orange-400" : ""}`,
+                trigger: `shadow-none ${isChanged ? "!border-orange-400" : ""}`,
                 value: "text-sm"
             }}
           >
@@ -382,7 +420,7 @@ export default function ConfigPage() {
             variant="bordered"
             size="sm"
             classNames={{
-              trigger: `bg-white dark:bg-zinc-900 border-gray-300 dark:border-gray-700 shadow-none hover:border-gray-400 focus-within:!border-blue-500 rounded-lg ${isChanged ? "!border-orange-400" : ""}`,
+              trigger: `shadow-none ${isChanged ? "!border-orange-400" : ""}`,
               value: "text-sm"
             }}
           >
@@ -401,9 +439,9 @@ export default function ConfigPage() {
   };
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 md-enter">
         {/* 顶部工具栏 */}
-        <div className="bg-white dark:bg-zinc-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+        <div className="md-card p-4">
              <div className="flex items-center justify-between">
                  <div className="flex flex-col">
                     <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">系统配置</h2>
@@ -425,7 +463,7 @@ export default function ConfigPage() {
         </div>
 
         {/* 配置表单 */}
-        <div className="bg-white dark:bg-zinc-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6 min-h-[400px]">
+        <div className="md-card p-6 min-h-[400px]">
            {loading ? (
              <div className="flex items-center justify-center h-64">
                <div className="flex flex-col items-center gap-3">

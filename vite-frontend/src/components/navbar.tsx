@@ -64,16 +64,21 @@ export const Navbar = () => {
 
   return (
     <>
-      <HeroUINavbar maxWidth="xl" position="sticky" height="60px" className="shrink-0">
+      <HeroUINavbar
+        maxWidth="xl"
+        position="sticky"
+        height="64px"
+        className="shrink-0 md-top-app-bar"
+      >
         <NavbarContent className="basis-1/5 sm:basis-full" justify="start">
           <NavbarBrand className="gap-2 max-w-fit">
             <Link
-              className="flex justify-start items-center gap-2 max-w-[200px] sm:max-w-none"
+              className="flex justify-start items-center gap-3 max-w-[200px] sm:max-w-none"
               color="foreground"
               href="/"
             >
-              <Logo size={24} />
-              <p className="font-bold text-inherit truncate">{appName}</p>
+              <Logo size={22} />
+              <p className="font-semibold tracking-tight text-inherit truncate">{appName}</p>
             </Link>
           </NavbarBrand>
         </NavbarContent>
@@ -82,7 +87,7 @@ export const Navbar = () => {
           {/* WebView设置图标 */}
           {isWebView && (
             <button
-              className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+              className="md-icon-btn h-9 w-9 flex items-center justify-center"
               onClick={() => navigate('/settings')}
               title="面板设置"
             >

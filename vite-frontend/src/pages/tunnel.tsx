@@ -501,9 +501,9 @@ export default function TunnelPage() {
 
   return (
     
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-6 md-enter">
         {/* Toolbar */}
-        <div className="bg-white dark:bg-zinc-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+        <div className="md-card p-4">
              <div className="flex items-center justify-between gap-4">
                  <div className="flex items-center gap-2 w-full max-w-xl">
                       <Input 
@@ -517,7 +517,7 @@ export default function TunnelPage() {
                         className="w-[240px]"
                         isClearable
                         classNames={{
-                           inputWrapper: "bg-gray-50 dark:bg-zinc-800 border-none shadow-none"
+                           inputWrapper: "bg-white dark:bg-zinc-800 border-none shadow-none"
                         }}
                       />
                       <Button size="sm" variant="light" isIconOnly onPress={() => loadData()} title="刷新">
@@ -541,10 +541,10 @@ export default function TunnelPage() {
         </div>
 
         {/* 隧道列表 */}
-        <div className="bg-white dark:bg-zinc-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden min-h-[400px]">
+        <div className="md-card overflow-hidden min-h-[400px]">
           {tunnels.length > 0 ? (
            <div className="overflow-x-auto">
-             <table className="w-full text-left text-sm">
+             <table className="w-full text-left text-sm md-table">
                 <thead className="bg-gray-50 dark:bg-zinc-800/50 text-gray-500 font-medium border-b border-gray-100 dark:border-gray-800">
                     <tr>
                        <th className="px-4 py-3">隧道名称</th>
@@ -572,8 +572,8 @@ export default function TunnelPage() {
                         <td className="px-4 py-3 align-middle">
                           <span className={`px-2 py-0.5 rounded text-xs border ${
                              tunnel.type === 1 
-                               ? 'bg-blue-50 text-blue-600 border-blue-100 dark:bg-blue-900/20 dark:border-blue-900/50' 
-                               : 'bg-purple-50 text-purple-600 border-purple-100 dark:bg-purple-900/20 dark:border-purple-900/50'
+                               ? 'bg-primary/10 text-primary border-primary/20' 
+                               : 'bg-secondary/10 text-secondary border-secondary/20'
                           }`}>
                             {typeDisplay.text}
                           </span>
@@ -909,7 +909,7 @@ export default function TunnelPage() {
                                   variant="bordered"
                                   isReadOnly
                                   classNames={{
-                                     inputWrapper: "bg-gray-50 dark:bg-zinc-800 border-gray-300 dark:border-gray-700 shadow-none",
+                                     inputWrapper: "bg-white dark:bg-zinc-800 border-gray-300 dark:border-gray-700 shadow-none",
                                      input: "text-sm text-gray-500"
                                   }}
                                   description="端口来自出口节点设置"

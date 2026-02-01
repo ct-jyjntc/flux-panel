@@ -90,6 +90,7 @@ export const getCachedConfigs = async (): Promise<Record<string, string>> => {
     'ip',
     'ip_cn',
     'ip_oversea',
+    'sidebar_visible_items',
     'node_monitor_visible_fields',
     'node_monitor_show_name',
     'node_monitor_show_in_ip',

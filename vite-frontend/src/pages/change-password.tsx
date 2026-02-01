@@ -107,23 +107,23 @@ export default function ChangePasswordPage() {
   };
 
   const inputClassNames = {
-    inputWrapper: "bg-white dark:bg-zinc-900 border-gray-300 dark:border-gray-700 shadow-none hover:border-gray-400 focus-within:!border-blue-500 rounded-lg",
+    inputWrapper: "shadow-none",
   };
 
   return (
     <DefaultLayout>
-      <section className="flex flex-col items-center justify-center gap-4 py-8 md:py-10 min-h-[calc(100dvh-200px)]">
+      <section className="flex flex-col items-center justify-center gap-4 py-8 md:py-10 min-h-[calc(100dvh-200px)] md-enter">
         <div className="w-full max-w-lg">
-          <div className="w-full bg-white dark:bg-zinc-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden">
-            <div className="pb-0 pt-6 px-6 flex-col items-center border-b border-gray-100 dark:border-zinc-800">
+          <div className="w-full md-card md-card-elevated overflow-hidden">
+            <div className="pb-0 pt-6 px-6 flex-col items-center border-b border-gray-100/70 dark:border-zinc-800/70">
               <div className="w-12 h-12 bg-warning-100 rounded-full flex items-center justify-center mb-3">
                 <svg className="w-6 h-6 text-warning-600" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                 </svg>
               </div>
               
-              <h1 className={title({ size: "sm" })}>安全提醒</h1>
-              <p className="text-small text-default-500 mt-2 text-center">检测到您使用的是默认账号密码，为了您的账户安全，请立即修改</p>
+              <h1 className={title({ size: "sm", color: "primary" })}>安全提醒</h1>
+              <p className="text-small md-muted mt-2 text-center">检测到您使用的是默认账号密码，为了您的账户安全，请立即修改</p>
             </div>
             
             <div className="px-6 py-6">
@@ -189,7 +189,7 @@ export default function ChangePasswordPage() {
                   onClick={handleSubmit}
                   isLoading={loading}
                   disabled={loading}
-                  className="mt-2"
+                  className="mt-2 shadow-sm"
                 >
                   {loading ? "修改中..." : "立即修改账号密码"}
                 </Button>

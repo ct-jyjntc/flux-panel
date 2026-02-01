@@ -175,9 +175,9 @@ export default function LimitPage() {
   };
 
   return (
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-6 md-enter">
         {/* Toolbar */}
-        <div className="bg-white dark:bg-zinc-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+        <div className="md-card p-4">
              <div className="flex items-center justify-between gap-4">
                  <div className="flex items-center gap-2">
                     {/* Placeholder search */}
@@ -197,7 +197,7 @@ export default function LimitPage() {
         </div>
 
         {/* 规则列表 */}
-        <div className="bg-white dark:bg-zinc-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden min-h-[400px]">
+        <div className="md-card overflow-hidden min-h-[400px]">
           {loading ? (
              <div className="flex items-center justify-center h-64">
                <div className="flex flex-col items-center gap-3">
@@ -207,7 +207,7 @@ export default function LimitPage() {
              </div>
           ) : rules.length > 0 ? (
            <div className="overflow-x-auto">
-             <table className="w-full text-left text-sm">
+             <table className="w-full text-left text-sm md-table">
                 <thead className="bg-gray-50 dark:bg-zinc-800/50 text-gray-500 font-medium border-b border-gray-100 dark:border-gray-800">
                     <tr>
                        <th className="px-6 py-3">规则名称</th>

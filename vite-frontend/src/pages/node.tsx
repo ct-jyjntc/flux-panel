@@ -757,9 +757,9 @@ export default function NodePage() {
 
   return (
     
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-6 md-enter">
         {/* Toolbar */}
-        <div className="bg-white dark:bg-zinc-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+        <div className="md-card p-4">
              <div className="flex items-center justify-between gap-4">
                  <div className="flex items-center gap-2">
                     {/* Placeholder for search if needed later */}
@@ -781,7 +781,7 @@ export default function NodePage() {
         </div>
 
         {/* 节点列表 */}
-        <div className="bg-white dark:bg-zinc-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden min-h-[400px]">
+        <div className="md-card overflow-hidden min-h-[400px]">
           {loading ? (
              <div className="flex items-center justify-center h-64">
                 <div className="flex flex-col items-center gap-3">
@@ -791,7 +791,7 @@ export default function NodePage() {
              </div>
           ) : nodeList.length > 0 ? (
            <div className="overflow-x-auto">
-             <table className="w-full text-left text-sm">
+             <table className="w-full text-left text-sm md-table">
                 <thead className="bg-gray-50 dark:bg-zinc-800/50 text-gray-500 font-medium border-b border-gray-100 dark:border-gray-800">
                     <tr>
                        {(isAdmin || nodeVisibility.name) && <th className="px-4 py-3">节点名称</th>}
@@ -893,7 +893,7 @@ export default function NodePage() {
                              {node.connectionStatus === 'online' && node.systemInfo ? (
                                <div className="flex items-center gap-2">
                                   <div className="w-16 h-1.5 bg-gray-100 dark:bg-zinc-800 rounded-full overflow-hidden">
-                                     <div className="h-full bg-purple-500 rounded-full transition-all duration-500" style={{ width: `${Math.min(node.systemInfo.memoryUsage, 100)}%` }}></div>
+                                     <div className="h-full bg-secondary rounded-full transition-all duration-500" style={{ width: `${Math.min(node.systemInfo.memoryUsage, 100)}%` }}></div>
                                   </div>
                                   <span className="text-xs text-gray-500 w-8">{node.systemInfo.memoryUsage.toFixed(0)}%</span>
                                </div>
@@ -1177,7 +1177,7 @@ export default function NodePage() {
                 {/* 屏蔽协议 (In Advanced Options) */}
                 <div className="border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden">
                    <button 
-                      className="w-full flex items-center justify-between p-3 bg-gray-50 dark:bg-zinc-800 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-zinc-700 transition-colors"
+                      className="w-full flex items-center justify-between p-3 md-surface-container-high text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-[rgb(var(--md-surface-container-highest))] transition-colors"
                       onClick={() => setShowNodeAdvanced(!showNodeAdvanced)}
                    >
                       <span>高级选项</span>
@@ -1186,7 +1186,11 @@ export default function NodePage() {
                       </svg>
                    </button>
                    {showNodeAdvanced && (
-                     <div className="p-4 bg-white dark:bg-zinc-900 border-t border-gray-200 dark:border-gray-800">
+                     <div className="p-4 md-surface-container border-t border-gray-200 dark:border-gray-800">
+                        <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-100 dark:border-blue-800 text-xs text-blue-600 dark:text-blue-400 space-y-1 mb-4">
+                          <p>• 请不要在出口节点执行屏蔽协议，否则可能影响转发；屏蔽协议仅需在入口节点执行。</p>
+                          <p>• 服务器IP是真实的物理IP。入口IP是展示给用户看的。</p>
+                        </div>
                         <div className="flex items-center justify-between mb-4">
                             <div>
                               <div className="text-sm font-bold text-gray-800 dark:text-gray-200">屏蔽协议</div>
@@ -1200,7 +1204,7 @@ export default function NodePage() {
                         </div>
                         
                         <div className={`space-y-3 ${protocolDisabled ? 'opacity-70 pointer-events-none' : ''}`}>
-                          <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-zinc-800/50 border border-gray-200 dark:border-gray-700 rounded-lg">
+                          <div className="flex items-center justify-between p-3 md-surface-container-high border border-gray-200 dark:border-gray-700 rounded-lg">
                             <div className="flex items-center gap-3">
                               <div className="w-8 h-8 rounded-full bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-blue-500">
                                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 10h20"/></svg>
@@ -1218,9 +1222,9 @@ export default function NodePage() {
                             </div>
                           </div>
 
-                          <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-zinc-800/50 border border-gray-200 dark:border-gray-700 rounded-lg">
+                          <div className="flex items-center justify-between p-3 md-surface-container-high border border-gray-200 dark:border-gray-700 rounded-lg">
                             <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-full bg-purple-50 dark:bg-purple-900/20 flex items-center justify-center text-purple-500">
+                              <div className="w-8 h-8 rounded-full bg-secondary/10 flex items-center justify-center text-secondary">
                                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 10V7a6 6 0 1 1 12 0v3"/><rect x="4" y="10" width="16" height="10" rx="2"/></svg>
                               </div>
                               <span className="text-sm font-medium text-gray-700 dark:text-gray-300">TLS</span>
@@ -1236,7 +1240,7 @@ export default function NodePage() {
                             </div>
                           </div>
 
-                          <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-zinc-800/50 border border-gray-200 dark:border-gray-700 rounded-lg">
+                          <div className="flex items-center justify-between p-3 md-surface-container-high border border-gray-200 dark:border-gray-700 rounded-lg">
                             <div className="flex items-center gap-3">
                                <div className="w-8 h-8 rounded-full bg-green-50 dark:bg-green-900/20 flex items-center justify-center text-green-500">
                                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -1255,12 +1259,7 @@ export default function NodePage() {
                           </div>
                         </div>
                      </div>
-                   )}
-                </div>
-
-                <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-100 dark:border-blue-800 text-xs text-blue-600 dark:text-blue-400 space-y-1">
-                  <p>• 请不要在出口节点执行屏蔽协议，否则可能影响转发；屏蔽协议仅需在入口节点执行。</p>
-                  <p>• 服务器IP是真实的物理IP。入口IP是展示给用户看的。</p>
+                    )}
                 </div>
               </div>
             </ModalBody>

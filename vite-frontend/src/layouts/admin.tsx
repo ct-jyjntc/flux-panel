@@ -9,7 +9,7 @@ import { Avatar } from "@heroui/avatar";
 
 import { updatePassword } from '@/api';
 import { safeLogout } from '@/utils/logout';
-import { siteConfig } from '@/config/site';
+import { siteConfig, getCachedConfigs } from '@/config/site';
 import { 
   SunFilledIcon, 
   MoonFilledIcon,
@@ -20,6 +20,7 @@ import {
 import { useTheme } from "@heroui/use-theme";
 
 interface MenuItem {
+  key: string;
   path: string;
   label: string;
   icon: React.ReactNode;
@@ -55,6 +56,25 @@ export default function AdminLayout({
   });
   const [username, setUsername] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
+  const [visibleMenuKeys, setVisibleMenuKeys] = useState<Set<string> | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const cached = localStorage.getItem('vite_config_sidebar_visible_items');
+      if (!cached) return null;
+      const keys = cached.split(',').map((v) => v.trim()).filter(Boolean);
+      return new Set(keys);
+    } catch {
+      return null;
+    }
+  });
+  const [menuVisibilityReady, setMenuVisibilityReady] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      return Boolean(localStorage.getItem('vite_config_sidebar_visible_items'));
+    } catch {
+      return false;
+    }
+  });
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [passwordForm, setPasswordForm] = useState<PasswordForm>({
     newUsername: '',
@@ -66,6 +86,7 @@ export default function AdminLayout({
   // 菜单项配置
   const menuItems: MenuItem[] = [
     {
+      key: '/dashboard',
       path: '/dashboard',
       label: '主页',
       group: 'main',
@@ -76,6 +97,7 @@ export default function AdminLayout({
       )
     },
     {
+      key: '/forward',
       path: '/forward',
       label: '转发规则',
       group: 'features',
@@ -86,6 +108,7 @@ export default function AdminLayout({
       )
     },
     {
+      key: '/tunnel',
       path: '/tunnel',
       label: '隧道管理',
       group: 'features',
@@ -96,6 +119,7 @@ export default function AdminLayout({
       )
     },
     {
+      key: '/store',
       path: '/store',
       label: '商城',
       group: 'features',
@@ -106,6 +130,7 @@ export default function AdminLayout({
       )
     },
     {
+      key: '/orders',
       path: '/orders',
       label: '我的订单',
       group: 'features',
@@ -116,6 +141,7 @@ export default function AdminLayout({
       )
     },
     {
+      key: '/looking-glass',
       path: '/looking-glass',
       label: 'LookingGlass',
       group: 'features',
@@ -126,6 +152,7 @@ export default function AdminLayout({
       )
     },
     {
+      key: '/node',
       path: '/node',
       label: '节点状态',
       group: 'features',
@@ -136,6 +163,7 @@ export default function AdminLayout({
       )
     },
     {
+      key: '/limit',
       path: '/limit',
       label: '限速管理',
       group: 'admin',
@@ -145,6 +173,7 @@ export default function AdminLayout({
       )
     },
     {
+      key: '/user',
       path: '/user',
       label: '用户管理',
       group: 'admin',
@@ -154,6 +183,7 @@ export default function AdminLayout({
       )
     },
     {
+      key: '/config',
       path: '/config',
       label: '网站配置',
       group: 'admin',
@@ -164,7 +194,7 @@ export default function AdminLayout({
     },
   ];
 
-   useEffect(() => {
+  useEffect(() => {
     const handleResize = () => {
       setIsMobile(window.innerWidth < 1024);
       if (window.innerWidth >= 1024) {
@@ -188,6 +218,27 @@ export default function AdminLayout({
     setIsAdmin(adminFlag);
 
     return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
+    const loadVisibleMenu = async () => {
+      try {
+        const configs = await getCachedConfigs();
+        const value = configs.sidebar_visible_items;
+        if (!value) {
+          setVisibleMenuKeys(null);
+          setMenuVisibilityReady(true);
+          return;
+        }
+        const keys = value.split(',').map((v) => v.trim()).filter(Boolean);
+        setVisibleMenuKeys(new Set(keys));
+        setMenuVisibilityReady(true);
+      } catch {
+        setVisibleMenuKeys(null);
+        setMenuVisibilityReady(true);
+      }
+    };
+    loadVisibleMenu();
   }, []);
 
   const handleLogout = () => {
@@ -249,22 +300,26 @@ export default function AdminLayout({
 
   // Mobile Header
   const MobileHeader = () => (
-    <div className="lg:hidden flex items-center justify-between p-4 bg-white dark:bg-zinc-800 border-b border-gray-200 dark:border-gray-700">
-      <div className="flex items-center gap-2">
-         <button onClick={() => setMobileMenuVisible(!mobileMenuVisible)}>
-          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <div className="lg:hidden md-top-app-bar flex items-center justify-between px-4 h-[60px]">
+      <div className="flex items-center gap-3">
+         <button
+          onClick={() => setMobileMenuVisible(!mobileMenuVisible)}
+          className="md-icon-btn h-9 w-9 flex items-center justify-center"
+          aria-label="打开菜单"
+         >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
           </svg>
          </button>
-         <span className="font-bold text-lg">{siteConfig.name}</span>
+         <span className="font-semibold tracking-tight text-sm">{siteConfig.name}</span>
       </div>
       <div className="flex items-center gap-2">
         <Dropdown>
               <DropdownTrigger>
-                <Avatar 
-                  size="sm" 
-                  name={username || "User"} 
-                  className="cursor-pointer bg-blue-500 text-white"
+                <Avatar
+                  size="sm"
+                  name={username || "User"}
+                  className="cursor-pointer bg-primary text-white"
                 />
               </DropdownTrigger>
               <DropdownMenu aria-label="User Actions">
@@ -281,22 +336,22 @@ export default function AdminLayout({
   // Sidebar Component
   const Sidebar = () => (
     <div className={`
-      fixed left-0 top-0 bottom-0 bg-white dark:bg-zinc-900 border-r border-gray-200 dark:border-gray-800
-      ${sidebarCollapsed ? 'w-16' : 'w-64'} flex flex-col transition-all duration-300 z-50
+      fixed left-0 top-0 bottom-0 md-nav-rail lg:top-4 lg:bottom-4 lg:left-4
+      ${sidebarCollapsed ? 'w-20' : 'w-72'} flex flex-col transition-all duration-300 z-50 lg:rounded-3xl overflow-hidden
       ${isMobile && !mobileMenuVisible ? '-translate-x-full' : 'translate-x-0'}
       lg:translate-x-0
     `}>
       {/* Logo Area */}
-      <div className={`h-16 flex items-center border-b border-gray-100 dark:border-gray-800 ${sidebarCollapsed ? 'justify-center px-2' : 'justify-between px-6'}`}>
+      <div className={`h-16 flex items-center border-b border-gray-100/70 dark:border-gray-800/70 ${sidebarCollapsed ? 'justify-center px-2' : 'justify-between px-6'}`}>
         {!sidebarCollapsed && (
-          <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-cyan-500">
+          <span className="text-base font-semibold tracking-tight">
              {siteConfig.name}
           </span>
         )}
         <button
           type="button"
           onClick={toggleSidebar}
-          className="w-8 h-8 rounded-md border border-gray-200 dark:border-gray-700 flex items-center justify-center text-gray-500 hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors"
+          className="md-icon-btn w-8 h-8 flex items-center justify-center"
           aria-label={sidebarCollapsed ? "展开侧边栏" : "收起侧边栏"}
         >
           {sidebarCollapsed ? (
@@ -313,9 +368,14 @@ export default function AdminLayout({
 
       {/* Menu Items */}
       <div className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
+        {!isAdmin && !menuVisibilityReady ? (
+          <div className="h-6" />
+        ) : (
+        <>
         {menuItems.map((item) => {
             // Check admin only
             if (item.adminOnly && !isAdmin) return null;
+            if (!isAdmin && visibleMenuKeys && !visibleMenuKeys.has(item.key)) return null;
 
             const isActive = location.pathname === item.path;
             
@@ -328,10 +388,8 @@ export default function AdminLayout({
                 }}
                 title={sidebarCollapsed ? item.label : undefined}
                 className={`
-                  flex items-center ${sidebarCollapsed ? 'justify-center px-2' : 'gap-3 px-3'} py-2.5 rounded-lg cursor-pointer transition-all
-                  ${isActive 
-                    ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400 font-medium' 
-                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-zinc-800'}
+                  md-nav-item flex items-center ${sidebarCollapsed ? 'justify-center px-2' : 'gap-3 px-3'} py-2.5 cursor-pointer
+                  ${isActive ? 'md-nav-item-active' : ''}
                 `}
               >
                   {item.icon}
@@ -339,12 +397,14 @@ export default function AdminLayout({
               </div>
             );
         })}
+        </>
+        )}
       </div>
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-zinc-950 flex flex-col lg:flex-row">
+    <div className="min-h-screen md-app flex flex-col lg:flex-row">
       {/* Mobile Header */}
       <MobileHeader />
 
@@ -360,16 +420,16 @@ export default function AdminLayout({
       )}
 
       {/* Main Content Area */}
-      <div className={`flex-1 ${sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'} flex flex-col min-w-0`}>
+      <div className={`flex-1 ${sidebarCollapsed ? 'lg:ml-[6rem]' : 'lg:ml-[19rem]'} flex flex-col min-w-0`}>
         {/* Top Header (Desktop) */}
-        <div className="hidden lg:flex h-16 bg-white dark:bg-zinc-900 border-b border-gray-200 dark:border-gray-800 px-6 items-center justify-between sticky top-0 z-30">
+        <div className="hidden lg:flex h-[60px] md-top-app-bar px-6 items-center justify-between sticky top-0 z-30">
            {/* Breadcrumbs / Page Title */}
-           <div className="font-bold text-gray-800 dark:text-white">
+           <div className="font-semibold tracking-tight text-sm">
               {currentPathLabel}
            </div>
 
            {/* Right Actions */}
-           <div className="flex items-center gap-4">
+           <div className="flex items-center gap-3">
              <Button
                 isIconOnly
                 variant="light"
@@ -382,19 +442,20 @@ export default function AdminLayout({
                   }
                   setTheme(nextTheme);
                 }}
+                className="md-icon-btn h-9 w-9"
              >
                 {theme === "dark" ? <SunFilledIcon size={20}/> : <MoonFilledIcon size={20}/>}
              </Button>
 
               <Dropdown>
                 <DropdownTrigger>
-                  <div className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-zinc-800 p-1.5 rounded-full pr-3 transition-colors border border-transparent hover:border-gray-200">
-                    <Avatar 
-                       size="sm" 
-                       name={username || "User"} 
-                       className="w-8 h-8 bg-gradient-to-tr from-blue-500 to-cyan-500 text-white"
+                  <div className="md-chip px-3 py-1.5 cursor-pointer">
+                    <Avatar
+                       size="sm"
+                       name={username || "User"}
+                       className="w-8 h-8 bg-primary text-white"
                      />
-                    <span className="text-sm font-medium text-gray-700 dark:text-gray-200 max-w-[100px] truncate">
+                    <span className="text-sm font-medium max-w-[100px] truncate">
                       {username || '用户'}
                     </span>
                   </div>
@@ -410,14 +471,14 @@ export default function AdminLayout({
         </div>
 
         {/* Page Content */}
-        <div className="p-4 lg:p-6 mx-auto w-full max-w-full">
+        <div className="p-4 lg:p-6 mx-auto w-full max-w-full md-enter">
            {children}
         </div>
       </div>
 
        {/* 修改密码模态框 */}
        <Modal hideCloseButton isOpen={isOpen} onOpenChange={onOpenChange}>
-        <ModalContent>
+        <ModalContent className="md-card md-card-elevated">
           {(onClose) => (
             <>
               <ModalHeader>修改密码</ModalHeader>

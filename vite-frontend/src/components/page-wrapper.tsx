@@ -12,7 +12,7 @@ export default function PageWrapper({
   children, 
   title, 
   description, 
-  className = "container mx-auto max-w-7xl px-3 lg:px-6 py-8" 
+  className = "container mx-auto max-w-7xl px-3 lg:px-6 py-8 md-enter" 
 }: PageWrapperProps) {
   const [isReady, setIsReady] = useState(false);
 
@@ -44,9 +44,9 @@ export default function PageWrapper({
     <AdminLayout>
       <div className={className}>
         <div className="mb-6">
-          <h1 className="text-2xl font-bold mb-2 text-foreground">{title}</h1>
+          <h1 className="md-section-title mb-2">{title}</h1>
           {description && (
-            <p className="text-default-600">{description}</p>
+            <p className="md-muted">{description}</p>
           )}
         </div>
         {children}

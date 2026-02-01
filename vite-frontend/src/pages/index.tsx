@@ -122,20 +122,20 @@ export default function IndexPage() {
   };
 
   const inputClassNames = {
-    inputWrapper: "bg-white dark:bg-zinc-900 border-gray-300 dark:border-gray-700 shadow-none hover:border-gray-400 focus-within:!border-blue-500 rounded-lg",
+    inputWrapper: "shadow-none",
   };
 
   return (
     <DefaultLayout>
-      <section className="flex flex-col items-center justify-center gap-4 py-4 sm:py-8 md:py-10 pb-20 min-h-[calc(100dvh-120px)] sm:min-h-[calc(100dvh-200px)]">
+      <section className="flex flex-col items-center justify-center gap-4 py-4 md:py-10 min-h-[100dvh] md-enter">
         <div className="w-full max-w-md px-4 sm:px-0">
-          <div className="w-full bg-white dark:bg-zinc-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden">
-            <div className="pb-0 pt-6 px-6 flex-col items-center border-b border-gray-100 dark:border-zinc-800">
-              <h1 className={title({ size: "sm" })}>登陆</h1>
-              <p className="text-small text-default-500 mt-2">请输入您的账号信息</p>
-            </div>
+          <div className="w-full md-card md-card-elevated relative overflow-hidden">
             <div className="px-6 py-6">
               <div className="flex flex-col gap-4">
+                <div>
+                  <h1 className={title({ size: "sm", color: "primary" })}>登录</h1>
+                  <p className="text-small md-muted mt-2">请输入您的账号信息</p>
+                </div>
                 <Input
                   label="用户名"
                   placeholder="请输入用户名"
@@ -169,7 +169,7 @@ export default function IndexPage() {
                   onClick={handleLogin}
                   isLoading={loading}
                   disabled={loading}
-                  className="mt-2"
+                  className="mt-2 shadow-sm"
                 >
                   {loading ? "登录中..." : "登录"}
                 </Button>

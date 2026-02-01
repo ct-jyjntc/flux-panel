@@ -408,9 +408,9 @@ export default function UserPage() {
   );
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 md-enter">
       {/* 页面头部 */}
-      <div className="bg-white dark:bg-zinc-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+      <div className="md-card p-4">
         <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
           <div className="flex items-center gap-2 flex-1 max-w-md w-full">
             <div className="relative flex-1">
@@ -423,7 +423,7 @@ export default function UserPage() {
                     size="sm"
                     variant="bordered"
                     classNames={{
-                        inputWrapper: "bg-white dark:bg-zinc-900 border-gray-200 dark:border-gray-700 pl-9 hover:border-gray-400 focus-within:!border-blue-500 rounded-lg h-9 shadow-sm",
+                        inputWrapper: "pl-9 h-9 shadow-none",
                         input: "text-sm",
                         innerWrapper: "bg-transparent",
                     }}
@@ -452,7 +452,7 @@ export default function UserPage() {
       </div>
 
       {/* 用户列表 */}
-      <div className="bg-white dark:bg-zinc-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden min-h-[400px]">
+      <div className="md-card overflow-hidden min-h-[400px]">
       {loading ? (
         <div className="flex items-center justify-center h-64">
           <div className="flex flex-col items-center gap-3">
@@ -462,7 +462,7 @@ export default function UserPage() {
         </div>
       ) : users.length > 0 ? (
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
+          <table className="w-full text-left text-sm md-table">
             <thead className="bg-gray-50 dark:bg-zinc-800/50 text-gray-500 font-medium border-b border-gray-100 dark:border-gray-800">
                 <tr>
                    <th className="px-6 py-3">用户</th>
@@ -878,7 +878,7 @@ export default function UserPage() {
               <div>
                 <h3 className="text-sm font-semibold mb-3 text-gray-700 dark:text-gray-300">已有节点权限</h3>
                 <div className="border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden">
-                    <table className="w-full text-left text-sm">
+                    <table className="w-full text-left text-sm md-table">
                         <thead className="bg-gray-50 dark:bg-zinc-800 text-gray-500 font-medium border-b border-gray-200 dark:border-gray-800">
                             <tr>
                                 <th className="px-4 py-2">节点名称</th>

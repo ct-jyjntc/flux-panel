@@ -1199,8 +1199,8 @@ export default function ForwardPage() {
             {/* Start/Stop */}
             <button 
               className={`w-7 h-7 rounded border bg-white dark:bg-zinc-900 flex items-center justify-center transition-colors ${forward.serviceRunning 
-                ? 'border-red-200 text-red-500 hover:bg-red-50 dark:border-red-900/60 dark:text-red-400 dark:hover:bg-red-900/20' 
-                : 'border-green-200 text-green-500 hover:bg-green-50 dark:border-green-900/60 dark:text-green-400 dark:hover:bg-green-900/20'}`}
+                ? 'border-gray-200 text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-zinc-800' 
+                : 'border-gray-200 text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-zinc-800'}`}
               onClick={() => handleServiceToggle(forward)}
               title={forward.serviceRunning ? "暂停" : "启动"}
             >
@@ -1321,9 +1321,9 @@ export default function ForwardPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 md-enter">
       {/* 1. Toolbar */}
-      <div className="bg-white dark:bg-zinc-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+      <div className="md-card p-4">
          {/* Stats and Controls Header */}
          <div className="flex flex-wrap items-center justify-between gap-4 text-sm mb-4 pb-4 border-b border-gray-100 dark:border-gray-800">
              <div className="flex items-center gap-6">
@@ -1387,7 +1387,7 @@ export default function ForwardPage() {
                    value={searchKeyword}
                    onValueChange={(value) => setSearchKeyword(value)}
                    classNames={{
-                      inputWrapper: "bg-gray-50 dark:bg-zinc-800 border-none shadow-none"
+                      inputWrapper: "bg-white dark:bg-zinc-800 border-none shadow-none"
                    }}
                  />
                  <Select
@@ -1402,7 +1402,7 @@ export default function ForwardPage() {
                    }}
                    items={tunnelFilterItems}
                    classNames={{
-                     trigger: "bg-gray-50 dark:bg-zinc-800 border-none shadow-none",
+                     trigger: "bg-white dark:bg-zinc-800 border-none shadow-none",
                      value: "text-sm"
                    }}
                  >
@@ -1434,7 +1434,7 @@ export default function ForwardPage() {
       </div>
 
       {/* 2. Content Table */}
-      <div className="bg-white dark:bg-zinc-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden min-h-[400px]">
+      <div className="md-card overflow-hidden min-h-[400px]">
           {getSortedForwards().length > 0 ? (
             <div className="overflow-x-auto">
                <DndContext
@@ -1446,7 +1446,7 @@ export default function ForwardPage() {
                 items={getSortedForwards().map((forward) => forward.id)}
                 strategy={verticalListSortingStrategy}
               >
-               <table className="w-full text-left text-sm">
+               <table className="w-full text-left text-sm md-table">
                   <thead className="bg-gray-50 dark:bg-zinc-800/50 text-gray-500 font-medium border-b border-gray-100 dark:border-gray-800">
                      <tr>
                         <th className="w-12 px-4 py-3">
@@ -1614,7 +1614,7 @@ example.com:443`}
                     {/* 高级选项 (Accordion style toggler) */}
                      <div className="border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden">
                         <button 
-                           className="w-full flex items-center justify-between p-3 bg-gray-50 dark:bg-zinc-800 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-zinc-700 transition-colors"
+                           className="w-full flex items-center justify-between p-3 md-surface-container-high text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-[rgb(var(--md-surface-container-highest))] transition-colors"
                            onClick={() => setShowAdvanced(!showAdvanced)}
                         >
                            <span>高级选项</span>
@@ -1623,7 +1623,7 @@ example.com:443`}
                            </svg>
                         </button>
                         {showAdvanced && (
-                          <div className="p-3 bg-white dark:bg-zinc-900 border-t border-gray-200 dark:border-gray-800">
+                          <div className="p-3 md-surface-container border-t border-gray-200 dark:border-gray-800">
                              <Input
                               label="出口网卡名或IP"
                               labelPlacement="outside"

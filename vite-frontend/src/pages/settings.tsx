@@ -76,7 +76,7 @@ export const SettingsPage = () => {
   }, []);
 
   return (
-    <div className="flex flex-col gap-6 p-4 lg:p-6">
+    <div className="flex flex-col gap-6 p-4 lg:p-6 md-enter">
       {/* 顶部导航 */}
       <div className="flex items-center gap-4 mb-2">
             <Button
@@ -84,7 +84,7 @@ export const SettingsPage = () => {
               size="sm"
               variant="flat"
               onPress={() => navigate(-1)}
-              className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-gray-800 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
+              className="md-icon-btn"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -94,9 +94,9 @@ export const SettingsPage = () => {
       </div>
 
       {/* 添加面板 */}
-      <div className="bg-white dark:bg-zinc-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6">
+      <div className="md-card p-6">
         <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
-            <span className="w-1 h-4 bg-primary-500 rounded-full"></span>
+            <span className="w-1 h-4 bg-primary rounded-full"></span>
             添加新面板地址
         </h2>
         <div className="flex flex-col gap-4 max-w-2xl">
@@ -109,7 +109,7 @@ export const SettingsPage = () => {
                   onChange={(e) => setNewName(e.target.value)}
                   variant="bordered"
                   classNames={{
-                      inputWrapper: "bg-white dark:bg-zinc-900 border-gray-300 dark:border-gray-700 shadow-none hover:border-gray-400 focus-within:!border-blue-500 rounded-lg",
+                      inputWrapper: "shadow-none",
                       input: "text-sm"
                    }}
                 />
@@ -121,7 +121,7 @@ export const SettingsPage = () => {
                   onChange={(e) => setNewAddress(e.target.value)}
                   variant="bordered"
                   classNames={{
-                      inputWrapper: "bg-white dark:bg-zinc-900 border-gray-300 dark:border-gray-700 shadow-none hover:border-gray-400 focus-within:!border-blue-500 rounded-lg",
+                      inputWrapper: "shadow-none",
                       input: "text-sm"
                    }}
                 />
@@ -135,9 +135,9 @@ export const SettingsPage = () => {
       </div>
 
       {/* 已保存列表 */}
-      <div className="bg-white dark:bg-zinc-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6">
+      <div className="md-card p-6">
          <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
-            <span className="w-1 h-4 bg-primary-500 rounded-full"></span>
+            <span className="w-1 h-4 bg-primary rounded-full"></span>
             已保存的面板地址
         </h2>
 
