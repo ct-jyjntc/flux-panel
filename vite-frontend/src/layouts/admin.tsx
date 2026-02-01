@@ -54,6 +54,19 @@ export default function AdminLayout({
       return false;
     }
   });
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    if (typeof window === 'undefined') return 288;
+    try {
+      const saved = localStorage.getItem('sidebar-width');
+      const value = saved ? parseInt(saved, 10) : 288;
+      if (Number.isNaN(value)) return 288;
+      return Math.min(Math.max(value, 240), 420);
+    } catch {
+      return 288;
+    }
+  });
+  const [isResizingSidebar, setIsResizingSidebar] = useState(false);
+  const sidebarWidthRef = React.useRef(sidebarWidth);
   const [username, setUsername] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
   const [visibleMenuKeys, setVisibleMenuKeys] = useState<Set<string> | null>(() => {
@@ -221,6 +234,42 @@ export default function AdminLayout({
   }, []);
 
   useEffect(() => {
+    sidebarWidthRef.current = sidebarWidth;
+  }, [sidebarWidth]);
+
+  useEffect(() => {
+    if (!isResizingSidebar) return;
+
+    const handleMouseMove = (event: MouseEvent) => {
+      const min = 240;
+      const max = 420;
+      const next = Math.min(Math.max(event.clientX, min), max);
+      setSidebarWidth(next);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizingSidebar(false);
+      try {
+        localStorage.setItem('sidebar-width', String(sidebarWidthRef.current));
+      } catch {
+        // ignore storage errors
+      }
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [isResizingSidebar]);
+
+  useEffect(() => {
     const loadVisibleMenu = async () => {
       try {
         const configs = await getCachedConfigs();
@@ -297,6 +346,11 @@ export default function AdminLayout({
 
   const currentPathLabel = menuItems.find(item => item.path === location.pathname)?.label || 'Flux Panel';
   const sidebarCollapsed = !isMobile && isSidebarCollapsed;
+  const sidebarExpandedWidth = `${sidebarWidth}px`;
+  const sidebarCollapsedWidth = '5rem';
+  const contentMarginLeft = isMobile
+    ? '0px'
+    : `calc(${sidebarCollapsed ? sidebarCollapsedWidth : sidebarExpandedWidth} + 1rem)`;
 
   // Mobile Header
   const MobileHeader = () => (
@@ -335,12 +389,15 @@ export default function AdminLayout({
   
   // Sidebar Component
   const Sidebar = () => (
-    <div className={`
+    <div
+      className={`
       fixed left-0 top-0 bottom-0 md-nav-rail lg:top-4 lg:bottom-4 lg:left-4
-      ${sidebarCollapsed ? 'w-20' : 'w-72'} flex flex-col transition-all duration-300 z-50 lg:rounded-3xl overflow-hidden
+      flex flex-col transition-all duration-300 z-50 lg:rounded-3xl overflow-hidden
       ${isMobile && !mobileMenuVisible ? '-translate-x-full' : 'translate-x-0'}
       lg:translate-x-0
-    `}>
+    `}
+      style={{ width: sidebarCollapsed ? sidebarCollapsedWidth : sidebarExpandedWidth }}
+    >
       {/* Logo Area */}
       <div className={`h-16 flex items-center border-b border-gray-100/70 dark:border-gray-800/70 ${sidebarCollapsed ? 'justify-center px-2' : 'justify-between px-6'}`}>
         {!sidebarCollapsed && (
@@ -400,6 +457,12 @@ export default function AdminLayout({
         </>
         )}
       </div>
+      {!isMobile && !sidebarCollapsed && (
+        <div
+          className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize"
+          onMouseDown={() => setIsResizingSidebar(true)}
+        />
+      )}
     </div>
   );
 
@@ -420,7 +483,10 @@ export default function AdminLayout({
       )}
 
       {/* Main Content Area */}
-      <div className={`flex-1 ${sidebarCollapsed ? 'lg:ml-[6rem]' : 'lg:ml-[19rem]'} flex flex-col min-w-0`}>
+      <div
+        className="flex-1 flex flex-col min-w-0"
+        style={{ marginLeft: contentMarginLeft }}
+      >
         {/* Top Header (Desktop) */}
         <div className="hidden lg:flex h-[60px] md-top-app-bar px-6 items-center justify-between sticky top-0 z-30">
            {/* Breadcrumbs / Page Title */}
