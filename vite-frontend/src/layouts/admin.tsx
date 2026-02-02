@@ -219,7 +219,7 @@ export default function AdminLayout({
     handleResize();
 
     // 恢复用户信息
-    const savedName = localStorage.getItem('username');
+    const savedName = localStorage.getItem('name') || localStorage.getItem('username');
     if (savedName) setUsername(savedName);
 
     let adminFlag = localStorage.getItem('admin') === 'true';
@@ -508,20 +508,15 @@ export default function AdminLayout({
                   }
                   setTheme(nextTheme);
                 }}
-                className="md-icon-btn h-9 w-9"
+                className="md-icon-btn h-8 w-8"
              >
                 {theme === "dark" ? <SunFilledIcon size={20}/> : <MoonFilledIcon size={20}/>}
              </Button>
 
               <Dropdown>
                 <DropdownTrigger>
-                  <div className="md-chip px-3 py-1.5 cursor-pointer">
-                    <Avatar
-                       size="sm"
-                       name={username || "User"}
-                       className="w-8 h-8 bg-primary text-white"
-                     />
-                    <span className="text-sm font-medium max-w-[100px] truncate">
+                  <div className="md-chip h-8 px-3 cursor-pointer flex items-center">
+                    <span className="text-sm font-medium max-w-[140px] truncate">
                       {username || '用户'}
                     </span>
                   </div>

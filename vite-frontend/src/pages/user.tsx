@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Button } from "@heroui/button";
+import { Checkbox } from "@heroui/checkbox";
 import { Input } from "@heroui/input";
 import { Select, SelectItem } from "@heroui/select";
 import { RadioGroup, Radio } from "@heroui/radio";
@@ -33,6 +34,7 @@ import {
   assignUserNode,
   getUserNodeList,
   removeUserNode,
+  batchAssignUserNodes,
   getSpeedLimitList,
   resetUserFlow
 } from '@/api';
@@ -124,6 +126,15 @@ export default function UserPage() {
   const { isOpen: isNodeModalOpen, onOpen: onNodeModalOpen, onClose: onNodeModalClose } = useDisclosure();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userNodes, setUserNodes] = useState<UserNode[]>([]);
+
+  // 批量节点权限相关状态
+  const [selectedUserKeys, setSelectedUserKeys] = useState<Set<string>>(new Set());
+  const { isOpen: isBulkNodeModalOpen, onOpen: onBulkNodeModalOpen, onClose: onBulkNodeModalClose } = useDisclosure();
+  const [bulkNodeForm, setBulkNodeForm] = useState<UserNodeForm>({
+    nodeId: null,
+    accessType: 0
+  });
+  const [bulkAssignLoading, setBulkAssignLoading] = useState(false);
   
   // 分配新节点权限相关状态
   const [nodeForm, setNodeForm] = useState<UserNodeForm>({
@@ -169,6 +180,7 @@ export default function UserPage() {
       if (response.code === 0) {
         const data = response.data || {};
         setUsers(data || []);
+        setSelectedUserKeys(new Set());
       } else {
         toast.error(response.msg || '获取用户列表失败');
       }
@@ -371,6 +383,50 @@ export default function UserPage() {
     }
   };
 
+  // 批量节点权限管理
+  const handleOpenBulkAssign = () => {
+    if (selectedUserCount === 0) {
+      toast.error('请选择用户');
+      return;
+    }
+    setBulkNodeForm({ nodeId: null, accessType: 0 });
+    onBulkNodeModalOpen();
+  };
+
+  const handleConfirmBulkAssign = async () => {
+    if (selectedUserCount === 0) {
+      toast.error('请选择用户');
+      return;
+    }
+    if (!bulkNodeForm.nodeId) {
+      toast.error('请选择节点');
+      return;
+    }
+    setBulkAssignLoading(true);
+    try {
+      const response = await batchAssignUserNodes({
+        userIds: selectedUserIds,
+        nodeId: bulkNodeForm.nodeId,
+        accessType: bulkNodeForm.accessType
+      });
+
+      if (response.code === 0) {
+        const created = response.data?.created ?? 0;
+        const updated = response.data?.updated ?? 0;
+        const skipped = response.data?.skipped ?? 0;
+        toast.success(`已处理 ${selectedUserCount} 个用户（新增 ${created}，更新 ${updated}，跳过 ${skipped}）`);
+        setSelectedUserKeys(new Set());
+        onBulkNodeModalClose();
+      } else {
+        toast.error(response.msg || '批量分配失败');
+      }
+    } catch (error) {
+      toast.error('批量分配失败');
+    } finally {
+      setBulkAssignLoading(false);
+    }
+  };
+
   // 重置流量相关函数
   const handleResetFlow = (user: User) => {
     setUserToReset(user);
@@ -406,6 +462,13 @@ export default function UserPage() {
   const availableNodes = nodes.filter(
     node => !userNodes.some(userNode => userNode.nodeId === node.id)
   );
+  const selectedUserIds = Array.from(selectedUserKeys)
+    .map((key) => Number(key))
+    .filter((id) => !Number.isNaN(id));
+  const selectedUserCount = selectedUserIds.length;
+  const visibleUserIds = users.map((user) => user.id);
+  const allVisibleSelected = visibleUserIds.length > 0 &&
+    visibleUserIds.every((id) => selectedUserKeys.has(id.toString()));
 
   return (
     <div className="flex flex-col gap-6 md-enter">
@@ -439,15 +502,26 @@ export default function UserPage() {
             </Button>
           </div>
           
-          <Button
-            size="sm"
-            color="primary"
-            onPress={handleAdd}
-            startContent={<PlusIcon size={16} />}
-            className="font-medium"
-          >
-            新增用户
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="bordered"
+              onPress={handleOpenBulkAssign}
+              isDisabled={selectedUserCount === 0}
+              className="font-medium"
+            >
+              批量节点权限{selectedUserCount > 0 ? ` (${selectedUserCount})` : ''}
+            </Button>
+            <Button
+              size="sm"
+              color="primary"
+              onPress={handleAdd}
+              startContent={<PlusIcon size={16} />}
+              className="font-medium"
+            >
+              新增用户
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -465,13 +539,28 @@ export default function UserPage() {
           <table className="w-full text-left text-sm md-table">
             <thead className="bg-gray-50 dark:bg-zinc-800/50 text-gray-500 font-medium border-b border-gray-100 dark:border-gray-800">
                 <tr>
-                   <th className="px-6 py-3">用户</th>
-                   <th className="px-6 py-3">状态</th>
-                   <th className="px-6 py-3">流量</th>
-                   <th className="px-6 py-3">转发数量</th>
-                   <th className="px-6 py-3">重置时间</th>
-                   <th className="px-6 py-3">到期时间</th>
-                   <th className="px-6 py-3 text-right">操作</th>
+                   <th className="w-12 px-4 py-3">
+                     <Checkbox
+                       aria-label="全选"
+                       isSelected={allVisibleSelected}
+                       onValueChange={(checked) => {
+                         const nextKeys = new Set(selectedUserKeys);
+                         if (checked) {
+                           visibleUserIds.forEach(id => nextKeys.add(id.toString()));
+                         } else {
+                           visibleUserIds.forEach(id => nextKeys.delete(id.toString()));
+                         }
+                         setSelectedUserKeys(nextKeys);
+                       }}
+                     />
+                   </th>
+                   <th className="px-4 py-3">用户</th>
+                   <th className="px-4 py-3">状态</th>
+                   <th className="px-4 py-3">流量</th>
+                   <th className="px-4 py-3">转发数量</th>
+                   <th className="px-4 py-3">重置时间</th>
+                   <th className="px-4 py-3">到期时间</th>
+                  <th className="px-4 py-3 text-right">操作</th>
                 </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-zinc-800">
@@ -482,8 +571,25 @@ export default function UserPage() {
                 const flowPercent = user.flow > 0 ? Math.min((usedFlow / (user.flow * 1024 * 1024 * 1024)) * 100, 100) : 0;
                 
                 return (
-                  <tr key={user.id} className="group hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors">
-                    <td className="px-6 py-4 align-top">
+                  <tr key={user.id} className="border-b border-gray-100 dark:border-zinc-800 group hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors">
+                    <td className="w-12 px-4 py-3 align-middle">
+                      <Checkbox
+                        aria-label={`选择用户 ${user.user}`}
+                        isSelected={selectedUserKeys.has(user.id.toString())}
+                        onValueChange={(checked) => {
+                          setSelectedUserKeys(prev => {
+                            const nextKeys = new Set(prev);
+                            if (checked) {
+                              nextKeys.add(user.id.toString());
+                            } else {
+                              nextKeys.delete(user.id.toString());
+                            }
+                            return nextKeys;
+                          });
+                        }}
+                      />
+                    </td>
+                    <td className="px-4 py-3 align-middle">
                       <div className="flex flex-col">
                         <div className="font-medium text-gray-900 dark:text-gray-100">
                           {user.name || user.user}
@@ -491,7 +597,7 @@ export default function UserPage() {
                         <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">@{user.user}</div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 align-top">
+                    <td className="px-4 py-3 align-middle">
                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${
                             userStatus.color === 'success'
                               ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-900/50' 
@@ -503,7 +609,7 @@ export default function UserPage() {
                            {userStatus.text}
                          </span>
                     </td>
-                    <td className="px-6 py-4 align-top">
+                    <td className="px-4 py-3 align-middle">
                       <div className="space-y-2 min-w-[160px]">
                         <div className="flex items-center justify-between text-xs mb-1">
                              <div className="text-gray-500 flex items-center gap-1">
@@ -523,17 +629,17 @@ export default function UserPage() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 align-top">
+                    <td className="px-4 py-3 align-middle">
                       <span className="inline-block px-2 py-0.5 bg-gray-100 dark:bg-zinc-800 rounded text-xs font-mono text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700">
                         {user.num}
                       </span>
                     </td>
-                    <td className="px-6 py-4 align-top">
+                    <td className="px-4 py-3 align-middle">
                       <span className="text-sm text-gray-600 dark:text-gray-400">
                         {user.flowResetTime === 0 ? '不重置' : `每月${user.flowResetTime}号`}
                       </span>
                     </td>
-                    <td className="px-6 py-4 align-top">
+                    <td className="px-4 py-3 align-middle">
                       {user.expTime ? (
                          expStatus && expStatus.color === 'success' ? (
                           <span className="text-sm text-gray-600 dark:text-gray-400">{formatDate(user.expTime)}</span>
@@ -548,8 +654,8 @@ export default function UserPage() {
                         <span className="text-sm text-gray-400">不限制</span>
                       )}
                     </td>
-                    <td className="px-6 py-4 align-top text-right">
-                      <div className="flex flex-wrap justify-end gap-1 w-[160px]">
+                    <td className="px-4 py-3 align-middle text-right">
+                      <div className="flex flex-wrap justify-end gap-1 w-full">
                         <button 
                              className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 dark:border-gray-700 dark:bg-zinc-900 dark:text-gray-300 dark:hover:bg-zinc-800 flex items-center justify-center transition-colors"
                              onClick={() => handleEdit(user)}
@@ -930,6 +1036,92 @@ export default function UserPage() {
           <ModalFooter>
             <Button size="sm" variant="light" onPress={onNodeModalClose}>
               关闭
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      {/* 批量节点权限模态框 */}
+      <Modal hideCloseButton
+        isOpen={isBulkNodeModalOpen}
+        onClose={onBulkNodeModalClose}
+        size="lg"
+        scrollBehavior="outside"
+        backdrop="blur"
+        placement="center"
+        classNames={{
+            base: "bg-white dark:bg-[#18181b] border border-gray-100 dark:border-gray-800 shadow-xl rounded-xl",
+            header: "border-b border-gray-100 dark:border-gray-800 pb-4",
+            body: "py-6",
+            footer: "border-t border-gray-100 dark:border-gray-800 pt-4"
+        }}
+      >
+        <ModalContent>
+          <ModalHeader className="text-lg font-bold">
+            批量节点权限
+          </ModalHeader>
+          <ModalBody>
+            <div className="space-y-4">
+              <div className="text-sm text-gray-500">
+                已选择 <span className="font-semibold text-gray-900 dark:text-gray-100">{selectedUserCount}</span> 个用户
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Select
+                  label="选择节点"
+                  placeholder="请选择节点"
+                  labelPlacement="outside"
+                  selectedKeys={bulkNodeForm.nodeId ? [bulkNodeForm.nodeId.toString()] : []}
+                  onSelectionChange={(keys) => {
+                    const value = Array.from(keys)[0] as string;
+                    setBulkNodeForm((prev) => ({ ...prev, nodeId: Number(value) || null }));
+                  }}
+                  variant="bordered"
+                  classNames={{
+                      trigger: "bg-white dark:bg-zinc-900 border-gray-200"
+                  }}
+                >
+                  {nodes.map((node) => (
+                    <SelectItem key={node.id.toString()} textValue={node.name}>
+                      {node.name} ({node.ip})
+                    </SelectItem>
+                  ))}
+                </Select>
+                <Select
+                  label="权限类型"
+                  placeholder="选择权限"
+                  labelPlacement="outside"
+                  selectedKeys={[bulkNodeForm.accessType.toString()]}
+                  onSelectionChange={(keys) => {
+                    const value = Array.from(keys)[0] as string;
+                    const parsed = Number(value);
+                    setBulkNodeForm((prev) => ({ ...prev, accessType: Number.isNaN(parsed) ? 0 : parsed }));
+                  }}
+                  variant="bordered"
+                  classNames={{
+                      trigger: "bg-white dark:bg-zinc-900 border-gray-200"
+                  }}
+                >
+                  <SelectItem key="0">出/入口</SelectItem>
+                  <SelectItem key="1">仅入口</SelectItem>
+                  <SelectItem key="2">仅出口</SelectItem>
+                </Select>
+              </div>
+              <div className="text-xs text-gray-400">
+                将为所选用户新增或更新该节点的权限类型。
+              </div>
+            </div>
+          </ModalBody>
+          <ModalFooter>
+            <Button size="sm" variant="light" onPress={onBulkNodeModalClose}>
+              取消
+            </Button>
+            <Button
+              size="sm"
+              color="primary"
+              onPress={handleConfirmBulkAssign}
+              isLoading={bulkAssignLoading}
+            >
+              确定
             </Button>
           </ModalFooter>
         </ModalContent>

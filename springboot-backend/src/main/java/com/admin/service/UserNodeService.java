@@ -1,5 +1,6 @@
 package com.admin.service;
 
+import com.admin.common.dto.BatchUserNodeDto;
 import com.admin.common.dto.UserNodeDto;
 import com.admin.common.dto.UserNodeQueryDto;
 import com.admin.common.lang.R;
@@ -13,4 +14,6 @@ public interface UserNodeService extends IService<UserNode> {
     R getUserNodeList(UserNodeQueryDto queryDto);
 
     R removeUserNode(Integer id);
+
+    R batchAssignUserNodes(BatchUserNodeDto batchDto);
 }

@@ -3,6 +3,7 @@ package com.admin.controller;
 
 import com.admin.common.annotation.RequireRole;
 import com.admin.common.aop.LogAnnotation;
+import com.admin.common.dto.BatchUserNodeDto;
 import com.admin.common.dto.NodeDto;
 import com.admin.common.dto.NodeUpdateDto;
 import com.admin.common.lang.R;
@@ -63,6 +64,13 @@ public class NodeController extends BaseController {
     @PostMapping("/user/assign")
     public R assignUserNode(@Validated @RequestBody com.admin.common.dto.UserNodeDto userNodeDto) {
         return userNodeService.assignUserNode(userNodeDto);
+    }
+
+    @LogAnnotation
+    @RequireRole
+    @PostMapping("/user/batch-assign")
+    public R batchAssignUserNodes(@Validated @RequestBody BatchUserNodeDto batchDto) {
+        return userNodeService.batchAssignUserNodes(batchDto);
     }
 
     @LogAnnotation

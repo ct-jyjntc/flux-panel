@@ -48,6 +48,8 @@ export const diagnoseTunnel = (tunnelId: number) => Network.post("/tunnel/diagno
 
 // 用户节点权限管理操作 - 全部使用POST请求
 export const assignUserNode = (data: any) => Network.post("/node/user/assign", data);
+export const batchAssignUserNodes = (data: { userIds: number[]; nodeId: number; accessType: number }) =>
+  Network.post("/node/user/batch-assign", data);
 export const getUserNodeList = (queryData: any = {}) => Network.post("/node/user/list", queryData);
 export const removeUserNode = (params: any) => Network.post("/node/user/remove", params);
 export const userTunnel = () => Network.post("/tunnel/user/tunnel");

@@ -210,19 +210,19 @@ export default function LimitPage() {
              <table className="w-full text-left text-sm md-table">
                 <thead className="bg-gray-50 dark:bg-zinc-800/50 text-gray-500 font-medium border-b border-gray-100 dark:border-gray-800">
                     <tr>
-                       <th className="px-6 py-3">规则名称</th>
-                       <th className="px-6 py-3">状态</th>
-                       <th className="px-6 py-3">速度限制</th>
-                       <th className="px-6 py-3 text-right">操作</th>
+                       <th className="px-4 py-3">规则名称</th>
+                       <th className="px-4 py-3">状态</th>
+                       <th className="px-4 py-3">速度限制</th>
+                       <th className="px-4 py-3 text-right">操作</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-zinc-800">
                   {rules.map((rule) => (
                     <tr key={rule.id} className="border-b border-gray-100 dark:border-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors">
-                      <td className="px-6 py-4 align-middle">
+                      <td className="px-4 py-3 align-middle">
                          <span className="font-medium text-gray-900 dark:text-gray-100">{rule.name}</span>
                       </td>
-                      <td className="px-6 py-4 align-middle">
+                      <td className="px-4 py-3 align-middle">
                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${
                             rule.status === 1 
                               ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-900/50' 
@@ -234,13 +234,13 @@ export default function LimitPage() {
                            {rule.status === 1 ? '运行' : '异常'}
                          </span>
                       </td>
-                      <td className="px-6 py-4 align-middle">
+                      <td className="px-4 py-3 align-middle">
                          <span className="px-2 py-1 bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-300 rounded text-xs border border-gray-200 dark:border-gray-700 font-mono">
                            {rule.speed} Mbps
                          </span>
                       </td>
-                      <td className="px-6 py-4 align-middle text-right w-[140px]">
-                          <div className="flex justify-end gap-1">
+                      <td className="px-4 py-3 align-middle text-right w-[160px]">
+                          <div className="flex justify-end gap-1 w-full">
                              <button 
                                className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 dark:border-gray-700 dark:bg-zinc-900 dark:text-gray-300 dark:hover:bg-zinc-800 flex items-center justify-center transition-colors"
                                onClick={() => handleEdit(rule)}
