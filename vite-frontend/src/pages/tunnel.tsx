@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@heroui/button";
 import { Input } from "@heroui/input";
 import { Select, SelectItem } from "@heroui/select";
@@ -15,8 +15,10 @@ import {
   updateTunnel, 
   deleteTunnel,
   getNodeList,
-  diagnoseTunnel
+  diagnoseTunnel,
+  getAllUsers
 } from "@/api";
+import { User } from "@/types";
 
 interface Tunnel {
   id: number;
@@ -37,6 +39,7 @@ interface Tunnel {
   muxPort?: number;
   status: number;
   createdTime: string;
+  ownerId?: number | null;
 }
 
 interface Node {
@@ -84,6 +87,7 @@ export default function TunnelPage() {
   const [loading, setLoading] = useState(true);
   const [tunnels, setTunnels] = useState<Tunnel[]>([]);
   const [nodes, setNodes] = useState<Node[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const isAdmin = localStorage.getItem('admin') === 'true';
   
   // 模态框状态
@@ -126,6 +130,22 @@ export default function TunnelPage() {
   const inNodeOptions = nodes.filter(canUseAsInNode);
   const outNodeOptions = nodes.filter(canUseAsOutNode);
 
+  const userNameMap = useMemo(() => {
+    const map = new Map<number, string>();
+    users.forEach((user) => {
+      const label = (user.name && user.name.trim()) || user.user || `用户${user.id}`;
+      map.set(user.id, label);
+    });
+    return map;
+  }, [users]);
+
+  const resolveUserLabel = (ownerId?: number | null) => {
+    if (ownerId === null || ownerId === undefined) {
+      return '管理员';
+    }
+    return userNameMap.get(ownerId) || `用户${ownerId}`;
+  };
+
   useEffect(() => {
     loadData();
   }, []);
@@ -134,9 +154,13 @@ export default function TunnelPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [tunnelsRes, nodesRes] = await Promise.all([
+      const userListPromise = isAdmin
+        ? getAllUsers()
+        : Promise.resolve({ code: 0, msg: '', data: [] as User[] });
+      const [tunnelsRes, nodesRes, userListRes] = await Promise.all([
         getTunnelList(),
-        getNodeList()
+        getNodeList(),
+        userListPromise
       ]);
       
       if (tunnelsRes.code === 0) {
@@ -149,6 +173,14 @@ export default function TunnelPage() {
         setNodes(nodesRes.data || []);
       } else {
         console.warn('获取节点列表失败:', nodesRes.msg);
+      }
+
+      if (isAdmin) {
+        if (userListRes.code === 0) {
+          setUsers(userListRes.data || []);
+        } else {
+          console.warn('获取用户列表失败:', userListRes.msg);
+        }
       }
     } catch (error) {
       console.error('加载数据失败:', error);
@@ -548,6 +580,7 @@ export default function TunnelPage() {
                 <thead className="bg-gray-50 dark:bg-zinc-800/50 text-gray-500 font-medium border-b border-gray-100 dark:border-gray-800">
                     <tr>
                        <th className="px-4 py-3">隧道名称</th>
+                       {isAdmin && <th className="px-4 py-3">用户</th>}
                        <th className="px-4 py-3">类型</th>
                        <th className="px-4 py-3">状态</th>
                        <th className="px-4 py-3">入口节点</th>
@@ -569,6 +602,13 @@ export default function TunnelPage() {
                         <td className="px-4 py-3 align-middle">
                            <span className="font-medium text-gray-900 dark:text-gray-100">{tunnel.name}</span>
                         </td>
+                        {isAdmin && (
+                          <td className="px-4 py-3 align-middle">
+                            <span className="text-sm text-gray-700 dark:text-gray-300">
+                              {resolveUserLabel(tunnel.ownerId)}
+                            </span>
+                          </td>
+                        )}
                         <td className="px-4 py-3 align-middle">
                           <span className={`px-2 py-0.5 rounded text-xs border ${
                              tunnel.type === 1 

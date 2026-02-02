@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Button } from "@heroui/button";
 import { Input } from "@heroui/input";
 import { Textarea } from "@heroui/input";
@@ -38,9 +38,12 @@ import {
   updateForwardOrder,
   batchDeleteForwards,
   batchUpdateForwardTunnel,
-  getUserPackageInfo
+  getUserPackageInfo,
+  getAllUsers
 } from "@/api";
 import { JwtUtil } from "@/utils/jwt";
+import { isAdmin } from "@/utils/auth";
+import { User } from "@/types";
 import { SearchIcon, ActivityIcon } from "@/components/icons";
 
 interface UserInfo {
@@ -144,6 +147,8 @@ const getStatusDisplay = (status: number) => {
 interface SortableForwardRowProps {
   forward: Forward;
   isSelected: boolean;
+  showUserColumn: boolean;
+  userLabel?: string;
   onSelectionChange: (id: string, checked: boolean) => void;
   onShowAddressModal: (addressString: string, port: number | null, title: string, nameString?: string) => void;
   onServiceToggle: (forward: Forward) => void;
@@ -156,6 +161,8 @@ interface SortableForwardRowProps {
 const SortableForwardRow = React.memo(({ 
   forward, 
   isSelected,
+  showUserColumn,
+  userLabel,
   onSelectionChange,
   onShowAddressModal,
   onServiceToggle,
@@ -232,6 +239,20 @@ const SortableForwardRow = React.memo(({
           </div>
         </div>
       </td>
+
+      {/* User */}
+      {showUserColumn && (
+        <td className="px-4 py-3 align-middle">
+          <div className="flex flex-col">
+            <span className="text-sm text-gray-700 dark:text-gray-300">
+              {userLabel || '管理员'}
+            </span>
+            {forward.userId !== undefined && forward.userId !== null && (
+              <span className="text-xs text-gray-400">#{forward.userId}</span>
+            )}
+          </div>
+        </td>
+      )}
 
       {/* Ingress */}
       <td className="px-4 py-3 align-middle">
@@ -371,10 +392,14 @@ export default function ForwardPage() {
   const [userInfo, setUserInfo] = useState<UserInfo>({ flow: 0, inFlow: 0, outFlow: 0, num: 0 });
   const [forwards, setForwards] = useState<Forward[]>([]);
   const [tunnels, setTunnels] = useState<Tunnel[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [filterTunnelId, setFilterTunnelId] = useState<string>("all");
+  const [filterUserId, setFilterUserId] = useState<string>("all");
   const [searchKeyword, setSearchKeyword] = useState('');
   const [pageSize, setPageSize] = useState<number>(20);
   const [currentPage, setCurrentPage] = useState<number>(1);
+  const isAdminUser = isAdmin();
+  const currentUserId = JwtUtil.getUserIdFromToken();
   
   // 拖拽排序相关状态
   const [forwardOrder, setForwardOrder] = useState<number[]>([]);
@@ -432,22 +457,56 @@ export default function ForwardPage() {
   const [bulkTunnelId, setBulkTunnelId] = useState<number | null>(null);
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
 
+  const userNameMap = useMemo(() => {
+    const map = new Map<number, string>();
+    users.forEach((user) => {
+      const label = (user.name && user.name.trim()) || user.user || `用户${user.id}`;
+      map.set(user.id, label);
+    });
+    return map;
+  }, [users]);
+
+  const resolveUserLabel = (userId?: number | null, fallbackName?: string) => {
+    if (fallbackName && fallbackName.trim()) {
+      return fallbackName;
+    }
+    if (userId === null || userId === undefined) {
+      return '管理员';
+    }
+    return userNameMap.get(userId) || `用户${userId}`;
+  };
+
+  const resolveScopedUserId = () => {
+    if (isAdminUser) {
+      if (filterUserId === 'all') {
+        return null;
+      }
+      const parsed = Number(filterUserId);
+      return Number.isNaN(parsed) ? null : parsed;
+    }
+    return currentUserId;
+  };
+
   useEffect(() => {
     loadData(true);
   }, []);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [filterTunnelId, searchKeyword, pageSize]);
+  }, [filterTunnelId, filterUserId, searchKeyword, pageSize]);
 
   // 加载所有数据
   const loadData = async (lod = false) => {
     setLoading(lod);
     try {
-      const [forwardsRes, tunnelsRes, userRes] = await Promise.all([
+      const userListPromise = isAdminUser
+        ? getAllUsers()
+        : Promise.resolve({ code: 0, msg: '', data: [] as User[] });
+      const [forwardsRes, tunnelsRes, userRes, userListRes] = await Promise.all([
         getForwardList(),
         userTunnel(),
-        getUserPackageInfo()
+        getUserPackageInfo(),
+        userListPromise
       ]);
       
       if (userRes.code === 0) {
@@ -463,11 +522,11 @@ export default function ForwardPage() {
         })) || [];
         setForwards(forwardsData);
         
-        // 初始化转发排序顺序（仅当前用户）
-        const currentUserId = JwtUtil.getUserIdFromToken();
+        // 初始化转发排序顺序（当前范围）
+        const scopedUserId = resolveScopedUserId();
         let userForwards = forwardsData;
-        if (currentUserId !== null) {
-          userForwards = forwardsData.filter((f: Forward) => f.userId === currentUserId);
+        if (scopedUserId !== null) {
+          userForwards = forwardsData.filter((f: Forward) => f.userId === scopedUserId);
         }
         
         // 检查数据库中是否有排序信息
@@ -518,6 +577,14 @@ export default function ForwardPage() {
         setTunnels(tunnelsRes.data || []);
       } else {
         console.warn('获取隧道列表失败:', tunnelsRes.msg);
+      }
+
+      if (isAdminUser) {
+        if (userListRes.code === 0) {
+          setUsers(userListRes.data || []);
+        } else {
+          console.warn('获取用户列表失败:', userListRes.msg);
+        }
       }
     } catch (error) {
       console.error('加载数据失败:', error);
@@ -1126,11 +1193,11 @@ export default function ForwardPage() {
       return [];
     }
     
-    // 仅显示当前用户的转发
+    // 按用户范围过滤
     let filteredForwards = forwards;
-    const currentUserId = JwtUtil.getUserIdFromToken();
-    if (currentUserId !== null) {
-      filteredForwards = forwards.filter(forward => forward.userId === currentUserId);
+    const scopedUserId = resolveScopedUserId();
+    if (scopedUserId !== null) {
+      filteredForwards = forwards.filter(forward => forward.userId === scopedUserId);
     }
 
     if (filterTunnelId !== "all") {
@@ -1208,13 +1275,20 @@ export default function ForwardPage() {
   const visibleForwardIds = paginatedForwards.map(forward => forward.id);
   const allVisibleSelected = visibleForwardIds.length > 0 &&
     visibleForwardIds.every(id => selectedForwardKeys.has(id.toString()));
-  const currentUserId = JwtUtil.getUserIdFromToken();
-  const userForwardCount = currentUserId !== null
-    ? forwards.filter((forward) => forward.userId === currentUserId).length
+  const scopedUserId = resolveScopedUserId();
+  const userForwardCount = scopedUserId !== null
+    ? forwards.filter((forward) => forward.userId === scopedUserId).length
     : forwards.length;
   const tunnelFilterItems = [
     { id: 'all', name: '全部隧道' },
     ...tunnels.map((tunnel) => ({ id: tunnel.id.toString(), name: tunnel.name }))
+  ];
+  const userFilterItems = [
+    { id: 'all', name: '全部用户' },
+    ...users.map((user) => ({
+      id: user.id.toString(),
+      name: (user.name && user.name.trim()) || user.user || `用户${user.id}`
+    }))
   ];
 
   const handleBulkDelete = () => {
@@ -1308,11 +1382,12 @@ export default function ForwardPage() {
     if (oldIndex === -1 || newIndex === -1) return;
 
     const newVisibleOrder = arrayMove(visibleIds, oldIndex, newIndex);
-    const currentUserId = JwtUtil.getUserIdFromToken();
-    const allForwardIds = forwards
-      .filter((forward) => currentUserId === null || forward.userId === currentUserId)
+    const scopedUserId = resolveScopedUserId();
+    const scopedForwardIds = forwards
+      .filter((forward) => scopedUserId === null || forward.userId === scopedUserId)
       .map((forward) => forward.id);
-    const baseOrder = forwardOrder.length > 0 ? forwardOrder : allForwardIds;
+    const scopedOrder = forwardOrder.filter((id) => scopedForwardIds.includes(id));
+    const baseOrder = scopedOrder.length > 0 ? scopedOrder : scopedForwardIds;
     const visibleSet = new Set(visibleIds);
     const updatedOrder: number[] = [];
     const queue = [...newVisibleOrder];
@@ -1434,6 +1509,30 @@ export default function ForwardPage() {
                       inputWrapper: "bg-white dark:bg-zinc-800 border-none shadow-none"
                    }}
                  />
+                 {isAdminUser && (
+                   <Select
+                     size="sm"
+                     className="w-[200px]"
+                     selectedKeys={[filterUserId]}
+                     onSelectionChange={(keys) => {
+                       const selectedKey = Array.from(keys)[0] as string;
+                       if (selectedKey) {
+                         setFilterUserId(selectedKey);
+                       }
+                     }}
+                     items={userFilterItems}
+                     classNames={{
+                       trigger: "bg-white dark:bg-zinc-800 border-none shadow-none",
+                       value: "text-sm"
+                     }}
+                   >
+                     {(item) => (
+                       <SelectItem key={item.id} textValue={item.name}>
+                         {item.name}
+                       </SelectItem>
+                     )}
+                   </Select>
+                 )}
                  <Select
                    size="sm"
                    className="w-[200px]"
@@ -1532,7 +1631,7 @@ export default function ForwardPage() {
               >
                <table className="w-full text-left text-sm md-table">
                   <thead className="bg-gray-50 dark:bg-zinc-800/50 text-gray-500 font-medium border-b border-gray-100 dark:border-gray-800">
-                     <tr>
+                    <tr>
                         <th className="w-12 px-4 py-3">
                            <Checkbox
                             aria-label="全选"
@@ -1549,6 +1648,7 @@ export default function ForwardPage() {
                           />
                         </th>
                         <th className="px-4 py-3">规则名</th>
+                        {isAdminUser && <th className="px-4 py-3">用户</th>}
                         <th className="px-4 py-3">入口</th>
                         <th className="px-4 py-3">目标</th>
                         <th className="px-4 py-3">已用流量</th>
@@ -1558,10 +1658,12 @@ export default function ForwardPage() {
                   </thead>
                   <tbody className="divide-y divide-gray-100 dark:divide-zinc-800">
                       {paginatedForwards.map((forward) => (
-                        <SortableForwardRow 
-                          key={forward.id} 
+                        <SortableForwardRow
+                          key={forward.id}
                           forward={forward}
                           isSelected={selectedForwardKeys.has(forward.id.toString())}
+                          showUserColumn={isAdminUser}
+                          userLabel={resolveUserLabel(forward.userId, forward.userName)}
                           onSelectionChange={handleSelectionChange}
                           onShowAddressModal={showAddressModal}
                           onServiceToggle={handleServiceToggle}

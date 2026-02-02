@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Button } from "@heroui/button";
 import { Input } from "@heroui/input";
 import { Textarea } from "@heroui/input";
@@ -18,8 +18,10 @@ import {
   updateNode, 
   deleteNode,
   getNodeInstallCommand,
-  forceSyncNodeConfig
+  forceSyncNodeConfig,
+  getAllUsers
 } from "@/api";
+import { User } from "@/types";
 
 interface Node {
   id: number;
@@ -115,6 +117,7 @@ export default function NodePage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [canCreateNode, setCanCreateNode] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+  const [users, setUsers] = useState<User[]>([]);
   const [dialogVisible, setDialogVisible] = useState(false);
   const [dialogTitle, setDialogTitle] = useState('');
   const [isEdit, setIsEdit] = useState(false);
@@ -156,6 +159,22 @@ export default function NodePage() {
   const reconnectAttemptsRef = useRef(0);
   const maxReconnectAttempts = 5;
 
+  const userNameMap = useMemo(() => {
+    const map = new Map<number, string>();
+    users.forEach((user) => {
+      const label = (user.name && user.name.trim()) || user.user || `用户${user.id}`;
+      map.set(user.id, label);
+    });
+    return map;
+  }, [users]);
+
+  const resolveUserLabel = (ownerId?: number | null) => {
+    if (ownerId === null || ownerId === undefined) {
+      return '管理员';
+    }
+    return userNameMap.get(ownerId) || `用户${ownerId}`;
+  };
+
   useEffect(() => {
     const adminFlag = localStorage.getItem('admin') === 'true';
     setIsAdmin(adminFlag);
@@ -163,7 +182,7 @@ export default function NodePage() {
     setCanCreateNode(adminFlag || allowNodeCreate);
     const storedUserId = localStorage.getItem('user_id');
     setCurrentUserId(storedUserId ? Number(storedUserId) : null);
-    loadNodes();
+    loadNodes(adminFlag);
     loadNodeVisibility(adminFlag);
     initWebSocket();
     
@@ -246,10 +265,13 @@ export default function NodePage() {
   };
 
   // 加载节点列表
-  const loadNodes = async () => {
+  const loadNodes = async (adminFlag: boolean = isAdmin) => {
     setLoading(true);
     try {
-      const res = await getNodeList();
+      const userListPromise = adminFlag
+        ? getAllUsers()
+        : Promise.resolve({ code: 0, msg: '', data: [] as User[] });
+      const [res, userListRes] = await Promise.all([getNodeList(), userListPromise]);
       if (res.code === 0) {
         setNodeList(res.data.map((node: any) => ({
           ...node,
@@ -259,6 +281,13 @@ export default function NodePage() {
         })));
       } else {
         toast.error(res.msg || '加载节点列表失败');
+      }
+      if (adminFlag) {
+        if (userListRes.code === 0) {
+          setUsers(userListRes.data || []);
+        } else {
+          console.warn('获取用户列表失败:', userListRes.msg);
+        }
       }
     } catch (error) {
       toast.error('网络错误，请重试');
@@ -813,6 +842,7 @@ export default function NodePage() {
                 <thead className="bg-gray-50 dark:bg-zinc-800/50 text-gray-500 font-medium border-b border-gray-100 dark:border-gray-800">
                     <tr>
                        {(isAdmin || nodeVisibility.name) && <th className="px-4 py-3">节点名称</th>}
+                       {isAdmin && <th className="px-4 py-3">用户</th>}
                        {(isAdmin || nodeVisibility.inIp) && <th className="px-4 py-3">入口IP</th>}
                        {(isAdmin || nodeVisibility.portRange) && <th className="px-4 py-3">端口范围</th>}
                        {(isAdmin || nodeVisibility.ratio) && <th className="px-4 py-3">倍率</th>}
@@ -835,6 +865,13 @@ export default function NodePage() {
                                 <span className="font-medium text-gray-900 dark:text-gray-100">{node.name}</span>
                                 <span className="text-xs text-gray-400">{node.serverIp}</span>
                              </div>
+                          </td>
+                        )}
+                        {isAdmin && (
+                          <td className="px-4 py-3 align-middle">
+                            <span className="text-sm text-gray-700 dark:text-gray-300">
+                              {resolveUserLabel(node.ownerId)}
+                            </span>
                           </td>
                         )}
                         {(isAdmin || nodeVisibility.inIp) && (
