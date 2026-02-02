@@ -2070,10 +2070,7 @@ example.com:443`}
                       </div>
                     </div>
                     
-                    <div className="max-h-40 overflow-y-auto space-y-1" style={{
-                      scrollbarWidth: 'thin',
-                      scrollbarColor: 'rgb(156 163 175) transparent'
-                    }}>
+                    <div className="max-h-40 overflow-y-auto space-y-1">
                       {importResults.map((result, index) => (
                         <div 
                           key={index} 

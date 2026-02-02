@@ -363,6 +363,42 @@ body::after {
   background: rgb(var(--md-surface-container-high));
 }
 
+:root {
+  --md-scrollbar-track: transparent;
+  --md-scrollbar-thumb: rgba(120, 120, 120, 0.35);
+  --md-scrollbar-thumb-hover: rgba(120, 120, 120, 0.55);
+}
+
+.dark {
+  --md-scrollbar-thumb: rgba(220, 220, 220, 0.2);
+  --md-scrollbar-thumb-hover: rgba(220, 220, 220, 0.35);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--md-scrollbar-thumb) var(--md-scrollbar-track);
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--md-scrollbar-track);
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: var(--md-scrollbar-thumb);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--md-scrollbar-thumb-hover);
+}
+
 /* Modal surface consistency */
 [role="dialog"][aria-modal="true"] {
   background: rgb(var(--md-surface-container)) !important;
