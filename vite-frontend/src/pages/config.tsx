@@ -124,21 +124,21 @@ const CONFIG_ITEMS: ConfigItem[] = [
     key: 'ip_cn',
     label: '面板后端地址（国内）',
     placeholder: '请输入国内面板后端IP:PORT',
-    description: '用于国内节点对接，格式“ip:port”。留空将尝试使用默认后端地址。',
+    description: '国内节点对接，格式"ip:port"',
     type: 'input'
   },
   {
     key: 'ip_oversea',
     label: '面板后端地址（海外）',
     placeholder: '请输入海外面板后端IP:PORT',
-    description: '用于海外节点对接，格式“ip:port”。留空将尝试使用默认后端地址。',
+    description: '海外节点对接，格式"ip:port"',
     type: 'input'
   },
   {
     key: 'ip',
     label: '面板后端地址（默认）',
     placeholder: '请输入面板后端IP:PORT',
-    description: '默认/兼容旧配置。若国内/海外地址未配置，则使用此地址。格式“ip:port”。',
+    description: '默认地址，格式"ip:port"',
     type: 'input'
   },
   {
@@ -469,7 +469,7 @@ export default function ConfigPage() {
         </div>
 
         {/* 配置表单 */}
-        <div className="md-card p-6 min-h-[400px]">
+        <div className="md-card px-4 min-h-[400px]">
            {loading ? (
              <div className="flex items-center justify-center h-64">
                <div className="flex flex-col items-center gap-3">
@@ -478,16 +478,16 @@ export default function ConfigPage() {
                </div>
              </div>
            ) : (
-             <div className="space-y-6 max-w-3xl">
+             <div className="space-y-0">
                 {CONFIG_ITEMS.map((item) => {
                   if (!shouldShowItem(item)) return null;
                   
                   const isChanged = hasChanges && configs[item.key] !== originalConfigs[item.key];
                   
                   return (
-                    <div key={item.key} className={`pb-6 last:pb-0 border-b border-gray-100 dark:border-zinc-800 last:border-0 ${isChanged ? "bg-orange-50/50 dark:bg-orange-900/10 -mx-4 px-4 py-4 rounded-lg border-transparent transition-colors" : ""}`}>
-                       <div className="flex flex-col md:flex-row md:items-start gap-4">
-                          <div className="md:w-1/3 flex flex-col gap-1">
+                    <div key={item.key} className={`py-4 border-b border-gray-100 dark:border-zinc-800 last:border-0 ${isChanged ? "bg-orange-50/50 dark:bg-orange-900/10 -mx-4 px-4 rounded-lg border-transparent transition-colors" : ""}`}>
+                       <div className="flex flex-col md:flex-row md:items-center gap-4">
+                          <div className="md:w-2/5 flex flex-col gap-1">
                              <label className="text-sm font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2">
                                 {item.label}
                                 {isChanged && <span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span>}
@@ -498,8 +498,10 @@ export default function ConfigPage() {
                                </p>
                              )}
                           </div>
-                          <div className="md:w-2/3 min-w-0">
-                             {renderConfigItem(item)}
+                          <div className="md:w-3/5 min-w-0 flex justify-end">
+                             <div className="w-full max-w-xs">
+                               {renderConfigItem(item)}
+                             </div>
                           </div>
                        </div>
                     </div>

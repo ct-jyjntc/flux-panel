@@ -570,10 +570,10 @@ export default function AdminLayout({
                 />
               </ModalBody>
               <ModalFooter>
-                <Button variant="light" onPress={onClose}>
+                <Button size="sm" variant="light" onPress={onClose}>
                   取消
                 </Button>
-                <Button color="primary" isLoading={passwordLoading} onPress={handlePasswordChange}>
+                <Button size="sm" color="primary" isLoading={passwordLoading} onPress={handlePasswordChange}>
                   确认修改
                 </Button>
               </ModalFooter>
