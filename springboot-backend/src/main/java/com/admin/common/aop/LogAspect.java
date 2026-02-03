@@ -4,6 +4,9 @@ package com.admin.common.aop;
 import cn.hutool.core.util.ArrayUtil;
 import com.admin.common.utils.JwtUtil;
 import com.alibaba.fastjson.JSON;
+import com.admin.common.lang.R;
+import com.admin.entity.SystemLog;
+import com.admin.service.SystemLogService;
 import com.admin.common.utils.HttpContextUtils;
 import com.admin.common.utils.IpUtils;
 import lombok.extern.slf4j.Slf4j;
@@ -18,11 +21,35 @@ import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.regex.Pattern;
+import java.util.regex.Matcher;
 
 @Component
 @Aspect
 @Slf4j
 public class LogAspect {
+
+    private static final int MAX_PARAM_LENGTH = 2000;
+    private static final int MAX_MSG_LENGTH = 500;
+    private static final String[] SKIP_PERSIST_URIS = {
+            "/flow/upload",
+            "/flow/config",
+            "/flow/test",
+            "/log/clear"
+    };
+
+    private static final Pattern SENSITIVE_JSON_PATTERN = Pattern.compile(
+            "(?i)\\\"(password|pwd|newPassword|confirmPassword|token|authorization)\\\"\\s*:\\s*\\\".*?\\\""
+    );
+    private static final Pattern SENSITIVE_QUERY_PATTERN = Pattern.compile(
+            "(?i)(password|pwd|newPassword|confirmPassword|token|authorization)=([^&\\s]+)"
+    );
+
+    private final SystemLogService systemLogService;
+
+    public LogAspect(SystemLogService systemLogService) {
+        this.systemLogService = systemLogService;
+    }
 
     @Pointcut("@annotation(com.admin.common.aop.LogAnnotation)")
     public void pt() {
@@ -75,7 +102,7 @@ public class LogAspect {
         
         // 获取返回参数
         String responseParams = returnValue != null ? JSON.toJSONString(returnValue) : "无返回值";
-        
+
         // 合并为一条完整的日志信息
         String logMessage = String.format(
             "【请求日志】用户ID:[%s], IP地址:[%s], 请求方式:[%s], 控制器方法:[%s], 请求参数:[%s], 返回参数:[%s]", user_id, ipAddr, requestMethod, controllerMethod, requestParams, responseParams
@@ -83,6 +110,22 @@ public class LogAspect {
         
         // 打印单条完整日志
         log.info(logMessage);
+
+        // 持久化操作日志
+        if (!shouldSkipPersistence(request)) {
+            try {
+                SystemLog systemLog = buildSystemLog(request, controllerMethod, requestParams);
+                systemLog.setLogType("OPERATION");
+                if (returnValue instanceof R) {
+                    R r = (R) returnValue;
+                    systemLog.setResponseCode(r.getCode());
+                    systemLog.setResponseMsg(truncate(r.getMsg(), MAX_MSG_LENGTH));
+                }
+                persistSystemLog(systemLog);
+            } catch (Exception e) {
+                log.warn("持久化操作日志失败: {}", e.getMessage());
+            }
+        }
     }
 
 
@@ -138,6 +181,20 @@ public class LogAspect {
             
             // 打印单条完整异常日志
             log.info(errorMessage, ex);
+
+            // 持久化异常日志
+            if (!shouldSkipPersistence(request)) {
+                try {
+                    SystemLog systemLog = buildSystemLog(request, controllerMethod, requestParams);
+                    systemLog.setLogType("EXCEPTION");
+                    systemLog.setResponseCode(-1);
+                    systemLog.setResponseMsg("请求异常");
+                    systemLog.setExceptionMsg(truncate(exceptionMsg, MAX_PARAM_LENGTH));
+                    persistSystemLog(systemLog);
+                } catch (Exception e) {
+                    log.warn("持久化异常日志失败: {}", e.getMessage());
+                }
+            }
         } catch (Exception e) {
             log.info("记录异常日志时出错: {}", e.getMessage());
         }
@@ -189,5 +246,64 @@ public class LogAspect {
         } catch (Exception e) {
             return "获取参数失败: " + e.getMessage();
         }
+    }
+
+    private SystemLog buildSystemLog(HttpServletRequest request, String controllerMethod, String requestParams) {
+        SystemLog systemLog = new SystemLog();
+        systemLog.setRequestMethod(request.getMethod());
+        systemLog.setRequestUri(request.getRequestURI());
+        systemLog.setControllerMethod(controllerMethod);
+        systemLog.setRequestParams(truncate(sanitize(requestParams), MAX_PARAM_LENGTH));
+
+        String authorization = request.getHeader("Authorization");
+        if (authorization != null && !"null".equals(authorization)) {
+            try {
+                systemLog.setUserId(JwtUtil.getUserIdFromToken(authorization).intValue());
+                systemLog.setUserName(JwtUtil.getNameFromToken());
+            } catch (Exception e) {
+                systemLog.setUserName("未登录");
+            }
+        } else {
+            systemLog.setUserName("未登录");
+        }
+
+        systemLog.setIp(IpUtils.getIpAddr(request));
+        long now = System.currentTimeMillis();
+        systemLog.setCreatedTime(now);
+        systemLog.setUpdatedTime(now);
+        systemLog.setStatus(0);
+        return systemLog;
+    }
+
+    private void persistSystemLog(SystemLog systemLog) {
+        if (systemLogService != null) {
+            systemLogService.save(systemLog);
+        }
+    }
+
+    private boolean shouldSkipPersistence(HttpServletRequest request) {
+        if (request == null) return false;
+        String uri = request.getRequestURI();
+        if (uri == null) return false;
+        for (String segment : SKIP_PERSIST_URIS) {
+            if (uri.contains(segment)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String sanitize(String input) {
+        if (input == null) return null;
+        Matcher jsonMatcher = SENSITIVE_JSON_PATTERN.matcher(input);
+        String sanitized = jsonMatcher.replaceAll("\"$1\":\"***\"");
+        Matcher queryMatcher = SENSITIVE_QUERY_PATTERN.matcher(sanitized);
+        return queryMatcher.replaceAll("$1=***");
+    }
+
+    private String truncate(String input, int maxLength) {
+        if (input == null) return null;
+        if (input.length() <= maxLength) return input;
+        return input.substring(0, maxLength) + "...";
     }
 }

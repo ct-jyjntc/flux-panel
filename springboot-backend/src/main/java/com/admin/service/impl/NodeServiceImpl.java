@@ -90,6 +90,8 @@ public class NodeServiceImpl extends ServiceImpl<NodeMapper, Node> implements No
     private static final List<String> SUPPORTED_TUNNEL_PROTOCOLS = Arrays.asList(
             "tls", "wss", "tcp", "mtls", "mwss", "mtcp"
     );
+    private static final String INSTALL_SCRIPT_CN = "http://fnos.xiercloud.uk:5244/d/share/1.2.5/install.sh?sign=6D9R9dmi1iCTS7kruO8wJdtFOM-rUxSUgpYZkB9klz0=:0";
+    private static final String INSTALL_SCRIPT_OVERSEA = "http://181.215.6.135:5244/d/share/1.2.5/install.sh?sign=WFB8a5Ubxrl6TtiIclCLAKFzLE6pL3WaQN9YGgMqjmk=:0";
 
     // ========== 依赖注入 ==========
     
@@ -784,7 +786,7 @@ public class NodeServiceImpl extends ServiceImpl<NodeMapper, Node> implements No
         StringBuilder command = new StringBuilder();
         
         // 第一部分：下载安装脚本  
-        command.append("curl -L https://github.com/bqlpfy/flux-panel/releases/download/1.4.3/install.sh")
+        command.append("curl -L ").append(resolveInstallScriptUrl(region))
                .append(" -o ./install.sh && chmod +x ./install.sh && ");
         
         // 处理服务器地址，如果是IPv6需要添加方括号
@@ -796,6 +798,19 @@ public class NodeServiceImpl extends ServiceImpl<NodeMapper, Node> implements No
                .append(" -s ").append(node.getSecret());    // 节点密钥
         
         return R.ok(command.toString());
+    }
+
+    private String resolveInstallScriptUrl(String region) {
+        if (StrUtil.isNotBlank(region)) {
+            String normalized = region.trim().toLowerCase();
+            if (normalized.contains("cn") || normalized.contains("china") || normalized.contains("domestic")) {
+                return INSTALL_SCRIPT_CN;
+            }
+            if (normalized.contains("oversea") || normalized.contains("overseas") || normalized.contains("global")) {
+                return INSTALL_SCRIPT_OVERSEA;
+            }
+        }
+        return INSTALL_SCRIPT_OVERSEA;
     }
 
     private String resolveServerAddress(String region) {

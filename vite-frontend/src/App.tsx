@@ -10,6 +10,7 @@ import NodePage from "@/pages/node";
 import UserPage from "@/pages/user";
 import LimitPage from "@/pages/limit";
 import ConfigPage from "@/pages/config";
+import LogsPage from "@/pages/logs";
 import { SettingsPage } from "@/pages/settings";
 import ComingSoonPage from "@/pages/coming-soon";
 
@@ -210,6 +211,14 @@ function App() {
         element={
           <ProtectedRoute>
             <NodePage />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/logs" 
+        element={
+          <ProtectedRoute>
+            <LogsPage />
           </ProtectedRoute>
         } 
       />

@@ -135,6 +135,33 @@ CREATE TABLE `tunnel` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- --------------------------------------------------------
+--
+-- 表的结构 `system_log`
+--
+
+CREATE TABLE `system_log` (
+  `id` int(10) NOT NULL AUTO_INCREMENT,
+  `log_type` varchar(20) NOT NULL,
+  `user_id` int(10) DEFAULT NULL,
+  `user_name` varchar(100) DEFAULT NULL,
+  `ip` varchar(64) DEFAULT NULL,
+  `request_method` varchar(10) DEFAULT NULL,
+  `request_uri` varchar(255) DEFAULT NULL,
+  `controller_method` varchar(255) DEFAULT NULL,
+  `request_params` text,
+  `response_code` int(10) DEFAULT NULL,
+  `response_msg` varchar(255) DEFAULT NULL,
+  `exception_msg` text,
+  `created_time` bigint(20) NOT NULL,
+  `updated_time` bigint(20) NOT NULL,
+  `status` int(10) NOT NULL DEFAULT '0',
+  PRIMARY KEY (`id`),
+  KEY `idx_log_type_created_time` (`log_type`,`created_time`),
+  KEY `idx_user_id_created_time` (`user_id`,`created_time`),
+  KEY `idx_created_time` (`created_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- --------------------------------------------------------
 
 --
 -- 表的结构 `user`

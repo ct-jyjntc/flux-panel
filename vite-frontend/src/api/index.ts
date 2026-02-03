@@ -91,3 +91,7 @@ export const getConfigs = () => Network.post("/config/list");
 export const getConfigByName = (name: string) => Network.post("/config/get", { name });
 export const updateConfigs = (configMap: Record<string, string>) => Network.post("/config/update", configMap);
 export const updateConfig = (name: string, value: string) => Network.post("/config/update-single", { name, value });
+
+// 系统日志
+export const getLogList = (data: any) => Network.post("/log/list", data);
+export const clearLogs = () => Network.post("/log/clear");
